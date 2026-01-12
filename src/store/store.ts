@@ -7,6 +7,7 @@
 import { createStore, combineReducers, applyMiddleware, Store } from 'redux';
 import createSagaMiddleware from 'redux-saga';
 import { reducer as formReducer, slice as formSlice, type FormState, type RootState } from './form-dux';
+import { formSagas } from './form-sagas';
 
 // Root reducer combining all slices
 export const rootReducer = combineReducers({
@@ -22,5 +23,8 @@ export const store: Store<RootState> = createStore(
   applyMiddleware(sagaMiddleware)
 );
 
-// Export saga middleware for running sagas (will be used in next task)
+// Run form sagas
+sagaMiddleware.run(formSagas);
+
+// Export saga middleware for running additional sagas if needed
 export { sagaMiddleware };
