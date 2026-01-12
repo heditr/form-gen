@@ -1,7 +1,9 @@
 /**
  * Form Sagas - Redux sagas for async form operations
  * 
- * Handles network requests and side effects for form operations
+ * Handles network requests and side effects for form operations.
+ * Note: formData and validationErrors are managed by react-hook-form.
+ * These sagas sync form data to Redux for context extraction and re-hydration.
  */
 
 import { call, put, delay, takeEvery, takeLatest } from 'redux-saga/effects';
@@ -11,7 +13,7 @@ import {
   loadGlobalDescriptor,
   applyRulesUpdate,
   loadDataSource,
-  setValidationErrors,
+  syncFormDataToContext,
   triggerRehydration,
   type ActionObject,
 } from './form-dux';
@@ -23,6 +25,7 @@ export const FETCH_GLOBAL_DESCRIPTOR = `${slice}/fetchGlobalDescriptor`;
 export const REHYDRATE_RULES = `${slice}/rehydrateRules`;
 export const FETCH_DATA_SOURCE = `${slice}/fetchDataSource`;
 export const SUBMIT_FORM = `${slice}/submitForm`;
+export const SYNC_FORM_DATA = `${slice}/syncFormDataToContext`;
 
 // Action creators for triggering sagas
 export const fetchGlobalDescriptor = (): ActionObject => ({
@@ -87,7 +90,22 @@ export function* loadGlobalDescriptorSaga(): Generator<CallEffect | PutEffect, v
   }
 }
 
+// Saga to sync react-hook-form state to Redux for context extraction
+// This saga watches for form data syncs from react-hook-form
+// When discriminant fields change, context extraction will trigger re-hydration
+export function* syncFormDataSaga(action: ActionObject<{ formData: Record<string, any> }>): Generator<PutEffect, void, any> {
+  try {
+    // Form data is already synced to Redux by the reducer
+    // Context extraction and re-hydration triggering will be implemented
+    // in the Context Extractor task
+    // This saga provides a hook point for future context extraction logic
+  } catch (error) {
+    console.error('Error syncing form data:', error);
+  }
+}
+
 // Saga to rehydrate rules with debouncing
+// Triggered by discriminant field changes from react-hook-form (via context extraction)
 export function* rehydrateRulesSaga(action: ActionObject<{ caseContext: CaseContext }>): Generator<CallEffect | PutEffect, void, any> {
   try {
     // Debounce: wait 500ms before making the request
@@ -179,23 +197,23 @@ export function* submitFormSaga(action: ActionObject<{ url: string; method: stri
       console.log('Form submitted successfully:', result);
     } else {
       // Handle validation errors
+      // Note: Validation errors are managed by react-hook-form
+      // Backend errors should be mapped to react-hook-form via setError() in the form component
       const errorData = yield call([response, 'json']);
-      if (errorData.errors) {
-        yield put(setValidationErrors({ errors: errorData.errors }));
-      } else {
-        yield put(setValidationErrors({ errors: { _form: 'Submission failed' } }));
-      }
+      console.error('Form submission failed:', errorData);
+      // Error handling will be done in the form component using react-hook-form's setError
     }
   } catch (error) {
     // Handle error
     console.error('Error submitting form:', error);
-    yield put(setValidationErrors({ errors: { _form: 'Network error occurred' } }));
+    // Error handling will be done in the form component using react-hook-form's setError
   }
 }
 
 // Root saga - watches for actions and runs appropriate sagas
 export function* formSagas(): Generator {
   yield takeEvery(FETCH_GLOBAL_DESCRIPTOR, loadGlobalDescriptorSaga);
+  yield takeEvery(SYNC_FORM_DATA, syncFormDataSaga);
   yield takeLatest(REHYDRATE_RULES, rehydrateRulesSaga);
   yield takeEvery(FETCH_DATA_SOURCE, loadDataSourceSaga);
   yield takeEvery(SUBMIT_FORM, submitFormSaga);

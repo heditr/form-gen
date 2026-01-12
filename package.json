@@ -12,6 +12,7 @@
     "test:ui": "vitest --ui"
   },
   "dependencies": {
+    "@hookform/resolvers": "^5.2.2",
     "@paralleldrive/cuid2": "^3.1.0",
     "aidd": "^2.5.0",
     "class-variance-authority": "^0.7.1",
@@ -21,6 +22,7 @@
     "next": "16.1.1",
     "react": "19.2.3",
     "react-dom": "19.2.3",
+    "react-hook-form": "^7.71.0",
     "react-redux": "^9.2.0",
     "redux": "^5.0.1",
     "redux-saga": "^1.4.2",

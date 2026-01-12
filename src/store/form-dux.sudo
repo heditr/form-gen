@@ -3,13 +3,15 @@
  * 
  * This SudoLang source can be transpiled to JavaScript using:
  * FormDux |> transpile(JavaScript)
+ * 
+ * Note: formData and validationErrors are managed by react-hook-form, not Redux.
+ * formData in Redux state is synced from react-hook-form for context extraction purposes.
  */
 
 loadGlobalDescriptor({ descriptor = null } = {}) => ActionObject
-updateFieldValue({ fieldPath = '', value = null } = {}) => ActionObject
+syncFormDataToContext({ formData = {} } = {}) => ActionObject
 triggerRehydration() => ActionObject
 applyRulesUpdate({ rulesObject = null } = {}) => ActionObject
-setValidationErrors({ errors = {} } = {}) => ActionObject
 loadDataSource({ fieldPath = '', data = null } = {}) => ActionObject
 
 getFormState(state) => state[slice]
@@ -19,7 +21,6 @@ getVisibleFields(state) => {
   fields = blocks.flatMap(block => block.fields || [])
   return fields
 }
-getValidationErrorsByField(state) => state[slice].validationErrors
 
 FormDux {
   initialState = {
@@ -27,12 +28,11 @@ FormDux {
     mergedDescriptor: null,
     formData: {},
     caseContext: {},
-    validationErrors: {},
     isRehydrating: false,
     dataSourceCache: {}
   }
   slice = 'form'
-  actions = [loadGlobalDescriptor, updateFieldValue, triggerRehydration, applyRulesUpdate, setValidationErrors, loadDataSource]
-  selectors = [getFormState, getVisibleBlocks, getVisibleFields, getValidationErrorsByField]
+  actions = [loadGlobalDescriptor, syncFormDataToContext, triggerRehydration, applyRulesUpdate, loadDataSource]
+  selectors = [getFormState, getVisibleBlocks, getVisibleFields]
   tools = [{createId} from @paralleldrive/cuid2]
 }

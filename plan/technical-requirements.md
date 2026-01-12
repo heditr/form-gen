@@ -5,12 +5,13 @@
 ### 1.1 Technology Stack
 - **Framework**: Next.js 16.1.1 (App Router)
 - **UI Library**: React 19.2.3
+- **Form Management**: react-hook-form
 - **State Management**: Redux with Autodux pattern (NO Redux Toolkit)
 - **Side Effects**: Redux-saga for async operations
 - **Template Engine**: Handlebars.js
 - **UI Components**: Shadcn UI
 - **Type Safety**: TypeScript 5
-- **Runtime Validation**: Zod
+- **Runtime Validation**: Zod with @hookform/resolvers
 - **ID Generation**: @paralleldrive/cuid2
 - **Deployment**: Vercel
 
@@ -104,12 +105,15 @@
 - **Payload Transformation**: Evaluate Handlebars in submission payload templates
 
 ### 4.5 Validation System
+- **Form Library**: react-hook-form for form state and validation management
 - **Validation Types**: required, minLength, maxLength, pattern, custom
-- **Frontend Validation**: Immediate feedback (< 100ms)
-- **Backend Validation**: Authoritative validation on submission
-- **Error Mapping**: Map backend errors to specific field paths
+- **Validation Adapter**: Convert ValidationRule[] to react-hook-form/Zod schema
+- **Frontend Validation**: react-hook-form provides immediate feedback (< 100ms)
+- **Backend Validation**: Authoritative validation on submission, map errors via setError()
+- **Error Mapping**: Map backend errors to react-hook-form field paths
 - **Conditional Validation**: Rules that apply only under specific conditions
 - **Cross-field Validation**: Validations that depend on multiple field values
+- **Dynamic Field Registration**: Register/unregister fields based on visibility
 
 ### 4.6 Re-hydration System
 - **Discriminant Detection**: Detect changes in fields marked as isDiscriminant
@@ -205,30 +209,41 @@
 
 ## 8. State Management Requirements
 
-### 8.1 Redux Store Structure
-- **State Shape**: globalDescriptor, mergedDescriptor, formData, caseContext, validationErrors, isRehydrating, dataSourceCache
-- **Actions**: loadGlobalDescriptor, updateFieldValue, triggerRehydration, applyRulesUpdate, setValidationErrors, loadDataSource
-- **Selectors**: Access form state, visible blocks, visible fields, validation errors by field
-- **Autodux Pattern**: Use Autodux dux objects, transpile from .sudo to .js
+### 8.1 Hybrid State Management Architecture
+- **react-hook-form**: Manages form field values, field-level validation, and form state
+- **Redux Store**: Manages globalDescriptor, mergedDescriptor, caseContext, isRehydrating, dataSourceCache
+- **State Sync**: Sync react-hook-form state to Redux for context extraction and re-hydration triggers
+- **Integration Pattern**: Use react-hook-form `watch()` to sync discriminant field changes to Redux
 
-### 8.2 Saga Requirements
+### 8.2 Redux Store Structure
+- **State Shape**: globalDescriptor, mergedDescriptor, caseContext, isRehydrating, dataSourceCache
+- **Actions**: loadGlobalDescriptor, syncFormDataToContext, triggerRehydration, applyRulesUpdate, loadDataSource
+- **Selectors**: Access form state, visible blocks, visible fields
+- **Autodux Pattern**: Use Autodux dux objects, transpile from .sudo to .js
+- **Note**: formData and validationErrors are managed by react-hook-form, not Redux
+
+### 8.3 Saga Requirements
 - **Global Descriptor Loading**: Fetch GET /api/form/global-descriptor
-- **Re-hydration**: POST /api/rules/context with debouncing
+- **Re-hydration**: POST /api/rules/context with debouncing (triggered by discriminant field changes)
 - **Data Source Loading**: Fetch dynamic field data with authentication
-- **Form Submission**: Submit form data to configured endpoint
+- **Form Submission**: Submit form data from react-hook-form to configured endpoint
+- **State Sync**: Sync react-hook-form state to Redux when discriminant fields change
 
 ## 9. Component Requirements
 
 ### 9.1 Component Patterns
-- **Container/Presentation**: Containers connect Redux, no UI markup
+- **Container/Presentation**: Containers connect Redux and provide react-hook-form `useForm` hook
+- **Form Hook Integration**: Containers initialize `useForm` and pass form methods to presentation components
 - **No Business Logic in Containers**: Use react-redux connect to wire actions/selectors
-- **Pure Presentation Components**: Presentation components are pure functions
+- **Pure Presentation Components**: Presentation components receive form methods as props
 - **Component Composition**: Compose smaller components into larger ones
+- **Field Integration**: Use react-hook-form `Controller` or `register()` for field components
 
 ### 9.2 Component Features
-- **Conditional Rendering**: Based on status template evaluation
+- **Conditional Rendering**: Based on status template evaluation using react-hook-form `watch()`
 - **Loading States**: Show loading indicators appropriately
-- **Error Display**: Display validation errors inline
+- **Error Display**: Display react-hook-form `formState.errors` inline
+- **Dynamic Fields**: Register/unregister fields based on visibility
 - **Smooth Animations**: Animate transitions for blocks/fields
 - **Accessibility**: Full ARIA and keyboard support
 

@@ -12,15 +12,13 @@ import {
   initialState,
   slice,
   loadGlobalDescriptor,
-  updateFieldValue,
+  syncFormDataToContext,
   triggerRehydration,
   applyRulesUpdate,
-  setValidationErrors,
   loadDataSource,
   getFormState,
   getVisibleBlocks,
   getVisibleFields,
-  getValidationErrorsByField,
   type FormState,
   type RootState,
 } from './form-dux';
@@ -38,7 +36,6 @@ describe('form-dux', () => {
         mergedDescriptor: null,
         formData: {},
         caseContext: {},
-        validationErrors: {},
         isRehydrating: false,
         dataSourceCache: {},
       });
@@ -61,23 +58,33 @@ describe('form-dux', () => {
     });
   });
 
-  describe('updateFieldValue action', () => {
-    test('given a field path and value, should update formData at that path', () => {
-      const fieldPath = 'personalInfo.email';
-      const value = 'test@example.com';
+  describe('syncFormDataToContext action', () => {
+    test('given form data from react-hook-form, should sync formData to Redux state', () => {
+      const formData = {
+        'personalInfo.email': 'test@example.com',
+        'personalInfo.name': 'John Doe',
+      };
       
-      const action = updateFieldValue({ fieldPath, value });
+      const action = syncFormDataToContext({ formData });
       const newState = reducer(initialState, action);
       
-      expect(newState.formData[fieldPath]).toBe(value);
+      expect(newState.formData).toEqual(formData);
     });
 
-    test('given multiple field updates, should preserve other fields', () => {
-      const state1 = reducer(initialState, updateFieldValue({ fieldPath: 'field1', value: 'value1' }));
-      const state2 = reducer(state1, updateFieldValue({ fieldPath: 'field2', value: 'value2' }));
+    test('given form data sync, should replace entire formData with new data from react-hook-form', () => {
+      const state1 = reducer(initialState, syncFormDataToContext({ formData: { field1: 'value1' } }));
+      const state2 = reducer(state1, syncFormDataToContext({ formData: { field1: 'updated', field2: 'value2' } }));
       
-      expect(state2.formData.field1).toBe('value1');
+      // Should replace entire formData, not merge
+      expect(state2.formData.field1).toBe('updated');
       expect(state2.formData.field2).toBe('value2');
+    });
+
+    test('given empty form data, should clear formData', () => {
+      const state1 = reducer(initialState, syncFormDataToContext({ formData: { field1: 'value1' } }));
+      const state2 = reducer(state1, syncFormDataToContext({ formData: {} }));
+      
+      expect(state2.formData).toEqual({});
     });
   });
 
@@ -123,19 +130,6 @@ describe('form-dux', () => {
     });
   });
 
-  describe('setValidationErrors action', () => {
-    test('given validation errors, should set validationErrors in state', () => {
-      const errors = {
-        'field1': 'Field 1 is required',
-        'field2': 'Field 2 is invalid',
-      };
-      
-      const action = setValidationErrors({ errors });
-      const newState = reducer(initialState, action);
-      
-      expect(newState.validationErrors).toEqual(errors);
-    });
-  });
 
   describe('loadDataSource action', () => {
     test('given data source data, should cache it in dataSourceCache', () => {
@@ -227,23 +221,4 @@ describe('form-dux', () => {
     });
   });
 
-  describe('getValidationErrorsByField selector', () => {
-    test('given validation errors, should return errors keyed by field path', () => {
-      const errors = {
-        'field1': 'Field 1 is required',
-        'field2': 'Field 2 is invalid',
-      };
-      
-      const state = createState({
-        ...initialState,
-        validationErrors: errors,
-      });
-      
-      const result = getValidationErrorsByField(state);
-      
-      expect(result).toEqual(errors);
-      expect(result['field1']).toBe('Field 1 is required');
-      expect(result['field2']).toBe('Field 2 is invalid');
-    });
-  });
 });

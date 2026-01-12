@@ -29,6 +29,8 @@ Install and configure required dependencies for the form engine.
 
 **Requirements**:
 - Given the project needs templating, should install handlebars library
+- Given form management needs, should install react-hook-form
+- Given validation integration needs, should install @hookform/resolvers for Zod integration
 - Given state management needs, should install redux, react-redux, and redux-saga
 - Given ID generation needs, should install @paralleldrive/cuid2 for Autodux
 - Given UI component needs, should initialize Shadcn UI with npx shadcn@latest init
@@ -38,13 +40,14 @@ Install and configure required dependencies for the form engine.
 
 ## Redux Store Setup
 
-Create Autodux dux definition for form state management.
+Create Autodux dux definition for global state management (form state managed by react-hook-form).
 
 **Requirements**:
-- Given form state needs, should define form-dux.sudo with initialState containing globalDescriptor, mergedDescriptor, formData, caseContext, validationErrors, isRehydrating, and dataSourceCache
-- Given action needs, should define actions for loadGlobalDescriptor, updateFieldValue, triggerRehydration, applyRulesUpdate, setValidationErrors, and loadDataSource
-- Given selector needs, should define selectors for accessing form state, visible blocks, visible fields, and validation errors by field
+- Given global state needs, should define form-dux.sudo with initialState containing globalDescriptor, mergedDescriptor, caseContext, isRehydrating, and dataSourceCache
+- Given action needs, should define actions for loadGlobalDescriptor, syncFormDataToContext, triggerRehydration, applyRulesUpdate, and loadDataSource
+- Given selector needs, should define selectors for accessing form state, visible blocks, and visible fields
 - Given transpilation needs, should transpile form-dux.sudo to form-dux.js
+- Given state architecture, should note that formData and validationErrors are managed by react-hook-form, not Redux
 
 ---
 
@@ -65,9 +68,10 @@ Create Redux sagas for async form operations.
 
 **Requirements**:
 - Given global descriptor loading, should create saga to fetch GET /api/form/global-descriptor
-- Given re-hydration needs, should create saga to POST /api/rules/context with debouncing
+- Given re-hydration needs, should create saga to POST /api/rules/context with debouncing (triggered by discriminant field changes from react-hook-form)
 - Given data source loading, should create saga to fetch dynamic field data with authentication
-- Given form submission, should create saga to submit form data to configured endpoint
+- Given form submission, should create saga to submit form data from react-hook-form to configured endpoint
+- Given state sync needs, should create saga to sync react-hook-form state to Redux for context extraction
 
 ---
 
@@ -118,28 +122,33 @@ Implement deep merge logic for combining GlobalFormDescriptor with RulesObject.
 
 ---
 
-## Validation Engine
+## Validation Rule Adapter
 
-Create core validation engine executing validation rules.
+Create adapter to convert ValidationRule[] to react-hook-form validation rules and Zod schema.
 
 **Requirements**:
-- Given a validation rule and field value, should execute required validation returning error message if invalid
-- Given a validation rule and field value, should execute minLength/maxLength validation
-- Given a validation rule and field value, should execute pattern regex validation
-- Given a validation rule and field value, should execute custom validation function
-- Given multiple rules, should execute all rules returning first error or null
+- Given ValidationRule[], should convert to react-hook-form validation rules object
+- Given ValidationRule[], should convert to Zod schema for use with @hookform/resolvers
+- Given required rule, should map to react-hook-form required validation
+- Given minLength/maxLength rules, should map to react-hook-form min/max validation
+- Given pattern rule, should map to react-hook-form pattern validation
+- Given custom rule, should map to react-hook-form validate function
+- Given multiple rules, should combine into single validation function or Zod schema
 
 ---
 
-## Frontend Validator
+## React Hook Form Integration
 
-Create frontend validation runner for immediate user feedback.
+Integrate react-hook-form with form descriptor system for validation and state management.
 
 **Requirements**:
-- Given a field descriptor and value, should run all validation rules returning errors array
-- Given form data and merged descriptor, should validate all visible fields
-- Given validation result, should return field-path-keyed error map
-- Given validation timing, should complete within 100ms for typical form
+- Given form initialization, should create useForm hook with default values from descriptor
+- Given field descriptors, should register fields with converted validation rules
+- Given dynamic field visibility, should register/unregister fields as they become visible/hidden
+- Given validation rules update, should update react-hook-form validation rules via setValue/clearErrors
+- Given backend validation errors, should map errors to react-hook-form via setError()
+- Given discriminant field changes, should sync form state to Redux for context extraction
+- Given validation timing, should leverage react-hook-form's built-in <100ms validation feedback
 
 ---
 
@@ -168,13 +177,16 @@ Create Next.js API route for rules re-hydration.
 
 ## Form Container Component
 
-Create Redux-connected container component for form.
+Create Redux-connected container component that integrates react-hook-form with Redux.
 
 **Requirements**:
-- Given Redux store, should connect form state and actions to presentation component
+- Given Redux store, should connect global state and actions to presentation component
+- Given react-hook-form needs, should initialize useForm hook in container
 - Given container pattern, should not contain UI markup only connect logic
-- Given mapStateToProps, should select visible blocks, visible fields, and validation errors
-- Given mapDispatchToProps, should provide action creators for field updates and submission
+- Given mapStateToProps, should select visible blocks, visible fields, and global state
+- Given mapDispatchToProps, should provide action creators for re-hydration and data loading
+- Given form hook, should pass form methods (register, control, handleSubmit, formState) to presentation component
+- Given discriminant field changes, should watch form state and sync to Redux for context extraction
 
 ---
 
@@ -216,83 +228,96 @@ Create field wrapper component handling visibility and validation display.
 
 ## Text Field Component
 
-Create text input field component.
+Create text input field component using react-hook-form.
 
 **Requirements**:
 - Given field descriptor, should render text input with label and description
-- Given value change, should call updateFieldValue action
-- Given discriminant flag, should trigger re-hydration on blur
-- Given validation error, should display error message
+- Given react-hook-form integration, should use Controller or register() for field registration
+- Given value change, should use react-hook-form onChange handler
+- Given discriminant flag, should trigger re-hydration on blur via watch() sync to Redux
+- Given validation error, should display error from formState.errors
 
 ---
 
 ## Dropdown Field Component
 
-Create dropdown field component supporting static and dynamic data.
+Create dropdown field component using react-hook-form with static and dynamic data support.
 
 **Requirements**:
 - Given static items, should render dropdown immediately with items
 - Given dataSource, should fetch data when field becomes visible
 - Given loading state, should show loading indicator in dropdown
 - Given data loaded, should populate dropdown with transformed items
-- Given value change, should call updateFieldValue action
+- Given react-hook-form integration, should use Controller for field registration
+- Given value change, should use react-hook-form onChange handler
+- Given validation error, should display error from formState.errors
 
 ---
 
 ## Autocomplete Field Component
 
-Create autocomplete field component with search functionality.
+Create autocomplete field component using react-hook-form with search functionality.
 
 **Requirements**:
 - Given dataSource, should fetch data when field becomes visible
 - Given user input, should filter options based on search term
-- Given selection, should call updateFieldValue action
+- Given react-hook-form integration, should use Controller for field registration
+- Given selection, should use react-hook-form onChange handler
 - Given loading state, should show loading indicator
+- Given validation error, should display error from formState.errors
 
 ---
 
 ## Checkbox Field Component
 
-Create checkbox field component.
+Create checkbox field component using react-hook-form.
 
 **Requirements**:
 - Given field descriptor, should render checkbox with label
-- Given value change, should call updateFieldValue action
-- Given discriminant flag, should trigger re-hydration on change
+- Given react-hook-form integration, should use Controller or register() for field registration
+- Given value change, should use react-hook-form onChange handler
+- Given discriminant flag, should trigger re-hydration on change via watch() sync to Redux
+- Given validation error, should display error from formState.errors
 
 ---
 
 ## Radio Field Component
 
-Create radio button group component.
+Create radio button group component using react-hook-form.
 
 **Requirements**:
 - Given static items, should render radio buttons for each option
 - Given dataSource, should fetch and render dynamic options
-- Given value change, should call updateFieldValue action
-- Given discriminant flag, should trigger re-hydration on change
+- Given react-hook-form integration, should use Controller for field registration
+- Given value change, should use react-hook-form onChange handler
+- Given discriminant flag, should trigger re-hydration on change via watch() sync to Redux
+- Given validation error, should display error from formState.errors
 
 ---
 
 ## Date Field Component
 
-Create date input field component.
+Create date input field component using react-hook-form.
 
 **Requirements**:
 - Given field descriptor, should render date picker with label
-- Given value change, should call updateFieldValue action
-- Given validation, should validate date format and range
+- Given react-hook-form integration, should use Controller for field registration
+- Given value change, should use react-hook-form onChange handler
+- Given validation, should validate date format and range using react-hook-form validation
+- Given validation error, should display error from formState.errors
 
 ---
 
 ## File Field Component
 
-Create file upload field component.
+Create file upload field component using react-hook-form.
 
 **Requirements**:
 - Given field descriptor, should render file input with label
-- Given file selection, should call updateFieldValue action with file data
-- Given validation, should validate file type and size
+- Given react-hook-form integration, should use Controller for field registration
+- Given file selection, should use react-hook-form onChange handler with file data
+- Given validation, should validate file type and size using react-hook-form validation
+- Given validation error, should display error from formState.errors
 
 ---
 
@@ -337,14 +362,14 @@ Create utility to orchestrate form re-hydration when discriminant fields change.
 
 ## Submission Orchestrator
 
-Create utility for form submission with validation and error handling.
+Create utility for form submission using react-hook-form with validation and error handling.
 
 **Requirements**:
-- Given submit action, should validate all visible fields first
+- Given react-hook-form handleSubmit, should validate all visible fields first
 - Given validation fails, should scroll to first error and prevent submission
-- Given payload template, should evaluate template with form context
+- Given payload template, should evaluate template with react-hook-form form values
 - Given submission config, should construct request with URL, method, headers, and auth
-- Given backend errors, should map errors to field paths
+- Given backend errors, should map errors to react-hook-form field paths via setError()
 - Given success, should display success message
 
 ---

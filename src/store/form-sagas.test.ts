@@ -9,6 +9,7 @@ import { describe, test, expect } from 'vitest';
 import { call, put, delay } from 'redux-saga/effects';
 import {
   loadGlobalDescriptorSaga,
+  syncFormDataSaga,
   rehydrateRulesSaga,
   loadDataSourceSaga,
   submitFormSaga,
@@ -16,12 +17,13 @@ import {
   REHYDRATE_RULES,
   FETCH_DATA_SOURCE,
   SUBMIT_FORM,
+  SYNC_FORM_DATA,
 } from './form-sagas';
 import {
   loadGlobalDescriptor,
   applyRulesUpdate,
   loadDataSource,
-  setValidationErrors,
+  syncFormDataToContext,
   triggerRehydration,
 } from './form-dux';
 import type { GlobalFormDescriptor, RulesObject, CaseContext } from '@/types/form-descriptor';
@@ -67,6 +69,20 @@ describe('form sagas', () => {
       
       // Saga should complete even on error
       expect(result.done).toBe(true);
+    });
+  });
+
+  describe('syncFormDataSaga', () => {
+    test('given form data sync from react-hook-form, should sync form data to Redux', () => {
+      const action: ActionObject<{ formData: Record<string, any> }> = {
+        type: SYNC_FORM_DATA,
+        payload: { formData: { field1: 'value1', field2: 'value2' } },
+      };
+      
+      const gen = syncFormDataSaga(action);
+      
+      // Saga should complete (context extraction will be added in later task)
+      expect(gen.next().done).toBe(true);
     });
   });
 
@@ -172,7 +188,7 @@ describe('form sagas', () => {
       expect(gen.next({ success: true }).done).toBe(true);
     });
 
-    test('given submission error, should set validation errors', () => {
+    test('given submission error, should handle error (validation errors managed by react-hook-form)', () => {
       const action: ActionObject<{ url: string; method: string; formData: any }> = {
         type: SUBMIT_FORM,
         payload: {
@@ -198,12 +214,8 @@ describe('form sagas', () => {
       // Should call json() on response
       expect(secondYield).toHaveProperty('@@redux-saga/IO');
       
-      const thirdYield = gen.next({ errors: { field1: 'Field 1 is required' } }).value;
-      expect(thirdYield).toEqual(
-        put(setValidationErrors({ errors: { field1: 'Field 1 is required' } }))
-      );
-      
-      expect(gen.next().done).toBe(true);
+      // Saga should complete (error handling done in form component via react-hook-form)
+      expect(gen.next({ errors: { field1: 'Field 1 is required' } }).done).toBe(true);
     });
   });
 });

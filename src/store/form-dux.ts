@@ -2,6 +2,9 @@
  * Form Dux - Redux reducer, actions, and selectors for form state management
  * 
  * Transpiled from form-dux.sudo
+ * 
+ * Note: formData and validationErrors are managed by react-hook-form, not Redux.
+ * formData in Redux state is synced from react-hook-form for context extraction purposes.
  */
 
 import type {
@@ -19,7 +22,6 @@ export interface FormState {
   mergedDescriptor: GlobalFormDescriptor | null;
   formData: Record<string, any>;
   caseContext: CaseContext;
-  validationErrors: Record<string, string>;
   isRehydrating: boolean;
   dataSourceCache: Record<string, any>;
 }
@@ -38,7 +40,6 @@ export const initialState: FormState = {
   mergedDescriptor: null,
   formData: {},
   caseContext: {},
-  validationErrors: {},
   isRehydrating: false,
   dataSourceCache: {},
 };
@@ -51,12 +52,11 @@ export const loadGlobalDescriptor = ({
   payload: { descriptor },
 });
 
-export const updateFieldValue = ({
-  fieldPath = '',
-  value = null,
-}: { fieldPath?: string; value?: any } = {}): ActionObject<{ fieldPath: string; value: any }> => ({
-  type: `${slice}/updateFieldValue`,
-  payload: { fieldPath, value },
+export const syncFormDataToContext = ({
+  formData = {},
+}: { formData?: Record<string, any> } = {}): ActionObject<{ formData: Record<string, any> }> => ({
+  type: `${slice}/syncFormDataToContext`,
+  payload: { formData },
 });
 
 export const triggerRehydration = (): ActionObject => ({
@@ -71,12 +71,6 @@ export const applyRulesUpdate = ({
   payload: { rulesObject },
 });
 
-export const setValidationErrors = ({
-  errors = {},
-}: { errors?: Record<string, string> } = {}): ActionObject<{ errors: Record<string, string> }> => ({
-  type: `${slice}/setValidationErrors`,
-  payload: { errors },
-});
 
 export const loadDataSource = ({
   fieldPath = '',
@@ -98,21 +92,11 @@ export const reducer = (state: FormState = initialState, action: ActionObject): 
       };
     }
 
-    case updateFieldValue().type: {
-      const { fieldPath, value } = action.payload as { fieldPath: string; value: any };
-      const newFormData = {
-        ...state.formData,
-        [fieldPath]: value,
-      };
-      
-      // Update caseContext if this is a discriminant field
-      // Note: Discriminant detection will be implemented in a later task
-      const newCaseContext = { ...state.caseContext };
-      
+    case syncFormDataToContext().type: {
+      const { formData } = action.payload as { formData: Record<string, any> };
       return {
         ...state,
-        formData: newFormData,
-        caseContext: newCaseContext,
+        formData,
       };
     }
 
@@ -135,14 +119,6 @@ export const reducer = (state: FormState = initialState, action: ActionObject): 
         ...state,
         mergedDescriptor: updatedMergedDescriptor,
         isRehydrating: false,
-      };
-    }
-
-    case setValidationErrors().type: {
-      const { errors } = action.payload as { errors: Record<string, string> };
-      return {
-        ...state,
-        validationErrors: errors,
       };
     }
 
@@ -180,5 +156,3 @@ export const getVisibleFields = (state: RootState): FieldDescriptor[] => {
   return blocks.flatMap((block) => block.fields || []);
 };
 
-export const getValidationErrorsByField = (state: RootState): Record<string, string> => 
-  state[slice].validationErrors;
