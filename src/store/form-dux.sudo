@@ -1,0 +1,38 @@
+/*
+ * Form Dux - Autodux definition for form state management
+ * 
+ * This SudoLang source can be transpiled to JavaScript using:
+ * FormDux |> transpile(JavaScript)
+ */
+
+loadGlobalDescriptor({ descriptor = null } = {}) => ActionObject
+updateFieldValue({ fieldPath = '', value = null } = {}) => ActionObject
+triggerRehydration() => ActionObject
+applyRulesUpdate({ rulesObject = null } = {}) => ActionObject
+setValidationErrors({ errors = {} } = {}) => ActionObject
+loadDataSource({ fieldPath = '', data = null } = {}) => ActionObject
+
+getFormState(state) => state[slice]
+getVisibleBlocks(state) => state[slice].mergedDescriptor?.blocks || []
+getVisibleFields(state) => {
+  blocks = getVisibleBlocks(state)
+  fields = blocks.flatMap(block => block.fields || [])
+  return fields
+}
+getValidationErrorsByField(state) => state[slice].validationErrors
+
+FormDux {
+  initialState = {
+    globalDescriptor: null,
+    mergedDescriptor: null,
+    formData: {},
+    caseContext: {},
+    validationErrors: {},
+    isRehydrating: false,
+    dataSourceCache: {}
+  }
+  slice = 'form'
+  actions = [loadGlobalDescriptor, updateFieldValue, triggerRehydration, applyRulesUpdate, setValidationErrors, loadDataSource]
+  selectors = [getFormState, getVisibleBlocks, getVisibleFields, getValidationErrorsByField]
+  tools = [{createId} from @paralleldrive/cuid2]
+}
