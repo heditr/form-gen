@@ -1,0 +1,181 @@
+id: multi-jurisdiction-applicant
+name: Multi-Jurisdiction Applicant Journey
+description: User journey for an applicant with entities/residences in multiple countries completing a KYC form that adapts dynamically
+createdAt: 1735689600
+updatedAt: 1735689600
+
+personas:
+  - applicant
+
+steps:
+  - id: initial-form-load
+    name: Initial Form Load
+    description: User first encounters the form with only relevant fields visible
+    createdAt: 1735689600
+    updatedAt: 1735689600
+    userStories:
+      - id: us-001
+        name: Load Form with Relevant Fields
+        description: As an Applicant, I want the form to load with only relevant fields visible, so that I'm not overwhelmed by complexity
+        createdAt: 1735689600
+        updatedAt: 1735689600
+        painPoint:
+          id: pp-complex-forms
+          name: Complex Forms Overwhelm
+          description: Too many fields visible at once creates confusion and abandonment
+          impact: 10
+          frequency: 10
+        priority: 100
+        functionalRequirements:
+          - Given the form loads, should display blocks in logical order
+          - Given a block is visible, should show clear title and description
+          - Given a field is visible, should display label and help text
+          - Given the form initializes, should only show fields relevant to initial context
+        mockups: []
+        status:
+          state: backlog
+          comment: High priority - first impression critical
+
+  - id: context-discovery
+    name: Context Discovery
+    description: User explores the form to understand what information is needed
+    createdAt: 1735689600
+    updatedAt: 1735689600
+    userStories:
+      - id: us-002
+        name: Understand Required Information
+        description: As an Applicant, I want to see fields that help me understand what information is needed, so that I can prepare the required documents
+        createdAt: 1735689600
+        updatedAt: 1735689600
+        painPoint:
+          id: pp-lack-of-clarity
+          name: Unclear Requirements
+          description: Users don't know what documents or information to prepare
+          impact: 8
+          frequency: 7
+        priority: 56
+        functionalRequirements:
+          - Given the form loads, should display blocks in logical order
+          - Given a block is visible, should show clear title and description
+          - Given a field is visible, should display label and help text
+        mockups: []
+        status:
+          state: backlog
+          comment: Important for user confidence
+
+  - id: jurisdiction-selection
+    name: Jurisdiction Selection (Critical Moment)
+    description: User changes jurisdiction/residence, triggering form re-hydration
+    createdAt: 1735689600
+    updatedAt: 1735689600
+    userStories:
+      - id: us-003
+        name: Smooth Jurisdiction Change
+        description: As an Applicant, I want the form to update smoothly when I change my jurisdiction, so that I understand what new information is required without losing my progress
+        createdAt: 1735689600
+        updatedAt: 1735689600
+        painPoint:
+          id: pp-jurisdiction-change
+          name: Confusing Form Updates
+          description: When jurisdiction changes, form becomes confusing and user loses progress
+          impact: 10
+          frequency: 8
+        priority: 80
+        functionalRequirements:
+          - Given user changes a discriminant field (e.g., tax residence), should trigger re-hydration
+          - Given re-hydration is in progress, should show loading indicator without blocking input
+          - Given new fields appear, should animate smoothly into view
+          - Given fields become hidden, should preserve their values (don't lose data)
+          - Given validation rules change, should update immediately
+          - Given re-hydration completes, should update UI within 500ms (95th percentile)
+        mockups: []
+        status:
+          state: backlog
+          comment: CRITICAL - This is where abandonment happens most frequently
+
+  - id: dynamic-data-loading
+    name: Dynamic Data Loading
+    description: Dropdown fields populate with relevant options from API
+    createdAt: 1735689600
+    updatedAt: 1735689600
+    userStories:
+      - id: us-004
+        name: Fast Dropdown Population
+        description: As an Applicant, I want dropdown fields to populate quickly with relevant options, so that I can complete the form efficiently
+        createdAt: 1735689600
+        updatedAt: 1735689600
+        painPoint:
+          id: pp-slow-data-loading
+          name: Slow Dropdown Loading
+          description: Dropdowns take too long to populate, blocking user progress
+          impact: 6
+          frequency: 7
+        priority: 42
+        functionalRequirements:
+          - Given a field has a dataSource, should fetch data when field becomes visible
+          - Given data is loading, should show loading state in dropdown
+          - Given data fetch fails, should show error message and allow retry
+          - Given URL contains template variables, should evaluate them from current form context
+          - Given data loads, should populate dropdown within 1 second
+        mockups: []
+        status:
+          state: backlog
+          comment: Performance critical for UX
+
+  - id: real-time-validation
+    name: Real-Time Validation
+    description: User sees validation errors immediately as they type
+    createdAt: 1735689600
+    updatedAt: 1735689600
+    userStories:
+      - id: us-005
+        name: Immediate Validation Feedback
+        description: As an Applicant, I want to see validation errors immediately as I type, so that I can correct mistakes before submission
+        createdAt: 1735689600
+        updatedAt: 1735689600
+        painPoint:
+          id: pp-late-validation-errors
+          name: Late Validation Discovery
+          description: Users discover validation errors only at submission, requiring rework
+          impact: 7
+          frequency: 8
+        priority: 56
+        functionalRequirements:
+          - Given user enters invalid data, should display error message within 100ms
+          - Given error message is displayed, should be clear and actionable
+          - Given field becomes valid, should remove error immediately
+          - Given multiple errors exist, should show all errors without overwhelming UI
+          - Given validation rule changes via re-hydration, should re-validate immediately
+        mockups: []
+        status:
+          state: backlog
+          comment: Success metric: Clarity - user understands what's wrong
+
+  - id: form-submission
+    name: Form Submission
+    description: User submits the completed form with confidence
+    createdAt: 1735689600
+    updatedAt: 1735689600
+    userStories:
+      - id: us-006
+        name: Confident Submission
+        description: As an Applicant, I want to submit the form with confidence that my data is valid, so that I don't have to resubmit after errors
+        createdAt: 1735689600
+        updatedAt: 1735689600
+        painPoint:
+          id: pp-submission-failures
+          name: Submission Failures
+          description: Form fails after user fills everything, unclear why
+          impact: 9
+          frequency: 5
+        priority: 45
+        functionalRequirements:
+          - Given user clicks submit, should validate all visible fields first
+          - Given validation fails, should scroll to first error and highlight it
+          - Given backend validation fails, should map errors to specific fields
+          - Given submission succeeds, should show clear success message
+          - Given backend returns validation errors, should display them inline with fields
+        mockups: []
+        status:
+          state: backlog
+          comment: Backend validation is authoritative source of truth

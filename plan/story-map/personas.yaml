@@ -1,0 +1,6 @@
+personas:
+  - id: applicant
+    name: Applicant
+    description: End user filling out the KYC form, typically with multi-jurisdiction complexity
+    createdAt: 1735689600
+    updatedAt: 1735689600

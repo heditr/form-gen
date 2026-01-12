@@ -1,0 +1,8 @@
+id: kyc-form-engine-story-map
+name: KYC Metadata-Driven Dynamic Form Engine Story Map
+description: Story map for the KYC Form Engine v3.1 project covering user journeys and technical requirements
+createdAt: 1735689600
+updatedAt: 1735689600
+
+userJourneys:
+  - multi-jurisdiction-applicant
