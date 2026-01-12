@@ -3,6 +3,7 @@
 ## Active Epics
 
 - [KYC Form Engine v3.1 Epic](tasks/kyc-form-engine-epic.md) - 📋 PLANNED
+- [React Query Integration Epic](tasks/react-query-integration-epic.md) - 📋 PLANNED
 
 ## Completed Epics
 
