@@ -160,6 +160,23 @@ export interface GlobalFormDescriptor {
 }
 
 /**
+ * Case prefill data provided at case creation
+ * 
+ * Contains initial values for case context that are set when the case is created.
+ * 
+ * @property incorporationCountry - Country where the entity is incorporated
+ * @property onboardingCountries - Array of countries where onboarding is needed
+ * @property processType - Type of onboarding process (e.g., 'standard', 'expedited')
+ * @property needSignature - Whether signature is required
+ */
+export interface CasePrefill {
+  incorporationCountry?: string;
+  onboardingCountries?: string[];
+  processType?: string;
+  needSignature?: boolean;
+}
+
+/**
  * Case context for rules re-hydration
  * 
  * Contains discriminant field values that determine which rules apply.
@@ -168,7 +185,7 @@ export interface GlobalFormDescriptor {
  * @property [key: string] - Dynamic properties based on discriminant fields
  */
 export interface CaseContext {
-  [key: string]: string | number | boolean | null | undefined;
+  [key: string]: string | number | boolean | null | undefined | string[];
 }
 
 /**
