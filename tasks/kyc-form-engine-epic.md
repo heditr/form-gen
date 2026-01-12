@@ -18,7 +18,8 @@ Create TypeScript interfaces for the form descriptor system.
 - Given a block structure, should define BlockDescriptor with status templates for hidden/disabled states
 - Given a field structure, should define FieldDescriptor supporting static items, dynamic dataSource, validation rules, and discriminant flag
 - Given validation needs, should define ValidationRule with type, value, and message properties
-- Given API communication, should define CaseContext and RulesObject types
+- Given case creation, should define CasePrefill with incorporationCountry, onboardingCountries, processType, and needSignature properties
+- Given API communication, should define CaseContext (from CasePrefill) and RulesObject types
 
 ---
 
@@ -96,11 +97,11 @@ Create utility functions for evaluating Handlebars templates with form context.
 
 ## Context Extractor
 
-Create utility to extract CaseContext from current form data.
+Create utility to extract and update CaseContext from CasePrefill and form data.
 
 **Requirements**:
-- Given form data and field descriptors, should identify discriminant fields
-- Given discriminant field values, should construct CaseContext object
+- Given CasePrefill provided at case creation, should initialize CaseContext with incorporationCountry, onboardingCountries, processType, and needSignature
+- Given form data and field descriptors, should identify discriminant fields and update CaseContext
 - Given context changes, should detect when CaseContext has changed requiring re-hydration
 
 ---
