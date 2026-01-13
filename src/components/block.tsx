@@ -20,6 +20,7 @@ export interface BlockProps {
   form: UseFormReturn<FieldValues>;
   formContext: FormContext;
   onLoadDataSource: (fieldPath: string, url: string, auth?: { type: 'bearer' | 'apikey'; token?: string; headerName?: string }) => void;
+  dataSourceCache: Record<string, unknown>;
 }
 
 /**
@@ -35,6 +36,7 @@ export default function Block({
   form,
   formContext,
   onLoadDataSource,
+  dataSourceCache,
 }: BlockProps) {
   // Track visibility state for smooth animations
   const [shouldRender, setShouldRender] = useState(!isHidden);
@@ -124,6 +126,7 @@ export default function Block({
               isHidden={fieldHidden}
               form={form}
               onLoadDataSource={onLoadDataSource}
+              dataSourceCache={dataSourceCache}
             />
           );
         })}

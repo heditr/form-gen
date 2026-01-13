@@ -27,6 +27,7 @@ export default function FormPresentation({
   isRehydrating: _isRehydrating, // Reserved for future loading state UI
   mergedDescriptor,
   onLoadDataSource,
+  dataSourceCache,
 }: FormPresentationProps) {
   // Get current form values for template evaluation
   const formValues = form.watch();
@@ -73,6 +74,7 @@ export default function FormPresentation({
             form={form}
             formContext={formContext}
             onLoadDataSource={onLoadDataSource}
+            dataSourceCache={dataSourceCache}
           />
         );
       })}

@@ -7,6 +7,7 @@
 import type { FieldDescriptor } from '@/types/form-descriptor';
 import type { UseFormReturn, FieldValues } from 'react-hook-form';
 import TextField from './text-field';
+import DropdownField from './dropdown-field';
 
 export interface FieldWrapperProps {
   field: FieldDescriptor;
@@ -14,6 +15,7 @@ export interface FieldWrapperProps {
   isHidden: boolean;
   form: UseFormReturn<FieldValues>;
   onLoadDataSource: (fieldPath: string, url: string, auth?: { type: 'bearer' | 'apikey'; token?: string; headerName?: string }) => void;
+  dataSourceCache: Record<string, unknown>;
 }
 
 /**
@@ -26,7 +28,8 @@ export default function FieldWrapper({
   isDisabled,
   isHidden,
   form,
-  onLoadDataSource, // eslint-disable-line @typescript-eslint/no-unused-vars
+  onLoadDataSource,
+  dataSourceCache,
 }: FieldWrapperProps) {
   // Don't render if hidden
   if (isHidden) {
@@ -43,7 +46,17 @@ export default function FieldWrapper({
           isDisabled={isDisabled}
         />
       );
-    // TODO: Add other field types (dropdown, autocomplete, checkbox, radio, date, file)
+    case 'dropdown':
+      return (
+        <DropdownField
+          field={field}
+          form={form}
+          isDisabled={isDisabled}
+          onLoadDataSource={onLoadDataSource}
+          dataSourceCache={dataSourceCache}
+        />
+      );
+    // TODO: Add other field types (autocomplete, checkbox, radio, date, file)
     default:
       // Fallback for unsupported field types
       const error = form.formState.errors[field.id];

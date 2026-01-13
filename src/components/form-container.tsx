@@ -32,6 +32,7 @@ export interface FormPresentationProps {
   isRehydrating: boolean;
   mergedDescriptor: GlobalFormDescriptor | null;
   onLoadDataSource: (fieldPath: string, url: string, auth?: { type: 'bearer' | 'apikey'; token?: string; headerName?: string }) => void;
+  dataSourceCache: Record<string, unknown>;
 }
 
 /**
@@ -44,6 +45,7 @@ interface StateProps {
   caseContext: CaseContext;
   isRehydrating: boolean;
   formData: Partial<FormData>;
+  dataSourceCache: Record<string, unknown>;
 }
 
 /**
@@ -74,6 +76,7 @@ function FormContainerComponent({
   isRehydrating,
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   formData: _formData, // Used for context extraction, not directly in component
+  dataSourceCache,
   syncFormDataToContext: syncFormData,
   rehydrateRules: rehydrate,
   fetchDataSource: loadDataSource,
@@ -119,8 +122,9 @@ function FormContainerComponent({
       isRehydrating,
       mergedDescriptor,
       onLoadDataSource: loadDataSource,
+      dataSourceCache,
     }),
-    [form, visibleBlocks, visibleFields, isRehydrating, mergedDescriptor, loadDataSource]
+    [form, visibleBlocks, visibleFields, isRehydrating, mergedDescriptor, loadDataSource, dataSourceCache]
   );
 
   // Render presentation component (no UI markup in container)
@@ -139,6 +143,7 @@ const mapStateToProps = (state: RootState): StateProps => {
     caseContext: formState.caseContext,
     isRehydrating: formState.isRehydrating,
     formData: formState.formData,
+    dataSourceCache: formState.dataSourceCache,
   };
 };
 
