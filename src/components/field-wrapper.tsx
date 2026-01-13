@@ -8,6 +8,11 @@ import type { FieldDescriptor } from '@/types/form-descriptor';
 import type { UseFormReturn, FieldValues } from 'react-hook-form';
 import TextField from './text-field';
 import DropdownField from './dropdown-field';
+import AutocompleteField from './autocomplete-field';
+import CheckboxField from './checkbox-field';
+import RadioField from './radio-field';
+import DateField from './date-field';
+import FileField from './file-field';
 
 export interface FieldWrapperProps {
   field: FieldDescriptor;
@@ -56,7 +61,50 @@ export default function FieldWrapper({
           dataSourceCache={dataSourceCache}
         />
       );
-    // TODO: Add other field types (autocomplete, checkbox, radio, date, file)
+    case 'autocomplete':
+      return (
+        <AutocompleteField
+          field={field}
+          form={form}
+          isDisabled={isDisabled}
+          onLoadDataSource={onLoadDataSource}
+          dataSourceCache={dataSourceCache}
+        />
+      );
+    case 'checkbox':
+      return (
+        <CheckboxField
+          field={field}
+          form={form}
+          isDisabled={isDisabled}
+        />
+      );
+    case 'radio':
+      return (
+        <RadioField
+          field={field}
+          form={form}
+          isDisabled={isDisabled}
+          onLoadDataSource={onLoadDataSource}
+          dataSourceCache={dataSourceCache}
+        />
+      );
+    case 'date':
+      return (
+        <DateField
+          field={field}
+          form={form}
+          isDisabled={isDisabled}
+        />
+      );
+    case 'file':
+      return (
+        <FileField
+          field={field}
+          form={form}
+          isDisabled={isDisabled}
+        />
+      );
     default:
       // Fallback for unsupported field types
       const error = form.formState.errors[field.id];

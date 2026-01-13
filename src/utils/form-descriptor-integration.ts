@@ -24,8 +24,30 @@ export function extractDefaultValues(descriptor: GlobalFormDescriptor | null): P
 
   for (const block of descriptor.blocks) {
     for (const field of block.fields) {
+      // Always set a default value to ensure controlled inputs
       if (field.defaultValue !== undefined) {
         defaultValues[field.id as keyof FormData] = field.defaultValue as FormData[keyof FormData];
+      } else {
+        // Set type-appropriate default values for uncontrolled -> controlled transition
+        switch (field.type) {
+          case 'text':
+          case 'dropdown':
+          case 'autocomplete':
+          case 'date':
+            defaultValues[field.id as keyof FormData] = '' as FormData[keyof FormData];
+            break;
+          case 'checkbox':
+            defaultValues[field.id as keyof FormData] = false as FormData[keyof FormData];
+            break;
+          case 'radio':
+            defaultValues[field.id as keyof FormData] = '' as FormData[keyof FormData];
+            break;
+          case 'file':
+            defaultValues[field.id as keyof FormData] = null as FormData[keyof FormData];
+            break;
+          default:
+            defaultValues[field.id as keyof FormData] = '' as FormData[keyof FormData];
+        }
       }
     }
   }

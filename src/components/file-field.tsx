@@ -47,7 +47,7 @@ export default function FileField({
       <Controller
         name={field.id}
         control={form.control}
-        defaultValue={field.defaultValue as File | File[] | null | undefined}
+        defaultValue={field.defaultValue !== undefined ? (field.defaultValue as File | File[] | null) : null}
         render={({ field: controllerField }) => (
           <Input
             id={field.id}

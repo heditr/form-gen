@@ -83,7 +83,7 @@ export default function RadioField({
           <Controller
             name={field.id}
             control={form.control}
-            defaultValue={field.defaultValue as string | number | undefined}
+            defaultValue={field.defaultValue !== undefined ? (field.defaultValue as string | number) : ''}
             render={({ field: controllerField }) => (
               <>
                 {items.map((item) => {

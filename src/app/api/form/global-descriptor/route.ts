@@ -102,6 +102,7 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
               label: 'Subscribe to newsletter',
               description: 'Receive updates via email',
               defaultValue: false,
+              validation: [],
             },
             {
               id: 'age',
