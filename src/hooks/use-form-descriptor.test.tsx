@@ -54,7 +54,7 @@ describe('form descriptor integration', () => {
       });
     });
 
-    test('given fields without default values, should return empty object for those fields', () => {
+    test('given fields without default values, should return type-appropriate defaults for controlled inputs', () => {
       const descriptor: GlobalFormDescriptor = {
         blocks: [
           {
@@ -74,6 +74,18 @@ describe('form descriptor integration', () => {
                 validation: [],
                 defaultValue: 'has value',
               },
+              {
+                id: 'field3',
+                type: 'checkbox',
+                label: 'Field 3',
+                validation: [],
+              },
+              {
+                id: 'field4',
+                type: 'file',
+                label: 'Field 4',
+                validation: [],
+              },
             ],
           },
         ],
@@ -85,8 +97,13 @@ describe('form descriptor integration', () => {
 
       const defaultValues = extractDefaultValues(descriptor);
 
-      expect(defaultValues.field1).toBeUndefined();
+      // Text fields without explicit defaultValue should get empty string for controlled inputs
+      expect(defaultValues.field1).toBe('');
       expect(defaultValues.field2).toBe('has value');
+      // Checkbox fields should get false
+      expect(defaultValues.field3).toBe(false);
+      // File fields should get null
+      expect(defaultValues.field4).toBe(null);
     });
   });
 
