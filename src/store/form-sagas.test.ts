@@ -26,7 +26,7 @@ import {
   syncFormDataToContext,
   triggerRehydration,
 } from './form-dux';
-import type { GlobalFormDescriptor, RulesObject, CaseContext } from '@/types/form-descriptor';
+import type { GlobalFormDescriptor, RulesObject, CaseContext, FormData } from '@/types/form-descriptor';
 import type { ActionObject } from './form-dux';
 
 describe('form sagas', () => {
@@ -74,9 +74,9 @@ describe('form sagas', () => {
 
   describe('syncFormDataSaga', () => {
     test('given form data sync from react-hook-form, should sync form data to Redux', () => {
-      const action: ActionObject<{ formData: Record<string, any> }> = {
+      const action: ActionObject<{ formData: Partial<FormData> }> = {
         type: SYNC_FORM_DATA,
-        payload: { formData: { field1: 'value1', field2: 'value2' } },
+        payload: { formData: { field1: 'value1', field2: 'value2' } as Partial<FormData> },
       };
       
       const gen = syncFormDataSaga(action);
@@ -127,7 +127,7 @@ describe('form sagas', () => {
 
   describe('loadDataSourceSaga', () => {
     test('given data source loading, should fetch dynamic field data with authentication', () => {
-      const action: ActionObject<{ fieldPath: string; url: string; auth?: any }> = {
+      const action: ActionObject<{ fieldPath: string; url: string; auth?: { type: 'bearer' | 'apikey'; token?: string; headerName?: string } }> = {
         type: FETCH_DATA_SOURCE,
         payload: {
           fieldPath: 'cities',
@@ -161,12 +161,12 @@ describe('form sagas', () => {
 
   describe('submitFormSaga', () => {
     test('given form submission, should submit form data to configured endpoint', () => {
-      const action: ActionObject<{ url: string; method: string; formData: any }> = {
+      const action: ActionObject<{ url: string; method: string; formData: Partial<FormData> }> = {
         type: SUBMIT_FORM,
         payload: {
           url: '/api/submit',
           method: 'POST',
-          formData: { field1: 'value1' },
+          formData: { field1: 'value1' } as Partial<FormData>,
         },
       };
       
@@ -189,12 +189,12 @@ describe('form sagas', () => {
     });
 
     test('given submission error, should handle error (validation errors managed by react-hook-form)', () => {
-      const action: ActionObject<{ url: string; method: string; formData: any }> = {
+      const action: ActionObject<{ url: string; method: string; formData: Partial<FormData> }> = {
         type: SUBMIT_FORM,
         payload: {
           url: '/api/submit',
           method: 'POST',
-          formData: {},
+          formData: {} as Partial<FormData>,
         },
       };
       

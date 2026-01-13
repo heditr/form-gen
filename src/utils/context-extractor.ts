@@ -5,7 +5,7 @@
  * update context from form data, and detect context changes.
  */
 
-import type { FieldDescriptor, CaseContext, CasePrefill } from '@/types/form-descriptor';
+import type { FieldDescriptor, CaseContext, CasePrefill, FormData } from '@/types/form-descriptor';
 
 /**
  * Initialize CaseContext from CasePrefill provided at case creation
@@ -50,21 +50,21 @@ export function identifyDiscriminantFields(fields: FieldDescriptor[]): FieldDesc
  * @param fieldPath - Field path (can be nested with dots)
  * @returns Extracted value or undefined
  */
-function extractFieldValue(formData: Record<string, any>, fieldPath: string): any {
+function extractFieldValue(formData: Partial<import('@/types/form-descriptor').FormData>, fieldPath: string): unknown {
   // Check for direct property access first
   if (fieldPath in formData) {
-    return formData[fieldPath];
+    return (formData as Record<string, unknown>)[fieldPath];
   }
 
   // Handle nested paths (e.g., 'personalInfo.jurisdiction')
   const parts = fieldPath.split('.');
-  let value: any = formData;
+  let value: unknown = formData;
 
   for (const part of parts) {
     if (value === null || value === undefined || typeof value !== 'object') {
       return undefined;
     }
-    value = value[part];
+    value = (value as Record<string, unknown>)[part];
   }
 
   return value;
@@ -80,7 +80,7 @@ function extractFieldValue(formData: Record<string, any>, fieldPath: string): an
  */
 export function updateCaseContext(
   currentContext: CaseContext,
-  formData: Record<string, any>,
+  formData: Partial<FormData>,
   discriminantFields: FieldDescriptor[]
 ): CaseContext {
   // Start with a copy of the current context to preserve prefill values

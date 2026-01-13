@@ -16,17 +16,33 @@ export type ValidationRuleType =
   | 'custom';
 
 /**
- * Validation rule definition
- * 
- * @property type - The type of validation rule
- * @property value - Optional value for the rule (e.g., minLength: 3, pattern: /regex/)
- * @property message - Error message to display when validation fails
+ * Discriminated union for validation rules with type-specific value types
  */
-export interface ValidationRule {
-  type: ValidationRuleType;
-  value?: number | string | RegExp | ((value: any) => boolean);
-  message: string;
-}
+export type ValidationRule =
+  | {
+      type: 'required';
+      message: string;
+    }
+  | {
+      type: 'minLength';
+      value: number;
+      message: string;
+    }
+  | {
+      type: 'maxLength';
+      value: number;
+      message: string;
+    }
+  | {
+      type: 'pattern';
+      value: RegExp;
+      message: string;
+    }
+  | {
+      type: 'custom';
+      value: (value: any) => boolean | string;
+      message: string;
+    };
 
 /**
  * Field types supported by the form engine
@@ -47,6 +63,20 @@ export interface FieldItem {
   label: string;
   value: string | number | boolean;
 }
+
+/**
+ * Type-safe default value based on field type
+ */
+export type FieldDefaultValue<T extends FieldType> =
+  T extends 'text' | 'dropdown' | 'autocomplete' | 'date'
+    ? string
+    : T extends 'checkbox'
+    ? boolean
+    : T extends 'radio'
+    ? string | number
+    : T extends 'file'
+    ? File | File[] | null
+    : unknown;
 
 /**
  * Data source configuration for dynamic field data
@@ -98,6 +128,7 @@ export interface FieldDescriptor {
   type: FieldType;
   label: string;
   description?: string;
+  defaultValue?: string | number | boolean | File | File[] | null;
   items?: FieldItem[];
   dataSource?: DataSourceConfig;
   validation: ValidationRule[];
@@ -208,3 +239,18 @@ export interface RulesObject {
     status?: StatusTemplates;
   }>;
 }
+
+/**
+ * Form data type derived from GlobalFormDescriptor
+ * Maps field IDs to their values based on field types
+ */
+export type FormData<T extends GlobalFormDescriptor = GlobalFormDescriptor> = {
+  [K in T['blocks'][number]['fields'][number]['id']]?: 
+    T['blocks'][number]['fields'][number]['type'] extends 'checkbox'
+      ? boolean
+      : T['blocks'][number]['fields'][number]['type'] extends 'file'
+      ? File | File[] | null
+      : T['blocks'][number]['fields'][number]['type'] extends 'radio'
+      ? string | number
+      : string | number | null;
+};

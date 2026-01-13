@@ -13,6 +13,7 @@ import type {
   RulesObject,
   BlockDescriptor,
   FieldDescriptor,
+  FormData,
 } from '@/types/form-descriptor';
 
 export const slice = 'form' as const;
@@ -20,17 +21,17 @@ export const slice = 'form' as const;
 export interface FormState {
   globalDescriptor: GlobalFormDescriptor | null;
   mergedDescriptor: GlobalFormDescriptor | null;
-  formData: Record<string, any>;
+  formData: Partial<FormData>;
   caseContext: CaseContext;
   isRehydrating: boolean;
-  dataSourceCache: Record<string, any>;
+  dataSourceCache: Record<string, unknown>;
 }
 
 export interface RootState {
   [slice]: FormState;
 }
 
-export interface ActionObject<T = any> {
+export interface ActionObject<T = unknown> {
   type: string;
   payload: T;
 }
@@ -54,7 +55,7 @@ export const loadGlobalDescriptor = ({
 
 export const syncFormDataToContext = ({
   formData = {},
-}: { formData?: Record<string, any> } = {}): ActionObject<{ formData: Record<string, any> }> => ({
+}: { formData?: Partial<FormData> } = {}): ActionObject<{ formData: Partial<FormData> }> => ({
   type: `${slice}/syncFormDataToContext`,
   payload: { formData },
 });
@@ -75,7 +76,7 @@ export const applyRulesUpdate = ({
 export const loadDataSource = ({
   fieldPath = '',
   data = null,
-}: { fieldPath?: string; data?: any } = {}): ActionObject<{ fieldPath: string; data: any }> => ({
+}: { fieldPath?: string; data?: unknown } = {}): ActionObject<{ fieldPath: string; data: unknown }> => ({
   type: `${slice}/loadDataSource`,
   payload: { fieldPath, data },
 });
@@ -93,7 +94,7 @@ export const reducer = (state: FormState = initialState, action: ActionObject): 
     }
 
     case syncFormDataToContext().type: {
-      const { formData } = action.payload as { formData: Record<string, any> };
+      const { formData } = action.payload as { formData: Partial<FormData> };
       return {
         ...state,
         formData,
@@ -108,11 +109,11 @@ export const reducer = (state: FormState = initialState, action: ActionObject): 
     }
 
     case applyRulesUpdate().type: {
-      const { rulesObject } = action.payload as { rulesObject: RulesObject | null };
       // Deep merge rules into mergedDescriptor
       // Note: Deep merge logic will be implemented in a later task
       // For now, just preserve the existing mergedDescriptor since RulesObject
       // has a different structure and merging will be handled in a later task
+      // const { rulesObject } = action.payload as { rulesObject: RulesObject | null };
       const updatedMergedDescriptor = state.mergedDescriptor;
       
       return {
@@ -123,7 +124,7 @@ export const reducer = (state: FormState = initialState, action: ActionObject): 
     }
 
     case loadDataSource().type: {
-      const { fieldPath, data } = action.payload as { fieldPath: string; data: any };
+      const { fieldPath, data } = action.payload as { fieldPath: string; data: unknown };
       return {
         ...state,
         dataSourceCache: {

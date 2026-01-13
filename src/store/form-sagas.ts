@@ -8,7 +8,7 @@
 
 import { call, put, delay, takeEvery, takeLatest } from 'redux-saga/effects';
 import type { CallEffect, PutEffect } from 'redux-saga/effects';
-import type { GlobalFormDescriptor, RulesObject, CaseContext } from '@/types/form-descriptor';
+import type { GlobalFormDescriptor, RulesObject, CaseContext, FormData } from '@/types/form-descriptor';
 import {
   loadGlobalDescriptor,
   applyRulesUpdate,
@@ -42,7 +42,7 @@ export const fetchDataSource = (
   fieldPath: string,
   url: string,
   auth?: { type: 'bearer' | 'apikey'; token?: string; headerName?: string }
-): ActionObject<{ fieldPath: string; url: string; auth?: any }> => ({
+): ActionObject<{ fieldPath: string; url: string; auth?: { type: 'bearer' | 'apikey'; token?: string; headerName?: string } }> => ({
   type: FETCH_DATA_SOURCE,
   payload: { fieldPath, url, auth },
 });
@@ -50,10 +50,10 @@ export const fetchDataSource = (
 export const submitForm = (
   url: string,
   method: 'GET' | 'POST' | 'PUT' | 'PATCH',
-  formData: Record<string, any>,
+  formData: Partial<FormData>,
   headers?: Record<string, string>,
   auth?: { type: 'bearer' | 'apikey'; token?: string; headerName?: string }
-): ActionObject<{ url: string; method: string; formData: any; headers?: any; auth?: any }> => ({
+): ActionObject<{ url: string; method: string; formData: Partial<FormData>; headers?: Record<string, string>; auth?: { type: 'bearer' | 'apikey'; token?: string; headerName?: string } }> => ({
   type: SUBMIT_FORM,
   payload: { url, method, formData, headers, auth },
 });
@@ -93,7 +93,7 @@ export function* loadGlobalDescriptorSaga(): Generator<CallEffect | PutEffect, v
 // Saga to sync react-hook-form state to Redux for context extraction
 // This saga watches for form data syncs from react-hook-form
 // When discriminant fields change, context extraction will trigger re-hydration
-export function* syncFormDataSaga(action: ActionObject<{ formData: Record<string, any> }>): Generator<PutEffect, void, any> {
+export function* syncFormDataSaga(action: ActionObject<{ formData: Partial<FormData> }>): Generator<PutEffect, void, any> {
   try {
     // Form data is already synced to Redux by the reducer
     // Context extraction and re-hydration triggering will be implemented
@@ -136,7 +136,7 @@ export function* rehydrateRulesSaga(action: ActionObject<{ caseContext: CaseCont
 }
 
 // Saga to fetch dynamic field data
-export function* loadDataSourceSaga(action: ActionObject<{ fieldPath: string; url: string; auth?: any }>): Generator<CallEffect | PutEffect, void, any> {
+export function* loadDataSourceSaga(action: ActionObject<{ fieldPath: string; url: string; auth?: { type: 'bearer' | 'apikey'; token?: string; headerName?: string } }>): Generator<CallEffect | PutEffect, void, any> {
   try {
     const { fieldPath, url, auth } = action.payload;
     
@@ -169,7 +169,7 @@ export function* loadDataSourceSaga(action: ActionObject<{ fieldPath: string; ur
 }
 
 // Saga to submit form data
-export function* submitFormSaga(action: ActionObject<{ url: string; method: string; formData: any; headers?: any; auth?: any }>): Generator<CallEffect | PutEffect, void, any> {
+export function* submitFormSaga(action: ActionObject<{ url: string; method: string; formData: Partial<FormData>; headers?: Record<string, string>; auth?: { type: 'bearer' | 'apikey'; token?: string; headerName?: string } }>): Generator<CallEffect | PutEffect, void, any> {
   try {
     const { url, method, formData, headers: customHeaders, auth } = action.payload;
     

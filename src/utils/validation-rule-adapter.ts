@@ -37,77 +37,70 @@ export function convertToReactHookFormRules(rules: ValidationRule[]): ReactHookF
         break;
 
       case 'minLength':
-        if (typeof rule.value === 'number') {
-          result.minLength = {
-            value: rule.value,
-            message: rule.message,
-          };
-        }
+        result.minLength = {
+          value: rule.value,
+          message: rule.message,
+        };
         break;
 
       case 'maxLength':
-        if (typeof rule.value === 'number') {
-          result.maxLength = {
-            value: rule.value,
-            message: rule.message,
-          };
-        }
+        result.maxLength = {
+          value: rule.value,
+          message: rule.message,
+        };
         break;
 
       case 'pattern':
-        if (rule.value instanceof RegExp) {
-          result.pattern = {
-            value: rule.value,
-            message: rule.message,
+        result.pattern = {
+          value: rule.value,
+          message: rule.message,
+        };
+        break;
+
+      case 'custom': {
+        // If validate function already exists, combine them
+        const existingValidate = result.validate;
+        const customValidator = rule.value;
+        const ruleMessage = rule.message;
+        
+        if (existingValidate) {
+          result.validate = (value: any) => {
+            const existingResult = existingValidate(value);
+            if (existingResult !== true) {
+              return existingResult;
+            }
+            
+            const customResult = customValidator(value);
+            // If validator returns boolean true, validation passes
+            if (customResult === true) {
+              return true;
+            }
+            // If validator returns boolean false, use rule message
+            if (customResult === false) {
+              return ruleMessage;
+            }
+            // If validator returns string (error message), use rule message instead
+            // This ensures consistent error messages from the descriptor
+            return ruleMessage;
+          };
+        } else {
+          result.validate = (value: any) => {
+            const customResult = customValidator(value);
+            // If validator returns boolean true, validation passes
+            if (customResult === true) {
+              return true;
+            }
+            // If validator returns boolean false, use rule message
+            if (customResult === false) {
+              return ruleMessage;
+            }
+            // If validator returns string (error message), use rule message instead
+            // This ensures consistent error messages from the descriptor
+            return ruleMessage;
           };
         }
         break;
-
-      case 'custom':
-        if (typeof rule.value === 'function') {
-          // If validate function already exists, combine them
-          const existingValidate = result.validate;
-          const customValidator = rule.value;
-          const ruleMessage = rule.message;
-          
-          if (existingValidate) {
-            result.validate = (value: any) => {
-              const existingResult = existingValidate(value);
-              if (existingResult !== true) {
-                return existingResult;
-              }
-              
-              const customResult = customValidator(value);
-              // If validator returns boolean true, validation passes
-              if (customResult === true) {
-                return true;
-              }
-              // If validator returns boolean false, use rule message
-              if (customResult === false) {
-                return ruleMessage;
-              }
-              // If validator returns string (error message), use rule message instead
-              // This ensures consistent error messages from the descriptor
-              return ruleMessage;
-            };
-          } else {
-            result.validate = (value: any) => {
-              const customResult = customValidator(value);
-              // If validator returns boolean true, validation passes
-              if (customResult === true) {
-                return true;
-              }
-              // If validator returns boolean false, use rule message
-              if (customResult === false) {
-                return ruleMessage;
-              }
-              // If validator returns string (error message), use rule message instead
-              // This ensures consistent error messages from the descriptor
-              return ruleMessage;
-            };
-          }
-        }
-        break;
+      }
     }
   }
 
@@ -132,40 +125,32 @@ export function convertToZodSchema(rules: ValidationRule[]): z.ZodString {
         break;
 
       case 'minLength':
-        if (typeof rule.value === 'number') {
-          schema = schema.min(rule.value, rule.message);
-        }
+        schema = schema.min(rule.value, rule.message);
         break;
 
       case 'maxLength':
-        if (typeof rule.value === 'number') {
-          schema = schema.max(rule.value, rule.message);
-        }
+        schema = schema.max(rule.value, rule.message);
         break;
 
       case 'pattern':
-        if (rule.value instanceof RegExp) {
-          schema = schema.regex(rule.value, rule.message);
-        }
+        schema = schema.regex(rule.value, rule.message);
         break;
 
       case 'custom':
-        if (typeof rule.value === 'function') {
-          schema = schema.refine(
-            (value) => {
-              const result = rule.value(value);
-              // If validator returns boolean, use it directly
-              if (typeof result === 'boolean') {
-                return result;
-              }
-              // If validator returns string (error message), treat as validation failure
-              return false;
-            },
-            {
-              message: rule.message,
+        schema = schema.refine(
+          (value) => {
+            const result = rule.value(value);
+            // If validator returns boolean, use it directly
+            if (typeof result === 'boolean') {
+              return result;
             }
-          );
-        }
+            // If validator returns string (error message), treat as validation failure
+            return false;
+          },
+          {
+            message: rule.message,
+          }
+        );
         break;
     }
   }
