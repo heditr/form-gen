@@ -6,8 +6,8 @@
  * These sagas sync form data to Redux for context extraction and re-hydration.
  */
 
-import { call, put, delay, takeEvery, takeLatest } from 'redux-saga/effects';
-import type { CallEffect, PutEffect } from 'redux-saga/effects';
+import { call, put, delay, takeEvery, takeLatest, select } from 'redux-saga/effects';
+import type { CallEffect, PutEffect, SelectEffect } from 'redux-saga/effects';
 import type { GlobalFormDescriptor, RulesObject, CaseContext, FormData } from '@/types/form-descriptor';
 import {
   loadGlobalDescriptor,
@@ -15,8 +15,12 @@ import {
   loadDataSource,
   syncFormDataToContext,
   triggerRehydration,
+  getFormState,
   type ActionObject,
+  type RootState,
 } from './form-dux';
+import { loadDataSource as loadDataSourceUtil } from '@/utils/data-source-loader';
+import type { FormContext } from '@/utils/template-evaluator';
 
 const slice = 'form';
 
@@ -136,32 +140,49 @@ export function* rehydrateRulesSaga(action: ActionObject<{ caseContext: CaseCont
 }
 
 // Saga to fetch dynamic field data
-export function* loadDataSourceSaga(action: ActionObject<{ fieldPath: string; url: string; auth?: { type: 'bearer' | 'apikey'; token?: string; headerName?: string } }>): Generator<CallEffect | PutEffect, void, any> {
+export function* loadDataSourceSaga(action: ActionObject<{ fieldPath: string; url: string; auth?: { type: 'bearer' | 'apikey'; token?: string; headerName?: string } }>): Generator<CallEffect | PutEffect | SelectEffect, void, any> {
   try {
     const { fieldPath, url, auth } = action.payload;
     
-    const headers: Record<string, string> = {};
+    // Get form state from Redux to access mergedDescriptor and formData
+    const formState: ReturnType<typeof getFormState> = yield select((state: RootState) => getFormState(state));
+    const { mergedDescriptor, formData } = formState;
     
-    if (auth) {
-      if (auth.type === 'bearer' && auth.token) {
-        headers['Authorization'] = `Bearer ${auth.token}`;
-      } else if (auth.type === 'apikey' && auth.token && auth.headerName) {
-        headers[auth.headerName] = auth.token;
+    if (!mergedDescriptor) {
+      console.error('No merged descriptor available for data source loading');
+      return;
+    }
+    
+    // Find the field descriptor to get the full DataSourceConfig
+    let fieldDescriptor = null;
+    for (const block of mergedDescriptor.blocks || []) {
+      fieldDescriptor = block.fields?.find((field) => field.id === fieldPath);
+      if (fieldDescriptor) {
+        break;
       }
     }
     
-    const response: Response = yield call(apiCall, url, {
-      method: 'GET',
-      headers,
-    });
-
-    if (response.ok) {
-      const data = yield call([response, 'json']);
-      yield put(loadDataSource({ fieldPath, data }));
-    } else {
-      // Handle error
-      console.error('Failed to load data source:', response.status);
+    if (!fieldDescriptor || !fieldDescriptor.dataSource) {
+      console.error(`Field ${fieldPath} not found or has no dataSource config`);
+      return;
     }
+    
+    // Build form context for template evaluation
+    const formContext: FormContext = {
+      ...formData,
+      formData, // Also include as nested property for template access
+    };
+    
+    // Use the data-source-loader utility which handles:
+    // - URL template evaluation
+    // - Authentication
+    // - API calls
+    // - Response transformation using itemsTemplate
+    // - Caching
+    const items = yield call(loadDataSourceUtil, fieldDescriptor.dataSource, formContext);
+    
+    // Store transformed items in Redux cache
+    yield put(loadDataSource({ fieldPath, data: items }));
   } catch (error) {
     // Handle error
     console.error('Error loading data source:', error);

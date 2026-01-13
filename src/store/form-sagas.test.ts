@@ -6,7 +6,7 @@
  */
 
 import { describe, test, expect } from 'vitest';
-import { call, put, delay } from 'redux-saga/effects';
+import { call, put, delay, select } from 'redux-saga/effects';
 import {
   loadGlobalDescriptorSaga,
   syncFormDataSaga,
@@ -25,9 +25,11 @@ import {
   loadDataSource,
   syncFormDataToContext,
   triggerRehydration,
+  getFormState,
 } from './form-dux';
 import type { GlobalFormDescriptor, RulesObject, CaseContext, FormData } from '@/types/form-descriptor';
-import type { ActionObject } from './form-dux';
+import type { ActionObject, RootState } from './form-dux';
+import { loadDataSource as loadDataSourceUtil } from '@/utils/data-source-loader';
 
 describe('form sagas', () => {
   describe('loadGlobalDescriptorSaga', () => {
@@ -136,26 +138,147 @@ describe('form sagas', () => {
         },
       };
       
+      // Create a mock merged descriptor with the field
+      const mergedDescriptor: GlobalFormDescriptor = {
+        version: '1.0.0',
+        blocks: [
+          {
+            id: 'location',
+            title: 'Location',
+            fields: [
+              {
+                id: 'cities',
+                type: 'autocomplete',
+                label: 'City',
+                dataSource: {
+                  url: '/api/cities',
+                  itemsTemplate: '{"label":"{{item.name}}","value":"{{item.id}}"}',
+                  auth: { type: 'bearer', token: 'token123' },
+                },
+                validation: [],
+              },
+            ],
+          },
+        ],
+        submission: { url: '/api/submit', method: 'POST' },
+      };
+      
+      // Mock form state
+      const mockFormState = {
+        globalDescriptor: null,
+        mergedDescriptor,
+        formData: {},
+        caseContext: {},
+        isRehydrating: false,
+        dataSourceCache: {},
+      };
+      
       const gen = loadDataSourceSaga(action);
       
+      // First yield should be select to get form state
       const firstYield = gen.next().value;
-      // Should be a call effect
+      // Check that it's a select effect (has IO marker)
       expect(firstYield).toHaveProperty('@@redux-saga/IO');
       
-      const data = [{ label: 'New York', value: 'NY' }];
-      const mockResponse = {
-        ok: true,
-        json: async () => data,
-      } as Response;
-      
-      const secondYield = gen.next(mockResponse).value;
-      // Should call json() on response
+      // Mock the select result
+      const secondYield = gen.next(mockFormState).value;
+      // Should be a call to loadDataSourceUtil
       expect(secondYield).toHaveProperty('@@redux-saga/IO');
+      expect(secondYield).toEqual(
+        call(loadDataSourceUtil, mergedDescriptor.blocks[0].fields![0].dataSource!, {
+          ...mockFormState.formData,
+          formData: mockFormState.formData,
+        })
+      );
       
-      const thirdYield = gen.next(data).value;
-      expect(thirdYield).toEqual(put(loadDataSource({ fieldPath: 'cities', data })));
+      // Mock the loadDataSourceUtil result (transformed items)
+      const transformedItems = [{ label: 'New York', value: '1' }];
+      const thirdYield = gen.next(transformedItems).value;
+      expect(thirdYield).toEqual(put(loadDataSource({ fieldPath: 'cities', data: transformedItems })));
       
       expect(gen.next().done).toBe(true);
+    });
+
+    test('given no merged descriptor, should handle error gracefully', () => {
+      const action: ActionObject<{ fieldPath: string; url: string }> = {
+        type: FETCH_DATA_SOURCE,
+        payload: {
+          fieldPath: 'cities',
+          url: '/api/cities',
+        },
+      };
+      
+      // Mock form state without merged descriptor
+      const mockFormState = {
+        globalDescriptor: null,
+        mergedDescriptor: null,
+        formData: {},
+        caseContext: {},
+        isRehydrating: false,
+        dataSourceCache: {},
+      };
+      
+      const gen = loadDataSourceSaga(action);
+      
+      // First yield should be select
+      gen.next();
+      
+      // Mock the select result with no merged descriptor
+      const result = gen.next(mockFormState);
+      
+      // Saga should complete (early return)
+      expect(result.done).toBe(true);
+    });
+
+    test('given field not found, should handle error gracefully', () => {
+      const action: ActionObject<{ fieldPath: string; url: string }> = {
+        type: FETCH_DATA_SOURCE,
+        payload: {
+          fieldPath: 'nonexistent',
+          url: '/api/cities',
+        },
+      };
+      
+      // Create a mock merged descriptor without the field
+      const mergedDescriptor: GlobalFormDescriptor = {
+        version: '1.0.0',
+        blocks: [
+          {
+            id: 'location',
+            title: 'Location',
+            fields: [
+              {
+                id: 'cities',
+                type: 'autocomplete',
+                label: 'City',
+                validation: [],
+              },
+            ],
+          },
+        ],
+        submission: { url: '/api/submit', method: 'POST' },
+      };
+      
+      // Mock form state
+      const mockFormState = {
+        globalDescriptor: null,
+        mergedDescriptor,
+        formData: {},
+        caseContext: {},
+        isRehydrating: false,
+        dataSourceCache: {},
+      };
+      
+      const gen = loadDataSourceSaga(action);
+      
+      // First yield should be select
+      gen.next();
+      
+      // Mock the select result
+      const result = gen.next(mockFormState);
+      
+      // Saga should complete (early return)
+      expect(result.done).toBe(true);
     });
   });
 

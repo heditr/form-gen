@@ -24,7 +24,7 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
       );
     }
 
-    // Test descriptor with Handlebars templates to verify functionality
+    // More complex descriptor with data sources for dropdown and autocomplete
     const globalDescriptor: GlobalFormDescriptor = {
       version: '1.0.0',
       blocks: [
@@ -59,6 +59,8 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
                 { label: 'United States', value: 'US' },
                 { label: 'Canada', value: 'CA' },
                 { label: 'United Kingdom', value: 'UK' },
+                { label: 'Australia', value: 'AU' },
+                { label: 'Germany', value: 'DE' },
               ],
               validation: [
                 {
@@ -67,6 +69,45 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
                 },
               ],
               isDiscriminant: true, // This field triggers re-hydration
+            },
+          ],
+        },
+        {
+          id: 'location-info',
+          title: 'Location Details',
+          description: 'Select your location details',
+          fields: [
+            {
+              id: 'state',
+              type: 'dropdown',
+              label: 'State/Province',
+              description: 'Select your state or province (loaded from API)',
+              dataSource: {
+                url: '/api/data-sources/states',
+                itemsTemplate: '{"label":"{{item.name}}","value":"{{item.code}}"}',
+              },
+              validation: [
+                {
+                  type: 'required',
+                  message: 'State/Province is required',
+                },
+              ],
+            },
+            {
+              id: 'city',
+              type: 'autocomplete',
+              label: 'City',
+              description: 'Search and select your city (loaded from API)',
+              dataSource: {
+                url: '/api/data-sources/cities',
+                itemsTemplate: '{"label":"{{item.name}}","value":"{{item.id}}"}',
+              },
+              validation: [
+                {
+                  type: 'required',
+                  message: 'City is required',
+                },
+              ],
             },
           ],
         },
@@ -132,14 +173,14 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
           },
           fields: [
             {
-              id: 'state',
+              id: 'zipcode',
               type: 'text',
-              label: 'State/Province',
-              description: 'Enter your state or province',
+              label: 'ZIP/Postal Code',
+              description: 'Enter your ZIP or postal code',
               validation: [
                 {
                   type: 'required',
-                  message: 'State/Province is required',
+                  message: 'ZIP/Postal Code is required',
                 },
               ],
             },
