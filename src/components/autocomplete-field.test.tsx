@@ -284,7 +284,8 @@ describe('AutocompleteField', () => {
     expect(input).toHaveAttribute('aria-describedby', 'test-field-error');
   });
 
-  test('given dataSource with cached data, should render cached items', () => {
+  test('given dataSource with cached data, should render cached items', async () => {
+    const user = userEvent.setup();
     const cachedItems = [
       { label: 'Cached Item 1', value: 'c1' },
       { label: 'Cached Item 2', value: 'c2' },
@@ -302,8 +303,15 @@ describe('AutocompleteField', () => {
 
     render(<AutocompleteField {...props} />);
 
-    expect(screen.getByText('Cached Item 1')).toBeInTheDocument();
-    expect(screen.getByText('Cached Item 2')).toBeInTheDocument();
+    // Focus the input to open the dropdown
+    const input = screen.getByRole('textbox');
+    await user.click(input);
+
+    // Wait for items to appear
+    await waitFor(() => {
+      expect(screen.getByText('Cached Item 1')).toBeInTheDocument();
+      expect(screen.getByText('Cached Item 2')).toBeInTheDocument();
+    });
   });
 
   test('given field without description, should render without description', () => {
