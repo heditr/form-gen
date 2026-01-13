@@ -27,8 +27,13 @@ export interface ReactHookFormRules {
  * @param rules - Array of validation rules from form descriptor
  * @returns React Hook Form validation rules object
  */
-export function convertToReactHookFormRules(rules: ValidationRule[]): ReactHookFormRules {
+export function convertToReactHookFormRules(rules: ValidationRule[] | undefined | null): ReactHookFormRules {
   const result: ReactHookFormRules = {};
+
+  // Handle undefined, null, or non-array values
+  if (!rules || !Array.isArray(rules)) {
+    return result;
+  }
 
   for (const rule of rules) {
     switch (rule.type) {
@@ -113,8 +118,13 @@ export function convertToReactHookFormRules(rules: ValidationRule[]): ReactHookF
  * @param rules - Array of validation rules from form descriptor
  * @returns Zod schema with applied validations
  */
-export function convertToZodSchema(rules: ValidationRule[]): z.ZodString {
+export function convertToZodSchema(rules: ValidationRule[] | undefined | null): z.ZodString {
   let schema = z.string();
+
+  // Handle undefined, null, or non-array values
+  if (!rules || !Array.isArray(rules)) {
+    return schema;
+  }
 
   for (const rule of rules) {
     switch (rule.type) {

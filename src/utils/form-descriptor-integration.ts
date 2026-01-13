@@ -50,7 +50,7 @@ export function getFieldValidationRules(
 
   for (const block of descriptor.blocks) {
     const field = block.fields.find((f) => f.id === fieldId);
-    if (field) {
+    if (field && field.validation) {
       return convertToReactHookFormRules(field.validation);
     }
   }
