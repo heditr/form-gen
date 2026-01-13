@@ -1,0 +1,137 @@
+/**
+ * RadioField Component
+ * 
+ * Renders a radio button group using react-hook-form with Shadcn UI styling.
+ * Supports static items and dynamic data sources with loading states.
+ */
+
+import { useMemo } from 'react';
+import { Controller } from 'react-hook-form';
+import type { FieldDescriptor, FieldItem } from '@/types/form-descriptor';
+import type { UseFormReturn, FieldValues } from 'react-hook-form';
+import { Label } from '@/components/ui/label';
+import { cn } from '@/lib/utils';
+
+export interface RadioFieldProps {
+  field: FieldDescriptor;
+  form: UseFormReturn<FieldValues>;
+  isDisabled: boolean;
+  onLoadDataSource: (fieldPath: string, url: string, auth?: { type: 'bearer' | 'apikey'; token?: string; headerName?: string }) => void;
+  dataSourceCache?: Record<string, unknown>;
+}
+
+/**
+ * RadioField Component
+ * 
+ * Renders radio buttons with label, description, and validation error display.
+ * Uses Controller from react-hook-form.
+ * Supports both static items and dynamic data sources.
+ * Note: For discriminant fields, the watch() subscription in useFormDescriptor
+ * will automatically sync changes to Redux and trigger re-hydration.
+ */
+export default function RadioField({
+  field,
+  form,
+  isDisabled,
+  onLoadDataSource,
+  dataSourceCache = {},
+}: RadioFieldProps) {
+  // Get validation error for this field
+  const error = form.formState.errors[field.id];
+  const errorMessage = error?.message as string | undefined;
+
+  // Get items from field.items or cached data source
+  const items = useMemo<FieldItem[]>(() => {
+    if (field.dataSource) {
+      const fieldPath = field.id;
+      const cachedData = dataSourceCache[fieldPath];
+      if (cachedData && Array.isArray(cachedData)) {
+        return cachedData as FieldItem[];
+      }
+      // Trigger data loading if not cached
+      if (!cachedData) {
+        onLoadDataSource(fieldPath, field.dataSource.url, field.dataSource.auth);
+      }
+    }
+    return field.items || [];
+  }, [field.items, field.dataSource, field.id, dataSourceCache, onLoadDataSource]);
+
+  // Derive loading state: loading if dataSource exists but data is not cached
+  const isLoading = useMemo(() => {
+    if (!field.dataSource) {
+      return false;
+    }
+    const fieldPath = field.id;
+    const cachedData = dataSourceCache[fieldPath];
+    return !cachedData || !Array.isArray(cachedData);
+  }, [field.dataSource, field.id, dataSourceCache]);
+
+  return (
+    <div data-testid={`radio-field-${field.id}`} className="space-y-2">
+      <div>
+        <Label>{field.label}</Label>
+        {field.description && (
+          <p className="text-sm text-muted-foreground">
+            {field.description}
+          </p>
+        )}
+      </div>
+      <div className="space-y-2">
+        {isLoading ? (
+          <div className="text-sm text-muted-foreground">Loading...</div>
+        ) : (
+          <Controller
+            name={field.id}
+            control={form.control}
+            defaultValue={field.defaultValue as string | number | undefined}
+            render={({ field: controllerField }) => (
+              <>
+                {items.map((item) => {
+                  const itemValue = String(item.value);
+                  const isChecked = String(controllerField.value) === itemValue;
+                  const radioId = `${field.id}-${itemValue}`;
+                  
+                  return (
+                    <div key={itemValue} className="flex items-center space-x-2">
+                      <input
+                        id={radioId}
+                        name={controllerField.name}
+                        type="radio"
+                        value={itemValue}
+                        checked={isChecked}
+                        onChange={() => controllerField.onChange(item.value)}
+                        onBlur={controllerField.onBlur}
+                        disabled={isDisabled}
+                        className={cn(
+                          'h-4 w-4 border-input text-primary focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50',
+                          errorMessage && 'border-destructive focus:ring-destructive'
+                        )}
+                        aria-invalid={errorMessage ? 'true' : 'false'}
+                        aria-describedby={errorMessage ? `${field.id}-error` : undefined}
+                      />
+                      <Label
+                        htmlFor={radioId}
+                        className="text-sm font-normal cursor-pointer peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                      >
+                        {item.label}
+                      </Label>
+                    </div>
+                  );
+                })}
+              </>
+            )}
+          />
+        )}
+      </div>
+      {errorMessage && (
+        <div
+          id={`${field.id}-error`}
+          className="text-sm text-destructive"
+          role="alert"
+        >
+          {errorMessage}
+        </div>
+      )}
+    </div>
+  );
+}
