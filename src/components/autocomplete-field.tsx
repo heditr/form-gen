@@ -1,0 +1,234 @@
+/**
+ * AutocompleteField Component
+ * 
+ * Renders an autocomplete/combobox field using react-hook-form with Shadcn UI Input component.
+ * Supports static items and dynamic data sources with search/filter functionality.
+ */
+
+import { useEffect, useState, useRef, useMemo } from 'react';
+import { Controller } from 'react-hook-form';
+import type { FieldDescriptor, FieldItem } from '@/types/form-descriptor';
+import type { UseFormReturn, FieldValues } from 'react-hook-form';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { cn } from '@/lib/utils';
+
+export interface AutocompleteFieldProps {
+  field: FieldDescriptor;
+  form: UseFormReturn<FieldValues>;
+  isDisabled: boolean;
+  onLoadDataSource: (fieldPath: string, url: string, auth?: { type: 'bearer' | 'apikey'; token?: string; headerName?: string }) => void;
+  dataSourceCache?: Record<string, unknown>;
+}
+
+/**
+ * AutocompleteField Component
+ * 
+ * Renders an autocomplete input with label, description, and validation error display.
+ * Uses Controller from react-hook-form with Shadcn UI Input component.
+ * Supports both static items and dynamic data sources with search filtering.
+ */
+export default function AutocompleteField({
+  field,
+  form,
+  isDisabled,
+  onLoadDataSource,
+  dataSourceCache = {},
+}: AutocompleteFieldProps) {
+  // Get validation error for this field
+  const error = form.formState.errors[field.id];
+  const errorMessage = error?.message as string | undefined;
+
+  // Get items from field.items or cached data source
+  const items = useMemo<FieldItem[]>(() => {
+    if (field.dataSource) {
+      const fieldPath = field.id;
+      const cachedData = dataSourceCache[fieldPath];
+      if (cachedData && Array.isArray(cachedData)) {
+        return cachedData as FieldItem[];
+      }
+    }
+    return field.items || [];
+  }, [field.items, field.dataSource, field.id, dataSourceCache]);
+
+  // Derive loading state: loading if dataSource exists but data is not cached
+  const isLoading = useMemo(() => {
+    if (!field.dataSource) {
+      return false;
+    }
+    const fieldPath = field.id;
+    const cachedData = dataSourceCache[fieldPath];
+    return !cachedData || !Array.isArray(cachedData);
+  }, [field.dataSource, field.id, dataSourceCache]);
+
+  // Track search term
+  const [searchTerm, setSearchTerm] = useState('');
+  
+  // Filter items based on search term (derived state)
+  const filteredItems = useMemo(() => {
+    if (!searchTerm) {
+      return items;
+    }
+    return items.filter((item) =>
+      item.label.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [searchTerm, items]);
+
+  // Derive isOpen state: open if there are filtered items and user is searching, or if focused
+  const [isOpen, setIsOpen] = useState(false);
+  const [isFocused, setIsFocused] = useState(false);
+  
+  // Update isOpen based on filtered items and focus state
+  const shouldBeOpen = useMemo(() => {
+    if (isFocused && filteredItems.length > 0) {
+      return true;
+    }
+    if (!searchTerm && items.length > 0 && isFocused) {
+      return true;
+    }
+    return false;
+  }, [filteredItems.length, searchTerm, items.length, isFocused]);
+
+  // Sync isOpen with shouldBeOpen
+  useEffect(() => {
+    setIsOpen(shouldBeOpen);
+  }, [shouldBeOpen]);
+
+  const [selectedItem, setSelectedItem] = useState<FieldItem | null>(null);
+
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Load data source when field becomes visible and has dataSource config
+  useEffect(() => {
+    if (!field.dataSource) {
+      return;
+    }
+
+    const fieldPath = field.id;
+    const cachedData = dataSourceCache[fieldPath];
+
+    // If data is already cached, no need to load
+    if (cachedData && Array.isArray(cachedData)) {
+      return;
+    }
+
+    // Trigger data loading (side effect)
+    onLoadDataSource(fieldPath, field.dataSource.url, field.dataSource.auth);
+  }, [field.dataSource, field.id, dataSourceCache, onLoadDataSource]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setIsFocused(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  const handleInputChange = (value: string) => {
+    setSearchTerm(value);
+    setIsFocused(true);
+  };
+
+  const handleSelectItem = (item: FieldItem, onChange: (value: string) => void) => {
+    setSelectedItem(item);
+    setSearchTerm(item.label);
+    setIsFocused(false);
+    onChange(item.value as string);
+  };
+
+  return (
+    <div data-testid={`autocomplete-field-${field.id}`} className="space-y-2" ref={containerRef}>
+      <Label htmlFor={field.id}>
+        {field.label}
+      </Label>
+      {field.description && (
+        <p className="text-sm text-muted-foreground">
+          {field.description}
+        </p>
+      )}
+      <div className="relative">
+        <Controller
+          name={field.id}
+          control={form.control}
+          defaultValue={field.defaultValue as string | undefined}
+          render={({ field: controllerField }) => (
+            <>
+              <Input
+                id={field.id}
+                name={controllerField.name}
+                type="text"
+                value={searchTerm}
+                onChange={(e) => {
+                  handleInputChange(e.target.value);
+                  controllerField.onChange(e);
+                }}
+                onBlur={controllerField.onBlur}
+                onFocus={() => setIsFocused(true)}
+                disabled={isDisabled || isLoading}
+                className={cn(
+                  errorMessage && 'border-destructive focus-visible:ring-destructive'
+                )}
+                aria-invalid={errorMessage ? 'true' : 'false'}
+                aria-describedby={errorMessage ? `${field.id}-error` : undefined}
+                aria-autocomplete="list"
+                aria-expanded={isOpen}
+                aria-controls={`${field.id}-options`}
+              />
+              {(isOpen || isLoading) && (
+                <div
+                  id={`${field.id}-options`}
+                  className="absolute z-50 w-full mt-1 bg-popover border border-border rounded-md shadow-md max-h-60 overflow-auto"
+                  role="listbox"
+                >
+                  {isLoading ? (
+                    <div className="px-3 py-2 text-sm text-muted-foreground">
+                      Loading...
+                    </div>
+                  ) : filteredItems.length > 0 ? (
+                    filteredItems.map((item) => {
+                      const isSelected = selectedItem?.value === item.value;
+                      return (
+                        <div
+                          key={String(item.value)}
+                          role="option"
+                          aria-selected={isSelected}
+                          className={cn(
+                            'px-3 py-2 text-sm cursor-pointer hover:bg-accent',
+                            isSelected && 'bg-accent'
+                          )}
+                          onClick={() => handleSelectItem(item, controllerField.onChange)}
+                          onMouseDown={(e) => e.preventDefault()} // Prevent input blur
+                        >
+                          {item.label}
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <div className="px-3 py-2 text-sm text-muted-foreground">
+                      No options found
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+        />
+      </div>
+      {errorMessage && (
+        <div
+          id={`${field.id}-error`}
+          className="text-sm text-destructive"
+          role="alert"
+        >
+          {errorMessage}
+        </div>
+      )}
+    </div>
+  );
+}
