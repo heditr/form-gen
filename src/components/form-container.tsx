@@ -72,7 +72,8 @@ function FormContainerComponent({
   visibleFields,
   caseContext,
   isRehydrating,
-  formData,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  formData: _formData, // Used for context extraction, not directly in component
   syncFormDataToContext: syncFormData,
   rehydrateRules: rehydrate,
   fetchDataSource: loadDataSource,
