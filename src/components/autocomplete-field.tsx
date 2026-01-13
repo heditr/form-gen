@@ -183,7 +183,8 @@ export default function AutocompleteField({
               {(isOpen || isLoading) && (
                 <div
                   id={`${field.id}-options`}
-                  className="absolute z-50 w-full mt-1 bg-popover border border-border rounded-md shadow-md max-h-60 overflow-auto"
+                  className="absolute z-50 w-full mt-1 bg-popover text-popover-foreground border border-border rounded-md shadow-lg max-h-60 overflow-auto"
+                  style={{ backgroundColor: 'var(--popover)' }}
                   role="listbox"
                 >
                   {isLoading ? (
