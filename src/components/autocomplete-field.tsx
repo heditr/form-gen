@@ -95,8 +95,10 @@ export default function AutocompleteField({
   }, [shouldBeOpen]);
 
   const [selectedItem, setSelectedItem] = useState<FieldItem | null>(null);
+  const [focusedIndex, setFocusedIndex] = useState<number>(-1);
 
   const containerRef = useRef<HTMLDivElement>(null);
+  const optionsRef = useRef<HTMLDivElement>(null);
 
   // Load data source when field becomes visible and has dataSource config
   useEffect(() => {
@@ -133,14 +135,62 @@ export default function AutocompleteField({
   const handleInputChange = (value: string) => {
     setSearchTerm(value);
     setIsFocused(true);
+    setFocusedIndex(-1); // Reset focused index when typing
   };
 
   const handleSelectItem = (item: FieldItem, onChange: (value: string) => void) => {
     setSelectedItem(item);
     setSearchTerm(item.label);
     setIsFocused(false);
+    setFocusedIndex(-1);
     onChange(item.value as string);
   };
+
+  // Handle keyboard navigation
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, onChange: (value: string) => void) => {
+    if (!isOpen || filteredItems.length === 0) {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        setIsFocused(true);
+        if (filteredItems.length > 0) {
+          setFocusedIndex(e.key === 'ArrowDown' ? 0 : filteredItems.length - 1);
+        }
+      }
+      return;
+    }
+
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault();
+        setFocusedIndex((prev) => (prev < filteredItems.length - 1 ? prev + 1 : 0));
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        setFocusedIndex((prev) => (prev > 0 ? prev - 1 : filteredItems.length - 1));
+        break;
+      case 'Enter':
+        e.preventDefault();
+        if (focusedIndex >= 0 && focusedIndex < filteredItems.length) {
+          handleSelectItem(filteredItems[focusedIndex], onChange);
+        }
+        break;
+      case 'Escape':
+        e.preventDefault();
+        setIsFocused(false);
+        setFocusedIndex(-1);
+        break;
+    }
+  };
+
+  // Scroll focused option into view
+  useEffect(() => {
+    if (focusedIndex >= 0 && optionsRef.current) {
+      const optionElement = optionsRef.current.children[focusedIndex] as HTMLElement;
+      if (optionElement && typeof optionElement.scrollIntoView === 'function') {
+        optionElement.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      }
+    }
+  }, [focusedIndex]);
 
   return (
     <div data-testid={`autocomplete-field-${field.id}`} className="space-y-2" ref={containerRef}>
@@ -168,6 +218,7 @@ export default function AutocompleteField({
                   handleInputChange(e.target.value);
                   controllerField.onChange(e);
                 }}
+                onKeyDown={(e) => handleKeyDown(e, controllerField.onChange)}
                 onBlur={controllerField.onBlur}
                 onFocus={() => setIsFocused(true)}
                 disabled={isDisabled || isLoading}
@@ -179,12 +230,13 @@ export default function AutocompleteField({
                 aria-autocomplete="list"
                 aria-expanded={isOpen}
                 aria-controls={`${field.id}-options`}
+                aria-activedescendant={focusedIndex >= 0 ? `${field.id}-option-${focusedIndex}` : undefined}
               />
               {(isOpen || isLoading) && (
                 <div
                   id={`${field.id}-options`}
-                  className="absolute z-50 w-full mt-1 bg-popover text-popover-foreground border border-border rounded-md shadow-lg max-h-60 overflow-auto"
-                  style={{ backgroundColor: 'var(--popover)' }}
+                  ref={optionsRef}
+                  className="absolute z-50 w-full mt-1 bg-[var(--popover)] text-[var(--popover-foreground)] border border-border rounded-md shadow-lg max-h-60 overflow-auto"
                   role="listbox"
                 >
                   {isLoading ? (
@@ -192,19 +244,26 @@ export default function AutocompleteField({
                       Loading...
                     </div>
                   ) : filteredItems.length > 0 ? (
-                    filteredItems.map((item) => {
+                    filteredItems.map((item, index) => {
                       const isSelected = selectedItem?.value === item.value;
+                      const isFocused = focusedIndex === index;
                       return (
                         <div
                           key={String(item.value)}
+                          id={`${field.id}-option-${index}`}
                           role="option"
                           aria-selected={isSelected}
                           className={cn(
-                            'px-3 py-2 text-sm cursor-pointer hover:bg-accent',
-                            isSelected && 'bg-accent'
+                            'px-4 py-2.5 text-sm font-medium cursor-pointer transition-colors duration-150',
+                            'hover:bg-accent hover:text-accent-foreground',
+                            'focus-visible:bg-accent focus-visible:text-accent-foreground focus-visible:outline-none',
+                            isFocused && 'bg-accent text-accent-foreground',
+                            isSelected && 'bg-primary/10 dark:bg-primary/20 text-primary'
                           )}
                           onClick={() => handleSelectItem(item, controllerField.onChange)}
                           onMouseDown={(e) => e.preventDefault()} // Prevent input blur
+                          onMouseEnter={() => setFocusedIndex(index)}
+                          tabIndex={-1}
                         >
                           {item.label}
                         </div>
