@@ -32,9 +32,14 @@ export const SUBMIT_FORM = `${slice}/submitForm`;
 export const SYNC_FORM_DATA = `${slice}/syncFormDataToContext`;
 
 // Action creators for triggering sagas
-export const fetchGlobalDescriptor = (): ActionObject => ({
+export const fetchGlobalDescriptor = (endpoint: string = '/api/form/global-descriptor'): ActionObject<{ endpoint: string }> => ({
   type: FETCH_GLOBAL_DESCRIPTOR,
-  payload: {},
+  payload: { endpoint },
+});
+
+export const fetchDemoGlobalDescriptor = (): ActionObject<{ endpoint: string }> => ({
+  type: FETCH_GLOBAL_DESCRIPTOR,
+  payload: { endpoint: '/api/form/global-descriptor-demo' },
 });
 
 export const rehydrateRules = (caseContext: CaseContext): ActionObject<{ caseContext: CaseContext }> => ({
@@ -75,9 +80,10 @@ async function apiCall(url: string, options: RequestInit = {}): Promise<Response
 }
 
 // Saga to fetch global form descriptor
-export function* loadGlobalDescriptorSaga(): Generator<CallEffect | PutEffect, void, any> {
+export function* loadGlobalDescriptorSaga(action: ActionObject<{ endpoint?: string }>): Generator<CallEffect | PutEffect, void, any> {
   try {
-    const response: Response = yield call(apiCall, '/api/form/global-descriptor', {
+    const endpoint = action.payload?.endpoint || '/api/form/global-descriptor';
+    const response: Response = yield call(apiCall, endpoint, {
       method: 'GET',
     });
 

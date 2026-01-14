@@ -122,16 +122,176 @@ export async function POST(
       );
     }
 
-    // TODO: In production, evaluate rules based on CaseContext
-    // This would involve:
-    // 1. Querying rules database/service based on context values
-    // 2. Evaluating which rules apply based on jurisdiction, entity type, etc.
-    // 3. Returning updated validation rules and status conditions
-    // For now, return a mock RulesObject
+    // Evaluate rules based on CaseContext
+    // This demonstrates how rules change based on entity type and jurisdiction
     const rulesObject: RulesObject = {
       blocks: [],
       fields: [],
     };
+
+    // Add entity-type specific validation rules
+    if (caseContext.entityType === 'corporation') {
+      rulesObject.fields = [
+        ...(rulesObject.fields || []),
+        {
+          id: 'corporationName',
+          validation: [
+            {
+              type: 'required',
+              message: 'Corporation name is required',
+            },
+            {
+              type: 'minLength',
+              value: 3,
+              message: 'Corporation name must be at least 3 characters',
+            },
+          ],
+        },
+        {
+          id: 'taxId',
+          validation: [
+            {
+              type: 'required',
+              message: 'Tax ID is required for corporations',
+            },
+            {
+              type: 'pattern',
+              value: '^\\d{2}-\\d{7}$' as unknown as RegExp,
+              message: 'Tax ID must be in format XX-XXXXXXX',
+            },
+          ],
+        },
+      ];
+    }
+
+    if (caseContext.entityType === 'individual') {
+      rulesObject.fields = [
+        ...(rulesObject.fields || []),
+        {
+          id: 'dateOfBirth',
+          validation: [
+            {
+              type: 'required',
+              message: 'Date of birth is required for individuals',
+            },
+          ],
+        },
+      ];
+
+      // US-specific rules for individuals
+      if (caseContext.country === 'US') {
+        rulesObject.fields = [
+          ...(rulesObject.fields || []),
+          {
+            id: 'ssn',
+            validation: [
+              {
+                type: 'required',
+                message: 'SSN is required for US individuals',
+              },
+              {
+                type: 'pattern',
+                value: '^\\d{3}-\\d{2}-\\d{4}$' as unknown as RegExp,
+                message: 'SSN must be in format XXX-XX-XXXX',
+              },
+            ],
+          },
+        ];
+      }
+
+      // Non-US rules for individuals
+      if (caseContext.country && caseContext.country !== 'US') {
+        rulesObject.fields = [
+          ...(rulesObject.fields || []),
+          {
+            id: 'passportNumber',
+            validation: [
+              {
+                type: 'required',
+                message: 'Passport number is required for non-US individuals',
+              },
+              {
+                type: 'minLength',
+                value: 6,
+                message: 'Passport number must be at least 6 characters',
+              },
+            ],
+          },
+        ];
+      }
+    }
+
+    // Country-specific validation rules
+    if (caseContext.country === 'US') {
+      rulesObject.fields = [
+        ...(rulesObject.fields || []),
+        {
+          id: 'phone',
+          validation: [
+            {
+              type: 'required',
+              message: 'Phone number is required',
+            },
+            {
+              type: 'pattern',
+              value: '^\\(\\d{3}\\) \\d{3}-\\d{4}$' as unknown as RegExp,
+              message: 'Phone number must be in format (XXX) XXX-XXXX',
+            },
+          ],
+        },
+      ];
+    }
+
+    if (caseContext.country === 'CA') {
+      rulesObject.fields = [
+        ...(rulesObject.fields || []),
+        {
+          id: 'phone',
+          validation: [
+            {
+              type: 'required',
+              message: 'Phone number is required',
+            },
+            {
+              type: 'pattern',
+              value: '^\\d{3}-\\d{3}-\\d{4}$' as unknown as RegExp,
+              message: 'Phone number must be in format XXX-XXX-XXXX',
+            },
+          ],
+        },
+      ];
+    }
+
+    // Update status conditions based on context
+    if (caseContext.entityType) {
+      rulesObject.blocks = [
+        ...(rulesObject.blocks || []),
+        {
+          id: 'corporation-details',
+          status: {
+            hidden: caseContext.entityType !== 'corporation' ? 'true' : 'false',
+          },
+        },
+        {
+          id: 'individual-details',
+          status: {
+            hidden: caseContext.entityType !== 'individual' ? 'true' : 'false',
+          },
+        },
+        {
+          id: 'partnership-details',
+          status: {
+            hidden: caseContext.entityType !== 'partnership' ? 'true' : 'false',
+          },
+        },
+        {
+          id: 'trust-details',
+          status: {
+            hidden: caseContext.entityType !== 'trust' ? 'true' : 'false',
+          },
+        },
+      ];
+    }
 
     return NextResponse.json(rulesObject, {
       status: 200,

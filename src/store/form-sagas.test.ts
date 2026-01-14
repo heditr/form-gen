@@ -34,7 +34,12 @@ import { loadDataSource as loadDataSourceUtil } from '@/utils/data-source-loader
 describe('form sagas', () => {
   describe('loadGlobalDescriptorSaga', () => {
     test('given global descriptor loading, should fetch GET /api/form/global-descriptor', () => {
-      const gen = loadGlobalDescriptorSaga();
+      const mockAction: ActionObject<{ endpoint?: string }> = {
+        type: FETCH_GLOBAL_DESCRIPTOR,
+        payload: {}, // endpoint will default to '/api/form/global-descriptor'
+      };
+      
+      const gen = loadGlobalDescriptorSaga(mockAction);
       
       const firstYield = gen.next().value;
       // Check that it's a call effect (has IO marker)
@@ -62,7 +67,12 @@ describe('form sagas', () => {
     });
 
     test('given fetch error, should handle error gracefully', () => {
-      const gen = loadGlobalDescriptorSaga();
+      const mockAction: ActionObject<{ endpoint?: string }> = {
+        type: FETCH_GLOBAL_DESCRIPTOR,
+        payload: {},
+      };
+      
+      const gen = loadGlobalDescriptorSaga(mockAction);
       
       gen.next(); // Skip call
       

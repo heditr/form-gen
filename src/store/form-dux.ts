@@ -34,6 +34,7 @@ export interface RootState {
 export interface ActionObject<T = unknown> {
   type: string;
   payload: T;
+  [key: string]: unknown;
 }
 
 export const initialState: FormState = {
