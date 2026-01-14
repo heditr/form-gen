@@ -1,0 +1,26 @@
+{
+  "isVisibleBefore": true,
+  "isVisibleAfter": true,
+  "stylesBefore": {
+    "backgroundColor": "lab(100 0 0)",
+    "opacity": "1",
+    "visibility": "visible",
+    "zIndex": "50",
+    "display": "block"
+  },
+  "stylesAfter": {
+    "backgroundColor": "lab(100 0 0)",
+    "opacity": "1",
+    "visibility": "visible",
+    "zIndex": "50",
+    "display": "block",
+    "popoverBg": "lab(100% 0 0)",
+    "popoverFg": "lab(2.75381% 0 0)"
+  },
+  "stylesAfterCA": {
+    "backgroundColor": "lab(100 0 0)",
+    "opacity": "1",
+    "visibility": "visible"
+  },
+  "transparencyIssue": false
+}
