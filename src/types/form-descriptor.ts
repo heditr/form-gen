@@ -54,7 +54,8 @@ export type FieldType =
   | 'radio'
   | 'checkbox'
   | 'date'
-  | 'file';
+  | 'file'
+  | 'number';
 
 /**
  * Static item for dropdown, radio, or autocomplete fields
@@ -76,6 +77,8 @@ export type FieldDefaultValue<T extends FieldType> =
     ? string | number
     : T extends 'file'
     ? File | File[] | null
+    : T extends 'number'
+    ? number
     : unknown;
 
 /**
@@ -252,5 +255,7 @@ export type FormData<T extends GlobalFormDescriptor = GlobalFormDescriptor> = {
       ? File | File[] | null
       : T['blocks'][number]['fields'][number]['type'] extends 'radio'
       ? string | number
+      : T['blocks'][number]['fields'][number]['type'] extends 'number'
+      ? number
       : string | number | null;
 };

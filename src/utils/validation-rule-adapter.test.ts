@@ -249,5 +249,52 @@ describe('validation rule adapter', () => {
       const validResult = schema.safeParse('abc');
       expect(validResult.success).toBe(true);
     });
+
+    test('given number field type, should create Zod number schema', () => {
+      const rules: ValidationRule[] = [];
+
+      const schema = convertToZodSchema(rules, 'number');
+
+      const stringResult = schema.safeParse('not a number');
+      expect(stringResult.success).toBe(false);
+
+      const numberResult = schema.safeParse(42);
+      expect(numberResult.success).toBe(true);
+    });
+
+    test('given number field with required rule, should validate number is not NaN', () => {
+      const rules: ValidationRule[] = [
+        { type: 'required', message: 'Number is required' },
+      ];
+
+      const schema = convertToZodSchema(rules, 'number');
+
+      const undefinedResult = schema.safeParse(undefined);
+      expect(undefinedResult.success).toBe(false);
+
+      const nanResult = schema.safeParse(NaN);
+      expect(nanResult.success).toBe(false);
+
+      const validResult = schema.safeParse(42);
+      expect(validResult.success).toBe(true);
+    });
+
+    test('given number field with custom rule, should apply custom validation', () => {
+      const customValidator = (value: unknown) => typeof value === 'number' && value > 0;
+      const rules: ValidationRule[] = [
+        { type: 'custom', value: customValidator, message: 'Must be positive' },
+      ];
+
+      const schema = convertToZodSchema(rules, 'number');
+
+      const negativeResult = schema.safeParse(-5);
+      expect(negativeResult.success).toBe(false);
+      if (!negativeResult.success) {
+        expect(negativeResult.error.issues[0].message).toBe('Must be positive');
+      }
+
+      const positiveResult = schema.safeParse(5);
+      expect(positiveResult.success).toBe(true);
+    });
   });
 });

@@ -13,6 +13,7 @@ import CheckboxField from './checkbox-field';
 import RadioField from './radio-field';
 import DateField from './date-field';
 import FileField from './file-field';
+import NumberField from './number-field';
 
 export interface FieldWrapperProps {
   field: FieldDescriptor;
@@ -92,6 +93,14 @@ export default function FieldWrapper({
     case 'date':
       return (
         <DateField
+          field={field}
+          form={form}
+          isDisabled={isDisabled}
+        />
+      );
+    case 'number':
+      return (
+        <NumberField
           field={field}
           form={form}
           isDisabled={isDisabled}

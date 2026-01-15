@@ -43,6 +43,9 @@ export function extractDefaultValues(descriptor: GlobalFormDescriptor | null): P
           case 'radio':
             defaultValues[field.id as keyof FormData] = '' as FormData[keyof FormData];
             break;
+          case 'number':
+            defaultValues[field.id as keyof FormData] = 0 as unknown as FormData[keyof FormData];
+            break;
           case 'file':
             defaultValues[field.id as keyof FormData] = null as FormData[keyof FormData];
             break;

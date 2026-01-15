@@ -126,7 +126,7 @@ export function convertToReactHookFormRules(rules: ValidationRule[] | undefined 
  */
 export function convertToZodSchema(
   rules: ValidationRule[] | undefined | null,
-  fieldType: 'text' | 'dropdown' | 'autocomplete' | 'date' | 'radio' | 'checkbox' | 'file' = 'text'
+  fieldType: 'text' | 'dropdown' | 'autocomplete' | 'date' | 'radio' | 'checkbox' | 'file' | 'number' = 'text'
 ): z.ZodTypeAny {
   // Handle undefined, null, or non-array values
   if (!rules || !Array.isArray(rules)) {
@@ -138,6 +138,8 @@ export function convertToZodSchema(
         return z.union([z.instanceof(File), z.array(z.instanceof(File)), z.null()]);
       case 'radio':
         return z.union([z.string(), z.number()]);
+      case 'number':
+        return z.number();
       default:
         return z.string();
     }
@@ -154,6 +156,9 @@ export function convertToZodSchema(
       break;
     case 'radio':
       schema = z.union([z.string(), z.number()]);
+      break;
+    case 'number':
+      schema = z.number();
       break;
     default:
       schema = z.string();
@@ -186,6 +191,11 @@ export function convertToZodSchema(
           }, {
             message: rule.message,
           });
+        } else if (fieldType === 'number') {
+          // For number, required means it must be a valid number (not NaN)
+          schema = (schema as z.ZodNumber).refine((val) => !isNaN(val) && val !== null && val !== undefined, {
+            message: rule.message,
+          });
         } else {
           // For string fields (text, dropdown, autocomplete, date), ensure not empty
           schema = (schema as z.ZodString).min(1, rule.message);
@@ -196,14 +206,14 @@ export function convertToZodSchema(
         if (fieldType === 'text' || fieldType === 'dropdown' || fieldType === 'autocomplete' || fieldType === 'date') {
           schema = (schema as z.ZodString).min(rule.value, rule.message);
         }
-        // minLength doesn't apply to checkbox, file, or radio
+        // minLength doesn't apply to checkbox, file, radio, or number
         break;
 
       case 'maxLength':
         if (fieldType === 'text' || fieldType === 'dropdown' || fieldType === 'autocomplete' || fieldType === 'date') {
           schema = (schema as z.ZodString).max(rule.value, rule.message);
         }
-        // maxLength doesn't apply to checkbox, file, or radio
+        // maxLength doesn't apply to checkbox, file, radio, or number
         break;
 
       case 'pattern':
@@ -214,7 +224,7 @@ export function convertToZodSchema(
             : rule.value;
           schema = (schema as z.ZodString).regex(regexPattern, rule.message);
         }
-        // pattern doesn't apply to checkbox, file, or radio
+        // pattern doesn't apply to checkbox, file, radio, or number
         break;
 
       case 'custom':
