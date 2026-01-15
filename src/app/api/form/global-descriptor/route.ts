@@ -188,7 +188,7 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
         },
       ],
       submission: {
-        url: '/api/submit',
+        url: '/api/form/submit',
         method: 'POST',
       },
     };
