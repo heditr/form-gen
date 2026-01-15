@@ -76,39 +76,124 @@ useEffect(() => {
 
 ## Form Initialization
 
-### Step 1: useFormDescriptor Hook Initialization
+### Step 1: Form Container Initialization
+
+**Location**: `src/components/form-container.tsx`
+
+**Flow**:
+1. `FormContainer` is connected to Redux via `connect()`
+2. `mapStateToProps` selects state from Redux:
+   - `mergedDescriptor`: Form descriptor with merged rules
+   - `formData`: Saved form data from Redux (for value restoration)
+   - `caseContext`: Current case context
+   - `isRehydrating`: Re-hydration loading state
+3. Component calculates `formKey` based on validation rules:
+   ```typescript
+   const formKey = useMemo(() => {
+     // Creates hash of field IDs and validation rule types
+     // Changes when validation rules update (triggers remount)
+     const validationHash = mergedDescriptor.blocks
+       .flatMap(block => block.fields)
+       .map(field => {
+         const ruleTypes = field.validation?.map(r => {
+           if (r.type === 'pattern') {
+             // Include pattern value to detect pattern changes
+             return `${r.type}:${r.value}`;
+           }
+           return `${r.type}:${'value' in r ? r.value : ''}`;
+         }).join(',') || 'none';
+         return `${field.id}:${ruleTypes}`;
+       }).join('|');
+     return `form-${validationHash}`;
+   }, [mergedDescriptor]);
+   ```
+4. Renders `FormInner` component with `key={formKey}` to force remount when rules change
+
+### Step 2: FormInner Component and useFormDescriptor Hook
+
+**Location**: `src/components/form-container.tsx` → `FormInner` → `src/hooks/use-form-descriptor.ts`
+
+**Flow**:
+1. `FormInner` receives `mergedDescriptor` and `savedFormData` (from Redux)
+2. Passes to `useFormDescriptor` hook:
+   ```typescript
+   const { form } = useFormDescriptor(mergedDescriptor, {
+     onDiscriminantChange: handleDiscriminantChange,
+     savedFormData, // Restore form values from Redux
+   });
+   ```
+3. Hook extracts default values: `extractDefaultValues(descriptor)`
+4. Merges with saved form data to preserve values on remount:
+   ```typescript
+   const initialValues = {
+     ...defaultValues,  // From descriptor
+     ...savedFormData,  // From Redux (preserves user input)
+   };
+   ```
+5. Builds Zod schema from descriptor: `buildZodSchemaFromDescriptor(descriptor)`
+6. Initializes `react-hook-form` with Zod resolver:
+   ```typescript
+   const form = useForm<FieldValues>({
+     defaultValues: initialValues,
+     resolver: zodResolver(zodSchema),  // Zod schema for validation
+     mode: 'onChange',  // Validate on change for immediate feedback
+   });
+   ```
+
+### Step 3: Zod Schema Building
+
+**Location**: `src/utils/form-descriptor-integration.ts` → `buildZodSchemaFromDescriptor`
+
+**Flow**:
+1. Iterates through all blocks and fields in descriptor
+2. For each field, calls `convertToZodSchema(field.validation, field.type)`
+3. Creates base schema based on field type:
+   - `text`, `dropdown`, `autocomplete`, `date` → `z.string()`
+   - `checkbox` → `z.boolean()`
+   - `number` → `z.number()`
+   - `file` → `z.union([z.instanceof(File), z.array(z.instanceof(File)), z.null()])`
+   - `radio` → `z.union([z.string(), z.number()])`
+4. Applies validation rules:
+   - `required`: Uses `refine()` to check non-empty/non-null values
+   - `minLength`/`maxLength`: Uses `.min()`/`.max()` for strings/numbers
+   - `pattern`: Converts string regex to `RegExp` and uses `.regex()`
+   - `custom`: Uses `.refine()` with custom validator function
+5. Returns complete Zod object schema: `z.object({ fieldId: schema, ... })`
+
+### Step 4: Form Value Preservation
 
 **Location**: `src/hooks/use-form-descriptor.ts`
 
 **Flow**:
-1. Hook receives `mergedDescriptor` from container
-2. Extracts default values from descriptor using `extractDefaultValues()`
-3. Initializes `react-hook-form` with:
+1. All form values are synced to Redux whenever any field changes:
    ```typescript
-   const form = useForm<FieldValues>({
-     defaultValues,  // Extracted from descriptor
-     mode: 'onChange',  // Validate on change for immediate feedback
+   form.watch((value) => {
+     // Sync all form data to Redux for restoration on remount
+     onDiscriminantChange(value as Partial<FormData>);
    });
    ```
-4. Auto-registers all fields from descriptor with validation rules
-5. Sets up discriminant field watcher
+2. Redux stores form data in `formState.formData`
+3. When form remounts (due to `formKey` change):
+   - `savedFormData` is passed to `useFormDescriptor`
+   - Merged with defaults: `{ ...defaultValues, ...savedFormData }`
+   - Form initializes with preserved values ✅
 
-### Step 2: Field Registration
+### Step 5: Field Registration (Automatic with Zod)
 
-**Location**: `src/hooks/use-form-descriptor.ts` → `registerField`
+**Location**: `src/hooks/use-form-descriptor.ts`
 
 **Flow**:
-1. For each field in descriptor blocks:
-   - Extracts validation rules using `getFieldValidationRules()`
-   - Registers field with react-hook-form: `form.register(fieldId, validationRules)`
-   - Tracks registered fields in `registeredFields` Set
-
-**Validation Rules Mapping**:
-- `required` → `{ required: true, message: '...' }`
-- `minLength` → `{ minLength: value, message: '...' }`
-- `maxLength` → `{ maxLength: value, message: '...' }`
-- `pattern` → `{ pattern: regex, message: '...' }`
-- etc.
+1. With Zod resolver, fields are automatically validated
+2. No manual `form.register()` calls needed
+3. Field components use `Controller` from react-hook-form:
+   ```typescript
+   <Controller
+     name={field.id}
+     control={form.control}
+     render={({ field }) => <Input {...field} />}
+   />
+   ```
+4. Validation happens automatically via Zod schema
 
 ### Step 3: Form Presentation Renders
 
@@ -254,19 +339,71 @@ disabled: '{{not newsletter}}'
 4. Updates `mergedDescriptor` in Redux state
 5. Sets `isRehydrating: false`
 
-### Step 5: Validation Rules Update
+**Important**: The reducer now actually merges rules (previously was a TODO):
+```typescript
+case applyRulesUpdate().type: {
+  const { rulesObject } = action.payload;
+  if (!rulesObject || !state.globalDescriptor) {
+    return { ...state, isRehydrating: false };
+  }
+  // Actually merge rules into descriptor
+  const updatedMergedDescriptor = mergeDescriptorWithRules(
+    state.globalDescriptor,
+    rulesObject
+  );
+  return {
+    ...state,
+    mergedDescriptor: updatedMergedDescriptor,
+    isRehydrating: false,
+  };
+}
+```
 
-**Location**: `src/hooks/use-form-descriptor.ts` → `updateValidationRules`
+### Step 5: Form Remounting with New Validation Rules
+
+**Location**: `src/components/form-container.tsx`
 
 **Flow**:
-1. `useFormDescriptor` detects `mergedDescriptor` change
-2. Calls `updateValidationRules(updatedDescriptor)`
-3. For each registered field:
-   - Clears existing errors: `form.clearErrors(fieldId)`
-   - Re-registers field with new rules: `form.register(fieldId, newValidationRules)`
-4. react-hook-form re-validates fields with updated rules
+1. `mergedDescriptor` change triggers `formKey` recalculation
+2. `formKey` changes because validation rules changed (e.g., phone pattern updated)
+3. React sees different `key` prop on `FormInner` component
+4. **FormInner remounts** (old instance unmounts, new instance mounts)
+5. New `useFormDescriptor` hook instance is created:
+   - Receives updated `mergedDescriptor` with new validation rules
+   - Receives `savedFormData` from Redux (preserves user input)
+   - Builds new Zod schema with updated validation rules
+   - Initializes new `useForm()` with new Zod resolver
+6. Form now has updated validation rules ✅
 
-### Step 6: Template Re-evaluation
+**Why Remount?**
+- react-hook-form's `zodResolver` is set at initialization
+- Resolver cannot be changed after form is created
+- Remounting ensures form uses new resolver with updated schema
+
+### Step 6: Form Value Restoration
+
+**Location**: `src/hooks/use-form-descriptor.ts`
+
+**Flow**:
+1. Before remount, all form values were synced to Redux via `form.watch()`
+2. During remount, `savedFormData` is passed to `useFormDescriptor`
+3. Hook merges saved data with defaults:
+   ```typescript
+   const initialValues = {
+     ...defaultValues,  // From descriptor (type-appropriate defaults)
+     ...savedFormData,  // From Redux (user's input) - takes precedence
+   };
+   ```
+4. Form initializes with preserved values:
+   ```typescript
+   const form = useForm({
+     defaultValues: initialValues,  // Includes saved form data
+     resolver: zodResolver(zodSchema),  // New schema with updated rules
+   });
+   ```
+5. User sees their input preserved with new validation rules applied ✅
+
+### Step 7: Template Re-evaluation
 
 **Location**: `src/components/form-presentation.tsx`
 
@@ -435,14 +572,24 @@ disabled: '{{not newsletter}}'
 **One-way sync**: react-hook-form → Redux
 
 **When synced**:
-- Only when discriminant fields change
-- Purpose: Context extraction for rules re-hydration
-- Not bidirectional: Redux doesn't update react-hook-form (except validation rules)
+- **All form values** are synced to Redux whenever ANY field changes
+- Purpose: 
+  1. Context extraction for rules re-hydration (discriminant fields)
+  2. **Form value preservation** during remount (all fields)
+- Not bidirectional: Redux doesn't update react-hook-form (except validation rules via remount)
+
+**Why sync all fields?**
+- Form remounting: When validation rules change, form remounts
+- Value preservation: All form values must be in Redux to restore on remount
+- User experience: Users don't lose their input when rules update
 
 **Why one-way?**
-- Performance: Avoid unnecessary Redux updates on every keystroke
+- Performance: Redux updates are debounced/optimized
 - Separation of concerns: Form state belongs in react-hook-form
-- Redux only needs form data for context extraction, not as source of truth
+- Redux is used for:
+  - Context extraction (discriminant fields)
+  - Value preservation (all fields during remount)
+  - Not as source of truth for form state
 
 ## Key Components and Their Roles
 
@@ -476,11 +623,18 @@ disabled: '{{not newsletter}}'
 **Role**: Bridge between react-hook-form and form descriptor system
 
 **Responsibilities**:
-- Initializes `useForm()` with descriptor defaults
-- Auto-registers fields with validation rules
-- Watches discriminant fields for changes
-- Updates validation rules on re-hydration
+- Extracts default values from descriptor
+- Merges saved form data (from Redux) with defaults for value preservation
+- Builds Zod schema from descriptor validation rules
+- Initializes `useForm()` with Zod resolver
+- Watches all form values and syncs to Redux (for preservation)
+- Handles discriminant field changes for re-hydration
 - Maps backend errors to react-hook-form
+
+**Key Features**:
+- **Zod Integration**: Uses `zodResolver` for type-safe validation
+- **Value Preservation**: Merges `savedFormData` with defaults on remount
+- **Automatic Validation**: Fields validated via Zod schema, no manual registration needed
 
 ### Block Component (`src/components/block.tsx`)
 
@@ -534,6 +688,8 @@ disabled: '{{not newsletter}}'
 - Merge status templates (preserve existing, add new)
 - Preserve original descriptor structure
 
+**Important**: This is called in the `applyRulesUpdate` reducer to actually merge rules from the API into the descriptor. Previously this was a TODO and rules weren't being merged.
+
 ### Data Source Loader (`src/utils/data-source-loader.ts`)
 
 **Role**: Load dynamic field data from APIs
@@ -557,14 +713,29 @@ Redux Saga (loadGlobalDescriptorSaga)
 API Route
     ↓ returns GlobalFormDescriptor
 Redux Reducer (loadGlobalDescriptor)
-    ↓ updates globalDescriptor, mergedDescriptor
+    ↓ updates:
+      - globalDescriptor = fetched descriptor
+      - mergedDescriptor = fetched descriptor (initially same)
+      - formData = {} (empty initially)
 Form Container (mapStateToProps)
-    ↓ receives mergedDescriptor
+    ↓ receives:
+      - mergedDescriptor
+      - formData = {} (no saved data yet)
+    ↓ calculates formKey (based on validation rules)
+FormInner Component (key={formKey})
+    ↓ passes to useFormDescriptor:
+      - mergedDescriptor
+      - savedFormData = {} (empty)
 useFormDescriptor Hook
-    ↓ extracts defaultValues, initializes useForm()
+    ↓
+    1. extractDefaultValues(descriptor) → defaultValues
+    2. Merge: { ...defaultValues, ...savedFormData } → initialValues
+    3. buildZodSchemaFromDescriptor(descriptor) → zodSchema
+    4. useForm({ defaultValues: initialValues, resolver: zodResolver(zodSchema) })
+    ↓
 Form Presentation
-    ↓ renders blocks and fields
-User sees form
+    ↓ renders blocks and fields with react-hook-form
+User sees form (with default values, Zod validation active)
 ```
 
 ### User Interaction Flow
@@ -586,28 +757,59 @@ UI updates (fields appear/disappear, enable/disable)
 ### Discriminant Field Change Flow
 
 ```
-User changes discriminant field
+User changes discriminant field (e.g., selects "United States")
     ↓
 react-hook-form detects change
     ↓
-useFormDescriptor.onDiscriminantChange()
+form.watch() triggers (all field changes)
     ↓
-FormContainer.handleDiscriminantChange()
+useFormDescriptor.onDiscriminantChange(formData)
     ↓
-1. syncFormDataToContext() → Redux
+FormContainer.handleDiscriminantChange(newFormData)
+    ↓
+1. syncFormDataToContext(newFormData) → Redux
+   - Stores ALL form data in Redux for restoration
+    ↓
 2. updateCaseContext() → Extract context
+   - Extracts discriminant field values (country: 'US')
+    ↓
 3. hasContextChanged() → Check if changed
-4. rehydrateRules() → Trigger saga
+   - Compares old vs new context
+    ↓
+4. rehydrateRules(updatedContext) → Trigger saga
     ↓
 Redux Saga (rehydrateRulesSaga)
     ↓ debounce 500ms
 POST /api/rules/context with CaseContext
     ↓
 Backend returns RulesObject
+   - Example: { fields: [{ id: 'phone', validation: [
+       { type: 'required', message: '...' },
+       { type: 'pattern', value: '^\\(\\d{3}\\) \\d{3}-\\d{4}$', message: '...' }
+     ]}]}
     ↓
-applyRulesUpdate() → Merge rules
+applyRulesUpdate({ rulesObject }) → Redux reducer
     ↓
-updateValidationRules() → Update react-hook-form
+mergeDescriptorWithRules(globalDescriptor, rulesObject)
+    ↓
+mergedDescriptor updated in Redux state
+    ↓
+FormContainer.formKey recalculates
+   - Validation hash changes (phone field now has pattern rule)
+    ↓
+formKey changes → FormInner remounts
+    ↓
+useFormDescriptor re-initializes:
+   1. Receives updated mergedDescriptor (with new phone pattern)
+   2. Receives savedFormData from Redux (preserves user input)
+   3. Builds new Zod schema with phone pattern validation
+   4. Merges savedFormData with defaults
+   5. Creates new useForm() with new Zod resolver
+    ↓
+Form now has:
+   - Updated validation rules (phone pattern) ✅
+   - Preserved form values (user's input) ✅
+   - New Zod schema applied ✅
     ↓
 Template re-evaluation → UI updates
 ```
@@ -761,3 +963,195 @@ itemsTemplate: '{"label":"{{item.firstName}} {{item.lastName}}","value":"{{item.
 
 ### Types
 - `src/types/form-descriptor.ts` - TypeScript type definitions
+
+## Complete Re-hydration Flow Summary
+
+This section provides a complete walkthrough of the re-hydration process from start to finish.
+
+### Scenario: User Selects Country "United States"
+
+**Initial State**:
+- Form has `phone` field with no pattern validation
+- User has typed "1234567890" in phone field
+- Country field is empty
+
+**Step-by-Step Flow**:
+
+1. **User Action**: User selects "United States" from country dropdown
+   - react-hook-form updates `country` field value to `"US"`
+
+2. **Form Watch Trigger**: `form.watch()` detects change
+   - Calls `onDiscriminantChange` with ALL form data (including phone: "1234567890")
+
+3. **Sync to Redux**: `handleDiscriminantChange` syncs form data
+   - `syncFormDataToContext(newFormData)` → Redux
+   - Redux state: `formData = { country: "US", phone: "1234567890", ... }`
+
+4. **Context Extraction**: Extract discriminant values
+   - `updateCaseContext()` extracts `country: "US"`
+   - `hasContextChanged()` detects change (was empty, now "US")
+
+5. **Trigger Re-hydration**: Dispatch re-hydration action
+   - `rehydrateRules({ country: "US" })` → Redux Saga
+
+6. **Saga Debounce**: Wait 500ms to prevent excessive calls
+   - `isRehydrating: true` in Redux state
+
+7. **API Call**: POST to `/api/rules/context`
+   - Request body: `{ country: "US" }`
+   - Backend evaluates rules based on country
+
+8. **Backend Response**: Returns `RulesObject`
+   ```json
+   {
+     "fields": [{
+       "id": "phone",
+       "validation": [
+         { "type": "required", "message": "Phone number is required" },
+         { 
+           "type": "pattern", 
+           "value": "^\\(\\d{3}\\) \\d{3}-\\d{4}$",
+           "message": "Phone number must be in format (XXX) XXX-XXXX"
+         }
+       ]
+     }]
+   }
+   ```
+
+9. **Rules Merging**: Redux reducer merges rules
+   - `applyRulesUpdate({ rulesObject })` → Redux reducer
+   - `mergeDescriptorWithRules(globalDescriptor, rulesObject)`
+   - Phone field now has pattern validation rule
+   - `mergedDescriptor` updated in Redux state
+
+10. **Form Key Recalculation**: Container calculates new key
+    - `formKey` changes because phone field validation rules changed
+    - Old key: `form-phone:none|...`
+    - New key: `form-phone:required,pattern:^\\(\\d{3}\\) \\d{3}-\\d{4}$|...`
+
+11. **Form Remount**: React sees different key
+    - Old `FormInner` unmounts
+    - New `FormInner` mounts with `key={newFormKey}`
+
+12. **Form Re-initialization**: `useFormDescriptor` re-runs
+    - Receives updated `mergedDescriptor` (with phone pattern rule)
+    - Receives `savedFormData` from Redux: `{ country: "US", phone: "1234567890", ... }`
+    - Extracts defaults: `{ phone: "", country: "", ... }`
+    - Merges: `{ ...defaults, ...savedFormData }` → `{ phone: "1234567890", country: "US", ... }`
+    - Builds Zod schema: Phone field now has `.regex(/^\(\d{3}\) \d{3}-\d{4}$/, message)`
+    - Initializes form: `useForm({ defaultValues: mergedValues, resolver: zodResolver(newSchema) })`
+
+13. **Validation Active**: Form now validates with new rules
+    - Phone field value: "1234567890" (preserved from before)
+    - Pattern validation: Fails (doesn't match `(XXX) XXX-XXXX` format)
+    - Error displayed: "Phone number must be in format (XXX) XXX-XXXX"
+
+14. **User Sees Result**:
+    - ✅ Form values preserved (phone: "1234567890")
+    - ✅ New validation rules active (pattern validation)
+    - ✅ Error message displayed
+    - ✅ User can correct input to match pattern
+
+### Key Takeaways
+
+1. **Form Remounting**: Validation rules can't be updated dynamically, so form remounts with new resolver
+2. **Value Preservation**: All form values synced to Redux before remount, restored after remount
+3. **Zod Integration**: Validation rules converted to Zod schema, applied via resolver
+4. **Pattern Handling**: String regex patterns from JSON converted to RegExp objects
+5. **Complete Flow**: From user action → API call → rules merge → form remount → validation active
+
+## Complete Re-hydration Flow Summary
+
+This section provides a complete walkthrough of the re-hydration process from start to finish.
+
+### Scenario: User Selects Country "United States"
+
+**Initial State**:
+- Form has `phone` field with no pattern validation
+- User has typed "1234567890" in phone field
+- Country field is empty
+
+**Step-by-Step Flow**:
+
+1. **User Action**: User selects "United States" from country dropdown
+   - react-hook-form updates `country` field value to `"US"`
+
+2. **Form Watch Trigger**: `form.watch()` detects change
+   - Calls `onDiscriminantChange` with ALL form data (including phone: "1234567890")
+
+3. **Sync to Redux**: `handleDiscriminantChange` syncs form data
+   - `syncFormDataToContext(newFormData)` → Redux
+   - Redux state: `formData = { country: "US", phone: "1234567890", ... }`
+
+4. **Context Extraction**: Extract discriminant values
+   - `updateCaseContext()` extracts `country: "US"`
+   - `hasContextChanged()` detects change (was empty, now "US")
+
+5. **Trigger Re-hydration**: Dispatch re-hydration action
+   - `rehydrateRules({ country: "US" })` → Redux Saga
+
+6. **Saga Debounce**: Wait 500ms to prevent excessive calls
+   - `isRehydrating: true` in Redux state
+
+7. **API Call**: POST to `/api/rules/context`
+   - Request body: `{ country: "US" }`
+   - Backend evaluates rules based on country
+
+8. **Backend Response**: Returns `RulesObject`
+   ```json
+   {
+     "fields": [{
+       "id": "phone",
+       "validation": [
+         { "type": "required", "message": "Phone number is required" },
+         { 
+           "type": "pattern", 
+           "value": "^\\(\\d{3}\\) \\d{3}-\\d{4}$",
+           "message": "Phone number must be in format (XXX) XXX-XXXX"
+         }
+       ]
+     }]
+   }
+   ```
+
+9. **Rules Merging**: Redux reducer merges rules
+   - `applyRulesUpdate({ rulesObject })` → Redux reducer
+   - `mergeDescriptorWithRules(globalDescriptor, rulesObject)`
+   - Phone field now has pattern validation rule
+   - `mergedDescriptor` updated in Redux state
+
+10. **Form Key Recalculation**: Container calculates new key
+    - `formKey` changes because phone field validation rules changed
+    - Old key: `form-phone:none|...`
+    - New key: `form-phone:required,pattern:^\\(\\d{3}\\) \\d{3}-\\d{4}$|...`
+
+11. **Form Remount**: React sees different key
+    - Old `FormInner` unmounts
+    - New `FormInner` mounts with `key={newFormKey}`
+
+12. **Form Re-initialization**: `useFormDescriptor` re-runs
+    - Receives updated `mergedDescriptor` (with phone pattern rule)
+    - Receives `savedFormData` from Redux: `{ country: "US", phone: "1234567890", ... }`
+    - Extracts defaults: `{ phone: "", country: "", ... }`
+    - Merges: `{ ...defaults, ...savedFormData }` → `{ phone: "1234567890", country: "US", ... }`
+    - Builds Zod schema: Phone field now has `.regex(/^\(\d{3}\) \d{3}-\d{4}$/, message)`
+    - Initializes form: `useForm({ defaultValues: mergedValues, resolver: zodResolver(newSchema) })`
+
+13. **Validation Active**: Form now validates with new rules
+    - Phone field value: "1234567890" (preserved from before)
+    - Pattern validation: Fails (doesn't match `(XXX) XXX-XXXX` format)
+    - Error displayed: "Phone number must be in format (XXX) XXX-XXXX"
+
+14. **User Sees Result**:
+    - ✅ Form values preserved (phone: "1234567890")
+    - ✅ New validation rules active (pattern validation)
+    - ✅ Error message displayed
+    - ✅ User can correct input to match pattern
+
+### Key Takeaways
+
+1. **Form Remounting**: Validation rules can't be updated dynamically, so form remounts with new resolver
+2. **Value Preservation**: All form values synced to Redux before remount, restored after remount
+3. **Zod Integration**: Validation rules converted to Zod schema, applied via resolver
+4. **Pattern Handling**: String regex patterns from JSON converted to RegExp objects
+5. **Complete Flow**: From user action → API call → rules merge → form remount → validation active
