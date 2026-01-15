@@ -19,6 +19,7 @@ import {
 
 export interface UseFormDescriptorOptions {
   onDiscriminantChange?: (formData: Partial<FormData>) => void;
+  savedFormData?: Partial<FormData>; // Form data from Redux to restore on remount
 }
 
 export interface UseFormDescriptorReturn {
@@ -41,17 +42,29 @@ export function useFormDescriptor(
   descriptor: GlobalFormDescriptor | null,
   options: UseFormDescriptorOptions = {}
 ): UseFormDescriptorReturn {
-  const { onDiscriminantChange } = options;
+  const { onDiscriminantChange, savedFormData } = options;
 
   // Extract default values from descriptor
   const defaultValues = useMemo(() => extractDefaultValues(descriptor), [descriptor]);
+
+  // Merge saved form data with defaults to preserve values on remount
+  const initialValues = useMemo(() => {
+    if (!savedFormData || Object.keys(savedFormData).length === 0) {
+      return defaultValues;
+    }
+    // Merge saved form data with defaults, with saved data taking precedence
+    return {
+      ...defaultValues,
+      ...savedFormData,
+    };
+  }, [defaultValues, savedFormData]);
 
   // Build Zod schema from descriptor
   const zodSchema = useMemo(() => buildZodSchemaFromDescriptor(descriptor), [descriptor]);
 
   // Initialize react-hook-form with Zod resolver
   const form = useForm<FieldValues>({
-    defaultValues,
+    defaultValues: initialValues,
     resolver: zodResolver(zodSchema),
     mode: 'onChange', // Validate on change for immediate feedback
   });
@@ -121,21 +134,24 @@ export function useFormDescriptor(
     [form]
   );
 
-  // Watch discriminant fields and sync to Redux
+  // Watch all form values and sync to Redux for restoration on remount
+  // This ensures form values are preserved when form remounts due to validation rule changes
   useEffect(() => {
-    if (!descriptor || discriminantFields.length === 0 || !onDiscriminantChange) {
+    if (!descriptor || !onDiscriminantChange) {
       return;
     }
 
-    const subscription = form.watch((value, { name }) => {
-      // Only trigger if a discriminant field changed
-      if (name && discriminantFields.includes(name)) {
-        onDiscriminantChange(value as Partial<FormData>);
-      }
+    // Watch all form values and sync to Redux whenever any field changes
+    // This allows form values to be restored when the form remounts
+    const subscription = form.watch((value) => {
+      const formData = value as Partial<FormData>;
+      // Sync all form data to Redux for restoration on remount
+      // The container's handleDiscriminantChange will handle discriminant field logic
+      onDiscriminantChange(formData);
     });
 
     return () => subscription.unsubscribe();
-  }, [descriptor, discriminantFields, form, onDiscriminantChange]);
+  }, [descriptor, form, onDiscriminantChange]);
 
   // Auto-register all fields from descriptor on mount/update
   // With Zod resolver, this is mainly for tracking purposes

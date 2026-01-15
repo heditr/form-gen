@@ -11,7 +11,6 @@ import type { ComponentType } from 'react';
 import type { UseFormReturn, FieldValues } from 'react-hook-form';
 import type { GlobalFormDescriptor, BlockDescriptor, FieldDescriptor, FormData, CaseContext } from '@/types/form-descriptor';
 import { useFormDescriptor } from '@/hooks/use-form-descriptor';
-import { buildZodSchemaFromDescriptor } from '@/utils/form-descriptor-integration';
 import {
   getVisibleBlocks,
   getVisibleFields,
@@ -64,25 +63,32 @@ interface DispatchProps {
 type FormContainerProps = StateProps & DispatchProps;
 
 /**
- * Form Container Component
- * 
- * Connects Redux state and actions to presentation component.
- * Initializes react-hook-form and syncs discriminant fields to Redux.
+ * Inner form component that creates the form instance
+ * This component is keyed to force remount when validation rules change
  */
-function FormContainerComponent({
+function FormInner({
   mergedDescriptor,
   visibleBlocks,
   visibleFields,
-  caseContext,
   isRehydrating,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  formData: _formData, // Used for context extraction, not directly in component
+  caseContext,
+  formData: savedFormData,
+  syncFormData,
+  rehydrate,
+  loadDataSource,
   dataSourceCache,
-  syncFormDataToContext: syncFormData,
-  rehydrateRules: rehydrate,
-  fetchDataSource: loadDataSource,
-}: FormContainerProps) {
-  // Initialize react-hook-form with descriptor
+}: {
+  mergedDescriptor: GlobalFormDescriptor | null;
+  visibleBlocks: BlockDescriptor[];
+  visibleFields: FieldDescriptor[];
+  isRehydrating: boolean;
+  caseContext: CaseContext;
+  formData: Partial<FormData>;
+  syncFormData: (formData: Partial<FormData>) => void;
+  rehydrate: (caseContext: CaseContext) => void;
+  loadDataSource: (fieldPath: string, url: string, auth?: { type: 'bearer' | 'apikey'; token?: string; headerName?: string }) => void;
+  dataSourceCache: Record<string, unknown>;
+}) {
   const handleDiscriminantChange = useCallback(
     (newFormData: Partial<FormData>) => {
       // Sync form data to Redux
@@ -109,9 +115,12 @@ function FormContainerComponent({
     [mergedDescriptor, visibleFields, caseContext, syncFormData, rehydrate]
   );
 
-  // Initialize useFormDescriptor hook
+  // Initialize useFormDescriptor hook - this will create a new form instance
+  // when this component remounts (due to key change)
+  // Pass savedFormData to restore form values from Redux
   const { form } = useFormDescriptor(mergedDescriptor, {
     onDiscriminantChange: handleDiscriminantChange,
+    savedFormData, // Restore form values from Redux when form remounts
   });
 
   // Prepare props for presentation component
@@ -128,8 +137,70 @@ function FormContainerComponent({
     [form, visibleBlocks, visibleFields, isRehydrating, mergedDescriptor, loadDataSource, dataSourceCache]
   );
 
-  // Render presentation component (no UI markup in container)
   return <FormPresentation {...presentationProps} />;
+}
+
+/**
+ * Form Container Component
+ * 
+ * Connects Redux state and actions to presentation component.
+ * Initializes react-hook-form and syncs discriminant fields to Redux.
+ */
+function FormContainerComponent({
+  mergedDescriptor,
+  visibleBlocks,
+  visibleFields,
+  caseContext,
+  isRehydrating,
+  formData, // Used for context extraction and form value restoration
+  dataSourceCache,
+  syncFormDataToContext: syncFormData,
+  rehydrateRules: rehydrate,
+  fetchDataSource: loadDataSource,
+}: FormContainerProps) {
+  // Create a key based on validation rules to force form remount when rules change
+  // This ensures the Zod resolver is re-initialized with updated validation rules
+  const formKey = useMemo(() => {
+    if (!mergedDescriptor) {
+      return 'no-descriptor';
+    }
+    // Create a hash of field IDs and their validation rule types
+    // This will change when validation rules are updated (e.g., during re-hydration)
+    const validationHash = mergedDescriptor.blocks
+      .flatMap((block) => block.fields)
+      .map((field) => {
+        const ruleTypes = field.validation?.map((r) => {
+          if (r.type === 'pattern') {
+            // Include pattern value in hash to detect pattern changes
+            const patternValue = typeof r.value === 'string' ? r.value : r.value.toString();
+            return `${r.type}:${patternValue}`;
+          }
+          return `${r.type}:${'value' in r ? r.value : ''}`;
+        }).join(',') || 'none';
+        return `${field.id}:${ruleTypes}`;
+      })
+      .join('|');
+    return `form-${validationHash}`;
+  }, [mergedDescriptor]);
+
+  // Render inner form component with key to force remount when validation rules change
+  // This ensures the form is re-created with the new Zod schema when rules are updated
+  // Pass formData to restore values when form remounts
+  return (
+    <FormInner
+      key={formKey}
+      mergedDescriptor={mergedDescriptor}
+      visibleBlocks={visibleBlocks}
+      visibleFields={visibleFields}
+      isRehydrating={isRehydrating}
+      caseContext={caseContext}
+      formData={formData}
+      syncFormData={syncFormData}
+      rehydrate={rehydrate}
+      loadDataSource={loadDataSource}
+      dataSourceCache={dataSourceCache}
+    />
+  );
 }
 
 /**

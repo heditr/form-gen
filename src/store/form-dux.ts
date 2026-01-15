@@ -15,6 +15,7 @@ import type {
   FieldDescriptor,
   FormData,
 } from '@/types/form-descriptor';
+import { mergeDescriptorWithRules } from '@/utils/descriptor-merger';
 
 export const slice = 'form' as const;
 
@@ -111,11 +112,18 @@ export const reducer = (state: FormState = initialState, action: ActionObject): 
 
     case applyRulesUpdate().type: {
       // Deep merge rules into mergedDescriptor
-      // Note: Deep merge logic will be implemented in a later task
-      // For now, just preserve the existing mergedDescriptor since RulesObject
-      // has a different structure and merging will be handled in a later task
-      // const { rulesObject } = action.payload as { rulesObject: RulesObject | null };
-      const updatedMergedDescriptor = state.mergedDescriptor;
+      const { rulesObject } = action.payload as { rulesObject: RulesObject | null };
+      
+      if (!rulesObject || !state.globalDescriptor) {
+        // If no rules or no global descriptor, just preserve existing state
+        return {
+          ...state,
+          isRehydrating: false,
+        };
+      }
+      
+      // Merge rules into the global descriptor to create updated merged descriptor
+      const updatedMergedDescriptor = mergeDescriptorWithRules(state.globalDescriptor, rulesObject);
       
       return {
         ...state,

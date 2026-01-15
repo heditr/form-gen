@@ -183,6 +183,25 @@ describe('validation rule adapter', () => {
       expect(successResult.success).toBe(true);
     });
 
+    test('given pattern rule as string from JSON, should convert to RegExp and validate correctly', () => {
+      // Simulate pattern coming from JSON API (like phone number validation)
+      const patternString = '^\\(\\d{3}\\) \\d{3}-\\d{4}$'; // This is what comes from JSON.parse
+      const rules: ValidationRule[] = [
+        { type: 'pattern', value: patternString as unknown as RegExp, message: 'Phone number must be in format (XXX) XXX-XXXX' },
+      ];
+
+      const schema = convertToZodSchema(rules, 'text');
+
+      const invalidResult = schema.safeParse('1234567890');
+      expect(invalidResult.success).toBe(false);
+      if (!invalidResult.success) {
+        expect(invalidResult.error.issues[0].message).toBe('Phone number must be in format (XXX) XXX-XXXX');
+      }
+
+      const validResult = schema.safeParse('(123) 456-7890');
+      expect(validResult.success).toBe(true);
+    });
+
     test('given custom rule, should create Zod schema with refine validation', () => {
       const customValidator = (value: unknown) => value === 'valid';
       const rules: ValidationRule[] = [
