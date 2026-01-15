@@ -18,7 +18,7 @@ export interface ReactHookFormRules {
   minLength?: { value: number; message: string };
   maxLength?: { value: number; message: string };
   pattern?: { value: RegExp; message: string };
-  validate?: (value: any) => boolean | string;
+  validate?: (value: unknown) => boolean | string;
 }
 
 /**
@@ -55,12 +55,17 @@ export function convertToReactHookFormRules(rules: ValidationRule[] | undefined 
         };
         break;
 
-      case 'pattern':
+      case 'pattern': {
+        // Convert string pattern to RegExp if needed (e.g., when loaded from JSON)
+        const regexPattern = typeof rule.value === 'string' 
+          ? new RegExp(rule.value) 
+          : rule.value;
         result.pattern = {
-          value: rule.value,
+          value: regexPattern,
           message: rule.message,
         };
         break;
+      }
 
       case 'custom': {
         // If validate function already exists, combine them
@@ -69,7 +74,7 @@ export function convertToReactHookFormRules(rules: ValidationRule[] | undefined 
         const ruleMessage = rule.message;
         
         if (existingValidate) {
-          result.validate = (value: any) => {
+          result.validate = (value: unknown) => {
             const existingResult = existingValidate(value);
             if (existingResult !== true) {
               return existingResult;
@@ -89,7 +94,7 @@ export function convertToReactHookFormRules(rules: ValidationRule[] | undefined 
             return ruleMessage;
           };
         } else {
-          result.validate = (value: any) => {
+          result.validate = (value: unknown) => {
             const customResult = customValidator(value);
             // If validator returns boolean true, validation passes
             if (customResult === true) {
@@ -113,37 +118,103 @@ export function convertToReactHookFormRules(rules: ValidationRule[] | undefined 
 }
 
 /**
- * Convert ValidationRule[] to Zod schema
+ * Convert ValidationRule[] to Zod schema for a specific field type
  * 
  * @param rules - Array of validation rules from form descriptor
+ * @param fieldType - Type of field (text, checkbox, file, etc.)
  * @returns Zod schema with applied validations
  */
-export function convertToZodSchema(rules: ValidationRule[] | undefined | null): z.ZodString {
-  let schema = z.string();
-
+export function convertToZodSchema(
+  rules: ValidationRule[] | undefined | null,
+  fieldType: 'text' | 'dropdown' | 'autocomplete' | 'date' | 'radio' | 'checkbox' | 'file' = 'text'
+): z.ZodTypeAny {
   // Handle undefined, null, or non-array values
   if (!rules || !Array.isArray(rules)) {
-    return schema;
+    // Return appropriate base schema based on field type
+    switch (fieldType) {
+      case 'checkbox':
+        return z.boolean();
+      case 'file':
+        return z.union([z.instanceof(File), z.array(z.instanceof(File)), z.null()]);
+      case 'radio':
+        return z.union([z.string(), z.number()]);
+      default:
+        return z.string();
+    }
   }
 
+  // Start with base schema based on field type
+  let schema: z.ZodTypeAny;
+  switch (fieldType) {
+    case 'checkbox':
+      schema = z.boolean();
+      break;
+    case 'file':
+      schema = z.union([z.instanceof(File), z.array(z.instanceof(File)), z.null()]);
+      break;
+    case 'radio':
+      schema = z.union([z.string(), z.number()]);
+      break;
+    default:
+      schema = z.string();
+  }
+
+  // Apply validation rules
   for (const rule of rules) {
     switch (rule.type) {
       case 'required':
-        // For required, we need to ensure the string is not empty
-        // Use min(1) to enforce non-empty string with custom message
-        schema = schema.min(1, rule.message);
+        if (fieldType === 'checkbox') {
+          // For checkbox, required means it must be true
+          schema = (schema as z.ZodBoolean).refine((val) => val === true, {
+            message: rule.message,
+          });
+        } else if (fieldType === 'file') {
+          // For file, required means it cannot be null
+          schema = (schema as z.ZodUnion<[z.ZodType<File>, z.ZodType<File[]>, z.ZodNull]>).refine((val) => val !== null, {
+            message: rule.message,
+          });
+        } else if (fieldType === 'radio') {
+          // For radio, required means it cannot be empty string or undefined
+          schema = schema.refine((val) => {
+            if (typeof val === 'string') {
+              return val !== '';
+            }
+            if (typeof val === 'number') {
+              return val !== null && val !== undefined;
+            }
+            return false;
+          }, {
+            message: rule.message,
+          });
+        } else {
+          // For string fields (text, dropdown, autocomplete, date), ensure not empty
+          schema = (schema as z.ZodString).min(1, rule.message);
+        }
         break;
 
       case 'minLength':
-        schema = schema.min(rule.value, rule.message);
+        if (fieldType === 'text' || fieldType === 'dropdown' || fieldType === 'autocomplete' || fieldType === 'date') {
+          schema = (schema as z.ZodString).min(rule.value, rule.message);
+        }
+        // minLength doesn't apply to checkbox, file, or radio
         break;
 
       case 'maxLength':
-        schema = schema.max(rule.value, rule.message);
+        if (fieldType === 'text' || fieldType === 'dropdown' || fieldType === 'autocomplete' || fieldType === 'date') {
+          schema = (schema as z.ZodString).max(rule.value, rule.message);
+        }
+        // maxLength doesn't apply to checkbox, file, or radio
         break;
 
       case 'pattern':
-        schema = schema.regex(rule.value, rule.message);
+        if (fieldType === 'text' || fieldType === 'dropdown' || fieldType === 'autocomplete' || fieldType === 'date') {
+          // Convert string pattern to RegExp if needed (e.g., when loaded from JSON)
+          const regexPattern = typeof rule.value === 'string' 
+            ? new RegExp(rule.value) 
+            : rule.value;
+          schema = (schema as z.ZodString).regex(regexPattern, rule.message);
+        }
+        // pattern doesn't apply to checkbox, file, or radio
         break;
 
       case 'custom':

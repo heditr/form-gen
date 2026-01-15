@@ -119,7 +119,7 @@ describe('validation rule adapter', () => {
         { type: 'required', message: 'This field is required' },
       ];
 
-      const schema = convertToZodSchema(rules);
+      const schema = convertToZodSchema(rules, 'text');
 
       const result = schema.safeParse('');
       expect(result.success).toBe(false);
@@ -136,7 +136,7 @@ describe('validation rule adapter', () => {
         { type: 'minLength', value: 3, message: 'Must be at least 3 characters' },
       ];
 
-      const schema = convertToZodSchema(rules);
+      const schema = convertToZodSchema(rules, 'text');
 
       const result = schema.safeParse('ab');
       expect(result.success).toBe(false);
@@ -153,7 +153,7 @@ describe('validation rule adapter', () => {
         { type: 'maxLength', value: 5, message: 'Must be at most 5 characters' },
       ];
 
-      const schema = convertToZodSchema(rules);
+      const schema = convertToZodSchema(rules, 'text');
 
       const result = schema.safeParse('toolong');
       expect(result.success).toBe(false);
@@ -171,7 +171,7 @@ describe('validation rule adapter', () => {
         { type: 'pattern', value: regex, message: 'Invalid email format' },
       ];
 
-      const schema = convertToZodSchema(rules);
+      const schema = convertToZodSchema(rules, 'text');
 
       const result = schema.safeParse('invalid-email');
       expect(result.success).toBe(false);
@@ -184,12 +184,12 @@ describe('validation rule adapter', () => {
     });
 
     test('given custom rule, should create Zod schema with refine validation', () => {
-      const customValidator = (value: any) => value === 'valid';
+      const customValidator = (value: unknown) => value === 'valid';
       const rules: ValidationRule[] = [
         { type: 'custom', value: customValidator, message: 'Value must be "valid"' },
       ];
 
-      const schema = convertToZodSchema(rules);
+      const schema = convertToZodSchema(rules, 'text');
 
       const result = schema.safeParse('invalid');
       expect(result.success).toBe(false);
@@ -208,7 +208,7 @@ describe('validation rule adapter', () => {
         { type: 'maxLength', value: 10, message: 'Max 10 chars' },
       ];
 
-      const schema = convertToZodSchema(rules);
+      const schema = convertToZodSchema(rules, 'text');
 
       const emptyResult = schema.safeParse('');
       expect(emptyResult.success).toBe(false);
@@ -226,7 +226,7 @@ describe('validation rule adapter', () => {
     test('given empty rules array, should return Zod string schema without validations', () => {
       const rules: ValidationRule[] = [];
 
-      const schema = convertToZodSchema(rules);
+      const schema = convertToZodSchema(rules, 'text');
 
       const result = schema.safeParse('any value');
       expect(result.success).toBe(true);
@@ -238,7 +238,7 @@ describe('validation rule adapter', () => {
         { type: 'minLength', value: 3, message: 'Min 3 chars' },
       ];
 
-      const schema = convertToZodSchema(rules);
+      const schema = convertToZodSchema(rules, 'text');
 
       const emptyResult = schema.safeParse('');
       expect(emptyResult.success).toBe(false);

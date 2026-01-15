@@ -7,12 +7,13 @@
 
 import { useEffect, useMemo, useCallback } from 'react';
 import { useForm, type UseFormReturn, type FieldValues } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import type { GlobalFormDescriptor, FormData } from '@/types/form-descriptor';
 import {
   extractDefaultValues,
-  getFieldValidationRules,
   mapBackendErrorsToForm,
   identifyDiscriminantFields,
+  buildZodSchemaFromDescriptor,
   type MappedFormError,
 } from '@/utils/form-descriptor-integration';
 
@@ -45,13 +46,17 @@ export function useFormDescriptor(
   // Extract default values from descriptor
   const defaultValues = useMemo(() => extractDefaultValues(descriptor), [descriptor]);
 
-  // Initialize react-hook-form
+  // Build Zod schema from descriptor
+  const zodSchema = useMemo(() => buildZodSchemaFromDescriptor(descriptor), [descriptor]);
+
+  // Initialize react-hook-form with Zod resolver
   const form = useForm<FieldValues>({
     defaultValues,
+    resolver: zodResolver(zodSchema),
     mode: 'onChange', // Validate on change for immediate feedback
   });
 
-  // Track registered fields
+  // Track registered fields (for compatibility, but not needed with Zod)
   const registeredFields = useMemo(() => new Set<string>(), []);
 
   // Get discriminant fields
@@ -60,48 +65,49 @@ export function useFormDescriptor(
     [descriptor]
   );
 
-  // Register a field with its validation rules
+  // Register a field (kept for API compatibility, but Zod handles validation)
   const registerField = useCallback(
     (fieldId: string) => {
       if (!descriptor || registeredFields.has(fieldId)) {
         return;
       }
-
-      const validationRules = getFieldValidationRules(descriptor, fieldId);
-      form.register(fieldId, validationRules);
+      // With Zod resolver, fields are automatically validated
+      // This is kept for API compatibility but doesn't need to do anything
       registeredFields.add(fieldId);
     },
-    [descriptor, form, registeredFields]
+    [descriptor, registeredFields]
   );
 
-  // Unregister a field
+  // Unregister a field (kept for API compatibility)
   const unregisterField = useCallback(
     (fieldId: string) => {
       if (registeredFields.has(fieldId)) {
-        form.unregister(fieldId);
         registeredFields.delete(fieldId);
       }
     },
-    [form, registeredFields]
+    [registeredFields]
   );
 
   // Update validation rules when descriptor changes
+  // Note: react-hook-form doesn't support changing the resolver after initialization.
+  // When validation rules change (e.g., during re-hydration), the form needs to be
+  // remounted with a new resolver. This is typically handled at the container level
+  // by using a key that changes when the descriptor changes significantly.
   const updateValidationRules = useCallback(
     (updatedDescriptor: GlobalFormDescriptor) => {
       if (!updatedDescriptor) {
         return;
       }
 
-      // Re-register all currently registered fields with updated rules
-      for (const fieldId of registeredFields) {
-        const validationRules = getFieldValidationRules(updatedDescriptor, fieldId);
-        // Clear existing errors before updating rules
-        form.clearErrors(fieldId);
-        // Re-register with new rules
-        form.register(fieldId, validationRules);
-      }
+      // Clear existing errors - new validation will occur on next user interaction
+      // The schema is memoized and will update, but the resolver won't change until remount
+      form.clearErrors();
+      
+      // Trigger re-validation of all fields with current values
+      // This helps catch any new validation errors immediately
+      form.trigger();
     },
-    [form, registeredFields]
+    [form]
   );
 
   // Map and set backend validation errors
@@ -132,6 +138,7 @@ export function useFormDescriptor(
   }, [descriptor, discriminantFields, form, onDiscriminantChange]);
 
   // Auto-register all fields from descriptor on mount/update
+  // With Zod resolver, this is mainly for tracking purposes
   useEffect(() => {
     if (!descriptor) {
       return;

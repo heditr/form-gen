@@ -6,8 +6,9 @@
  */
 
 import type { FieldError } from 'react-hook-form';
-import type { GlobalFormDescriptor, FieldDescriptor, FormData } from '@/types/form-descriptor';
-import { convertToReactHookFormRules } from './validation-rule-adapter';
+import { z } from 'zod';
+import type { GlobalFormDescriptor, FormData } from '@/types/form-descriptor';
+import { convertToReactHookFormRules, convertToZodSchema } from './validation-rule-adapter';
 
 /**
  * Extract default values from form descriptor fields
@@ -37,7 +38,7 @@ export function extractDefaultValues(descriptor: GlobalFormDescriptor | null): P
             defaultValues[field.id as keyof FormData] = '' as FormData[keyof FormData];
             break;
           case 'checkbox':
-            defaultValues[field.id as keyof FormData] = false as FormData[keyof FormData];
+            defaultValues[field.id as keyof FormData] = false as unknown as FormData[keyof FormData];
             break;
           case 'radio':
             defaultValues[field.id as keyof FormData] = '' as FormData[keyof FormData];
@@ -135,4 +136,28 @@ export function identifyDiscriminantFields(descriptor: GlobalFormDescriptor | nu
   }
 
   return discriminantFields;
+}
+
+/**
+ * Build a complete Zod schema object from form descriptor
+ * 
+ * @param descriptor - Global form descriptor
+ * @returns Zod schema object with field IDs as keys and Zod schemas as values
+ */
+export function buildZodSchemaFromDescriptor(
+  descriptor: GlobalFormDescriptor | null
+): z.ZodObject<Record<string, z.ZodTypeAny>> {
+  if (!descriptor) {
+    return z.object({});
+  }
+
+  const schemaShape: Record<string, z.ZodTypeAny> = {};
+
+  for (const block of descriptor.blocks) {
+    for (const field of block.fields) {
+      schemaShape[field.id] = convertToZodSchema(field.validation, field.type);
+    }
+  }
+
+  return z.object(schemaShape);
 }

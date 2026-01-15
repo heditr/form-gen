@@ -11,6 +11,7 @@ import type { ComponentType } from 'react';
 import type { UseFormReturn, FieldValues } from 'react-hook-form';
 import type { GlobalFormDescriptor, BlockDescriptor, FieldDescriptor, FormData, CaseContext } from '@/types/form-descriptor';
 import { useFormDescriptor } from '@/hooks/use-form-descriptor';
+import { buildZodSchemaFromDescriptor } from '@/utils/form-descriptor-integration';
 import {
   getVisibleBlocks,
   getVisibleFields,
