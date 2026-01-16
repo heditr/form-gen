@@ -7,13 +7,14 @@
  * and shows backend validation responses.
  */
 
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { useDispatch, useSelector, connect } from 'react-redux';
 import type { ComponentType } from 'react';
 import SubmitButton from '@/components/submit-button';
-import { fetchDemoGlobalDescriptor } from '@/store/form-sagas';
+import { useGlobalDescriptor } from '@/hooks/use-form-query';
 import { getFormState, getVisibleBlocks, getVisibleFields, syncFormDataToContext, type RootState } from '@/store/form-dux';
-import { rehydrateRules, fetchDataSource } from '@/store/form-sagas';
+import { rehydrateRulesThunk, fetchDataSourceThunk } from '@/store/form-thunks';
+import type { AppDispatch } from '@/store/store';
 import { updateCaseContext, identifyDiscriminantFields, hasContextChanged } from '@/utils/context-extractor';
 import { useFormDescriptor } from '@/hooks/use-form-descriptor';
 import { createSubmissionOrchestrator, evaluatePayloadTemplate, constructSubmissionRequest } from '@/utils/submission-orchestrator';
@@ -32,7 +33,7 @@ interface SubmissionState {
 }
 
 export default function DemoWithSubmitPage() {
-  const dispatch = useDispatch();
+  const dispatch = useDispatch<AppDispatch>();
   const formState = useSelector((state: RootState) => getFormState(state));
   const [submissionState, setSubmissionState] = useState<SubmissionState>({
     payload: null,
@@ -49,10 +50,9 @@ export default function DemoWithSubmitPage() {
     isRehydrating,
   } = formState;
 
-  // Load global descriptor on mount
-  useEffect(() => {
-    dispatch(fetchDemoGlobalDescriptor());
-  }, [dispatch]);
+  // Load global descriptor using TanStack Query hook
+  // This automatically syncs to Redux state on success
+  const { refetch: refetchDescriptor } = useGlobalDescriptor('/api/form/global-descriptor-demo');
 
   // Reset form handler
   const handleReset = useCallback(() => {
@@ -66,8 +66,8 @@ export default function DemoWithSubmitPage() {
       submittedAt: null,
     });
     // Reload the descriptor to reset form
-    dispatch(fetchDemoGlobalDescriptor());
-  }, [dispatch]);
+    refetchDescriptor();
+  }, [refetchDescriptor]);
 
   return (
     <div className="min-h-screen p-8 bg-gray-50">
@@ -397,11 +397,17 @@ const mapStateToProps = (state: RootState): StateProps => {
   };
 };
 
-const mapDispatchToProps: DispatchProps = {
-  syncFormDataToContext,
-  rehydrateRules,
-  fetchDataSource,
-};
+const mapDispatchToProps = (dispatch: AppDispatch): DispatchProps => ({
+  syncFormDataToContext: (formData: Partial<FormData>) => {
+    dispatch(syncFormDataToContext({ formData }));
+  },
+  rehydrateRules: (caseContext: CaseContext) => {
+    dispatch(rehydrateRulesThunk(caseContext));
+  },
+  fetchDataSource: (fieldPath: string, url: string, auth?: { type: 'bearer' | 'apikey'; token?: string; headerName?: string }) => {
+    dispatch(fetchDataSourceThunk({ fieldPath, url, auth }));
+  },
+});
 
 const FormContainerWithSubmission = connect(
   mapStateToProps,

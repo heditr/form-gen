@@ -29,7 +29,6 @@
     "react-hook-form": "^7.71.0",
     "react-redux": "^9.2.0",
     "redux": "^5.0.1",
-    "redux-saga": "^1.4.2",
     "tailwind-merge": "^3.4.0",
     "tailwindcss-animate": "^1.0.7",
     "zod": "^4.3.5"

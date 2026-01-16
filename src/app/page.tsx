@@ -7,18 +7,13 @@
  * Loads the form descriptor and renders the form container.
  */
 
-import { useEffect } from 'react';
-import { useDispatch } from 'react-redux';
 import FormContainer from '@/components/form-container';
-import { fetchGlobalDescriptor } from '@/store/form-sagas';
+import { useGlobalDescriptor } from '@/hooks/use-form-query';
 
 export default function Home() {
-  const dispatch = useDispatch();
-
-  // Load global descriptor on mount
-  useEffect(() => {
-    dispatch(fetchGlobalDescriptor());
-  }, [dispatch]);
+  // Load global descriptor using TanStack Query hook
+  // This automatically syncs to Redux state on success
+  useGlobalDescriptor();
 
   return (
     <div className="min-h-screen p-8">

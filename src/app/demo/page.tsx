@@ -7,16 +7,15 @@
  * Displays form state, re-hydration status, and allows interactive testing.
  */
 
-import { useEffect, useState, useCallback } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
+import { useState, useCallback } from 'react';
+import { useSelector } from 'react-redux';
 import FormContainer from '@/components/form-container';
-import { fetchDemoGlobalDescriptor } from '@/store/form-sagas';
+import { useGlobalDescriptor } from '@/hooks/use-form-query';
 import { getFormState } from '@/store/form-dux';
 import type { RootState } from '@/store/form-dux';
 import { Button } from '@/components/ui/button';
 
 export default function DemoPage() {
-  const dispatch = useDispatch();
   const formState = useSelector((state: RootState) => getFormState(state));
   const [showDebug, setShowDebug] = useState(false);
   const [submissionResult, setSubmissionResult] = useState<Record<string, unknown> | null>(null);
@@ -29,17 +28,16 @@ export default function DemoPage() {
     dataSourceCache,
   } = formState;
 
-  // Load global descriptor on mount
-  useEffect(() => {
-    dispatch(fetchDemoGlobalDescriptor());
-  }, [dispatch]);
+  // Load global descriptor using TanStack Query hook
+  // This automatically syncs to Redux state on success
+  const { refetch: refetchDescriptor } = useGlobalDescriptor('/api/form/global-descriptor-demo');
 
   // Reset form handler
   const handleReset = useCallback(() => {
     setSubmissionResult(null);
     // Reload the descriptor to reset form
-    dispatch(fetchDemoGlobalDescriptor());
-  }, [dispatch]);
+    refetchDescriptor();
+  }, [refetchDescriptor]);
 
   // Get visible blocks count
   const visibleBlocksCount = mergedDescriptor?.blocks?.length || 0;
