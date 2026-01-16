@@ -5,7 +5,7 @@
  * Supports static items and dynamic data sources with loading states.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo } from 'react';
 import { Controller } from 'react-hook-form';
 import type { FieldDescriptor, FieldItem } from '@/types/form-descriptor';
 import type { UseFormReturn, FieldValues } from 'react-hook-form';
@@ -39,11 +39,40 @@ export default function DropdownField({
   const error = form.formState.errors[field.id];
   const errorMessage = error?.message as string | undefined;
 
-  // Track loading state
-  const [isLoading, setIsLoading] = useState(false);
+  // Derive items from field.items or dataSourceCache (avoid setState in effects)
+  const items = useMemo<FieldItem[]>(() => {
+    // If field has static items, use them
+    if (field.items) {
+      return field.items;
+    }
 
-  // Determine items to display
-  const [items, setItems] = useState<FieldItem[]>(field.items || []);
+    // If field has dataSource, check cache
+    if (field.dataSource) {
+      const fieldPath = field.id;
+      const cachedData = dataSourceCache[fieldPath];
+      
+      if (cachedData && Array.isArray(cachedData)) {
+        // For now, assume cached data is already transformed
+        // TODO: Transform using Handlebars itemsTemplate
+        return cachedData as FieldItem[];
+      }
+    }
+
+    return [];
+  }, [field.items, field.dataSource, field.id, dataSourceCache]);
+
+  // Derive loading state from dataSourceCache (avoid setState in effects)
+  const isLoading = useMemo(() => {
+    if (!field.dataSource) {
+      return false;
+    }
+
+    const fieldPath = field.id;
+    const cachedData = dataSourceCache[fieldPath];
+    
+    // Loading if we have a dataSource but no cached data yet
+    return !cachedData;
+  }, [field.dataSource, field.id, dataSourceCache]);
 
   // Load data source when field becomes visible and has dataSource config
   useEffect(() => {
@@ -54,42 +83,16 @@ export default function DropdownField({
     const fieldPath = field.id;
     const cachedData = dataSourceCache[fieldPath];
 
-    // If data is already cached, use it
+    // If data is already cached, no need to load
     if (cachedData) {
-      // For now, assume cached data is already transformed
-      // TODO: Transform using Handlebars itemsTemplate
-      if (Array.isArray(cachedData)) {
-        setItems(cachedData as FieldItem[]);
-      }
       return;
     }
 
     // Trigger data loading
-    setIsLoading(true);
     // TODO: Evaluate URL template with form context
     // For now, use the URL directly
     onLoadDataSource(fieldPath, field.dataSource.url, field.dataSource.auth);
-    
-    // Note: Data will be loaded via Redux saga and cached
-    // Component should re-render when dataSourceCache updates
-    // For now, we'll set loading to false after a delay (this should be handled by Redux state)
-    // In a real implementation, we'd watch dataSourceCache changes
   }, [field.dataSource, field.id, dataSourceCache, onLoadDataSource]);
-
-  // Watch for data source cache updates
-  useEffect(() => {
-    if (!field.dataSource) {
-      return;
-    }
-
-    const fieldPath = field.id;
-    const cachedData = dataSourceCache[fieldPath];
-
-    if (cachedData && Array.isArray(cachedData)) {
-      setItems(cachedData as FieldItem[]);
-      setIsLoading(false);
-    }
-  }, [dataSourceCache, field.id, field.dataSource]);
 
   return (
     <div data-testid={`dropdown-field-${field.id}`} className="space-y-2">

@@ -6,7 +6,7 @@
  */
 
 import { describe, test, expect } from 'vitest';
-import type { GlobalFormDescriptor } from '@/types/form-descriptor';
+import type { GlobalFormDescriptor, RulesObject, CaseContext } from '@/types/form-descriptor';
 import {
   reducer,
   initialState,
@@ -22,6 +22,11 @@ import {
   type FormState,
   type RootState,
 } from './form-dux';
+import {
+  fetchGlobalDescriptorThunk,
+  rehydrateRulesThunk,
+  fetchDataSourceThunk,
+} from './form-thunks';
 
 // Helper to create state with slice
 const createState = (formState: FormState): RootState => ({
@@ -218,6 +223,86 @@ describe('form-dux', () => {
       expect(fields).toHaveLength(2);
       expect(fields[0].id).toBe('field1');
       expect(fields[1].id).toBe('field2');
+    });
+  });
+
+  describe('thunk action handlers', () => {
+    describe('fetchGlobalDescriptorThunk', () => {
+      test('given fulfilled thunk action, should update globalDescriptor and mergedDescriptor', () => {
+        const descriptor: GlobalFormDescriptor = {
+          version: '1.0.0',
+          blocks: [],
+          submission: { url: '/api/submit', method: 'POST' },
+        };
+
+        const action = fetchGlobalDescriptorThunk.fulfilled(descriptor, 'requestId', '/api/form/global-descriptor');
+        const newState = reducer(initialState, action);
+
+        expect(newState.globalDescriptor).toEqual(descriptor);
+        expect(newState.mergedDescriptor).toEqual(descriptor);
+      });
+    });
+
+    describe('rehydrateRulesThunk', () => {
+      test('given pending thunk action, should set isRehydrating to true', () => {
+        const caseContext: CaseContext = { country: 'US' };
+        const action = rehydrateRulesThunk.pending('requestId', caseContext);
+        const newState = reducer(initialState, action);
+
+        expect(newState.isRehydrating).toBe(true);
+      });
+
+      test('given fulfilled thunk action, should update mergedDescriptor and set isRehydrating to false', () => {
+        const descriptor: GlobalFormDescriptor = {
+          version: '1.0.0',
+          blocks: [{ id: 'block1', title: 'Block 1', fields: [] }],
+          submission: { url: '/api/submit', method: 'POST' },
+        };
+
+        const stateWithDescriptor = reducer(initialState, loadGlobalDescriptor({ descriptor }));
+
+        const rulesObject: RulesObject = {
+          blocks: [{ id: 'block1', status: { hidden: 'false' } }],
+        };
+
+        const caseContext: CaseContext = { country: 'US' };
+        const action = rehydrateRulesThunk.fulfilled(rulesObject, 'requestId', caseContext);
+        const newState = reducer(stateWithDescriptor, action);
+
+        expect(newState.mergedDescriptor).toBeDefined();
+        expect(newState.isRehydrating).toBe(false);
+      });
+
+      test('given rejected thunk action, should set isRehydrating to false', () => {
+        const stateRehydrating = reducer(initialState, triggerRehydration());
+        expect(stateRehydrating.isRehydrating).toBe(true);
+
+        const caseContext: CaseContext = { country: 'US' };
+        const action = rehydrateRulesThunk.rejected(
+          { name: 'RejectedError', message: 'Failed' },
+          'requestId',
+          caseContext
+        );
+        const newState = reducer(stateRehydrating, action);
+
+        expect(newState.isRehydrating).toBe(false);
+      });
+    });
+
+    describe('fetchDataSourceThunk', () => {
+      test('given fulfilled thunk action, should cache data in dataSourceCache', () => {
+        const fieldPath = 'cities';
+        const data = [{ label: 'New York', value: 'NY' }];
+
+        const action = fetchDataSourceThunk.fulfilled(
+          data,
+          'requestId',
+          { fieldPath, url: '/api/cities', auth: undefined }
+        );
+        const newState = reducer(initialState, action);
+
+        expect(newState.dataSourceCache[fieldPath]).toEqual(data);
+      });
     });
   });
 
