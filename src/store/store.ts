@@ -1,30 +1,40 @@
 /**
  * Redux store configuration
  * 
- * Creates root reducer and configures store with redux-saga middleware
+ * Creates root reducer and configures store with Redux Toolkit.
+ * Redux Toolkit includes Redux Thunk middleware by default.
  */
 
-import { createStore, combineReducers, applyMiddleware, Store } from 'redux';
-import createSagaMiddleware from 'redux-saga';
-import { reducer as formReducer, slice as formSlice, type FormState, type RootState } from './form-dux';
-import { formSagas } from './form-sagas';
+import { configureStore, combineReducers } from '@reduxjs/toolkit';
+import { reducer as formReducer, slice as formSlice, type RootState as FormRootState } from './form-dux';
 
-// Root reducer combining all slices
+/**
+ * Root reducer combining all slices
+ * 
+ * Exported for testing purposes
+ */
 export const rootReducer = combineReducers({
   [formSlice]: formReducer,
 });
 
-// Create saga middleware
-const sagaMiddleware = createSagaMiddleware();
+/**
+ * Configure Redux store with Redux Toolkit
+ * 
+ * Redux Toolkit includes Redux Thunk middleware by default,
+ * so no need to add it manually.
+ */
+export const store = configureStore({
+  reducer: rootReducer,
+  // Redux Thunk is included by default in Redux Toolkit
+  // No need to add middleware manually
+});
 
-// Configure store with saga middleware
-export const store: Store<RootState> = createStore(
-  rootReducer,
-  applyMiddleware(sagaMiddleware)
-);
-
-// Run form sagas
-sagaMiddleware.run(formSagas);
-
-// Export saga middleware for running additional sagas if needed
-export { sagaMiddleware };
+/**
+ * Export types for use with connect() and hooks
+ * 
+ * These types are essential for proper TypeScript typing when using:
+ * - connect() with mapDispatchToProps
+ * - useSelector and useDispatch hooks
+ */
+export type RootState = ReturnType<typeof store.getState>;
+export type AppDispatch = typeof store.dispatch;

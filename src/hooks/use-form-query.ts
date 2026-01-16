@@ -8,7 +8,7 @@
 import { useEffect } from 'react';
 import { useQuery, useMutation, type UseQueryOptions, type UseMutationOptions } from '@tanstack/react-query';
 import { useDispatch } from 'react-redux';
-import type { Dispatch } from 'redux';
+import type { AppDispatch } from '@/store/store';
 import { createError } from 'error-causes';
 import type {
   GlobalFormDescriptor,
@@ -22,12 +22,6 @@ import {
 import { loadDataSource as loadDataSourceUtil } from '@/utils/data-source-loader';
 import { evaluateTemplate } from '@/utils/template-evaluator';
 import type { FormContext } from '@/utils/template-evaluator';
-
-/**
- * AppDispatch type - will be properly exported from store after migration
- * For now, using a type that works with the current store setup
- */
-type AppDispatch = Dispatch;
 
 /**
  * Auth configuration type

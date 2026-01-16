@@ -2,12 +2,10 @@
  * Tests for Redux store configuration
  * 
  * Following TDD: Tests verify the store is properly configured with
- * root reducer and saga middleware.
+ * root reducer and Redux Toolkit (which includes Redux Thunk middleware).
  */
 
 import { describe, test, expect } from 'vitest';
-import { createStore, applyMiddleware } from 'redux';
-import createSagaMiddleware from 'redux-saga';
 import { store, rootReducer } from './store';
 import { reducer as formReducer, initialState as formInitialState, slice } from './form-dux';
 import { loadGlobalDescriptor } from './form-dux';
@@ -15,7 +13,9 @@ import { loadGlobalDescriptor } from './form-dux';
 describe('store configuration', () => {
   describe('rootReducer', () => {
     test('given Redux setup needs, should combine form slice in root reducer', () => {
-      const state = rootReducer(undefined, { type: '@@INIT' });
+      // Use a valid ActionObject with payload for initialization
+      const initAction = { type: '@@INIT', payload: {} };
+      const state = rootReducer(undefined, initAction);
       
       expect(state[slice]).toBeDefined();
       expect(state[slice]).toEqual(formInitialState);
@@ -25,7 +25,7 @@ describe('store configuration', () => {
       const descriptor = {
         version: '1.0.0',
         blocks: [],
-        submission: { url: '/api/submit', method: 'POST' },
+        submission: { url: '/api/submit', method: 'POST' as const },
       };
       
       const action = loadGlobalDescriptor({ descriptor });
@@ -52,12 +52,12 @@ describe('store configuration', () => {
       expect(state[slice]).toEqual(formInitialState);
     });
 
-    test('given async operations need, should have saga middleware configured', () => {
-      // Verify store can dispatch actions (saga middleware allows this)
+    test('given async operations need, should support dispatching actions (Redux Thunk included by default)', () => {
+      // Verify store can dispatch actions (Redux Thunk middleware allows this)
       const descriptor = {
         version: '1.0.0',
         blocks: [],
-        submission: { url: '/api/submit', method: 'POST' },
+        submission: { url: '/api/submit', method: 'POST' as const },
       };
       
       const action = loadGlobalDescriptor({ descriptor });
