@@ -16,6 +16,11 @@ import type {
   FormData,
 } from '@/types/form-descriptor';
 import { mergeDescriptorWithRules } from '@/utils/descriptor-merger';
+import {
+  fetchGlobalDescriptorThunk,
+  rehydrateRulesThunk,
+  fetchDataSourceThunk,
+} from './form-thunks';
 
 export const slice = 'form' as const;
 
@@ -84,7 +89,72 @@ export const loadDataSource = ({
 });
 
 // Reducer
-export const reducer = (state: FormState = initialState, action: ActionObject): FormState => {
+// Action can be either our custom ActionObject or Redux Toolkit thunk actions
+export const reducer = (state: FormState = initialState, action: ActionObject | { type: string; payload?: unknown; meta?: { arg?: unknown }; error?: unknown }): FormState => {
+  // Handle thunk actions using Redux Toolkit's action matchers
+  // These take precedence over regular action handlers for thunk operations
+  
+  // Handle fetchGlobalDescriptorThunk fulfilled
+  if (fetchGlobalDescriptorThunk.fulfilled.match(action)) {
+    const descriptor = action.payload as GlobalFormDescriptor;
+    return {
+      ...state,
+      globalDescriptor: descriptor,
+      mergedDescriptor: descriptor,
+    };
+  }
+
+  // Handle rehydrateRulesThunk pending
+  if (rehydrateRulesThunk.pending.match(action)) {
+    return {
+      ...state,
+      isRehydrating: true,
+    };
+  }
+
+  // Handle rehydrateRulesThunk fulfilled
+  if (rehydrateRulesThunk.fulfilled.match(action)) {
+    const rulesObject = action.payload as RulesObject;
+    
+    if (!rulesObject || !state.globalDescriptor) {
+      return {
+        ...state,
+        isRehydrating: false,
+      };
+    }
+    
+    // Merge rules into the global descriptor to create updated merged descriptor
+    const updatedMergedDescriptor = mergeDescriptorWithRules(state.globalDescriptor, rulesObject);
+    
+    return {
+      ...state,
+      mergedDescriptor: updatedMergedDescriptor,
+      isRehydrating: false,
+    };
+  }
+
+  // Handle rehydrateRulesThunk rejected
+  if (rehydrateRulesThunk.rejected.match(action)) {
+    return {
+      ...state,
+      isRehydrating: false,
+    };
+  }
+
+  // Handle fetchDataSourceThunk fulfilled
+  if (fetchDataSourceThunk.fulfilled.match(action)) {
+    const { fieldPath } = action.meta.arg as { fieldPath: string; url: string; auth?: unknown };
+    const data = action.payload;
+    return {
+      ...state,
+      dataSourceCache: {
+        ...state.dataSourceCache,
+        [fieldPath]: data,
+      },
+    };
+  }
+
+  // Handle regular (non-thunk) actions
   switch (action.type) {
     case loadGlobalDescriptor().type: {
       const { descriptor } = action.payload as { descriptor: GlobalFormDescriptor | null };

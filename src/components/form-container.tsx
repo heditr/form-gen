@@ -3,11 +3,13 @@
  * 
  * Redux-connected container that integrates react-hook-form with Redux.
  * Follows container/presentation pattern - no UI markup, only connect logic.
+ * 
+ * Uses React-Redux hooks (useSelector, useDispatch) instead of connect() HOC.
+ * Integrates TanStack Query for server state operations.
  */
 
-import { connect } from 'react-redux';
 import { useMemo, useCallback } from 'react';
-import type { ComponentType } from 'react';
+import { useSelector, useDispatch } from 'react-redux';
 import type { UseFormReturn, FieldValues } from 'react-hook-form';
 import type { GlobalFormDescriptor, BlockDescriptor, FieldDescriptor, FormData, CaseContext } from '@/types/form-descriptor';
 import { useFormDescriptor } from '@/hooks/use-form-descriptor';
@@ -18,7 +20,8 @@ import {
   syncFormDataToContext,
   type RootState,
 } from '@/store/form-dux';
-import { rehydrateRules, fetchDataSource } from '@/store/form-sagas';
+import { rehydrateRulesThunk, fetchDataSourceThunk } from '@/store/form-thunks';
+import type { AppDispatch } from '@/store/store';
 import { updateCaseContext, identifyDiscriminantFields, hasContextChanged } from '@/utils/context-extractor';
 import FormPresentation from './form-presentation';
 
@@ -34,33 +37,6 @@ export interface FormPresentationProps {
   onLoadDataSource: (fieldPath: string, url: string, auth?: { type: 'bearer' | 'apikey'; token?: string; headerName?: string }) => void;
   dataSourceCache: Record<string, unknown>;
 }
-
-/**
- * Redux state props
- */
-interface StateProps {
-  mergedDescriptor: GlobalFormDescriptor | null;
-  visibleBlocks: BlockDescriptor[];
-  visibleFields: FieldDescriptor[];
-  caseContext: CaseContext;
-  isRehydrating: boolean;
-  formData: Partial<FormData>;
-  dataSourceCache: Record<string, unknown>;
-}
-
-/**
- * Redux dispatch props
- */
-interface DispatchProps {
-  syncFormDataToContext: (formData: Partial<FormData>) => void;
-  rehydrateRules: (caseContext: CaseContext) => void;
-  fetchDataSource: (fieldPath: string, url: string, auth?: { type: 'bearer' | 'apikey'; token?: string; headerName?: string }) => void;
-}
-
-/**
- * Container component props
- */
-type FormContainerProps = StateProps & DispatchProps;
 
 /**
  * Inner form component that creates the form instance
@@ -109,6 +85,7 @@ function FormInner({
       // Check if context changed
       if (hasContextChanged(caseContext, updatedContext)) {
         // Trigger re-hydration with updated context
+        // Note: Task 7 will replace this with a debounced TanStack Query mutation hook
         rehydrate(updatedContext);
       }
     },
@@ -143,21 +120,53 @@ function FormInner({
 /**
  * Form Container Component
  * 
- * Connects Redux state and actions to presentation component.
+ * Uses React-Redux hooks to connect to Redux state and dispatch actions.
  * Initializes react-hook-form and syncs discriminant fields to Redux.
  */
-function FormContainerComponent({
-  mergedDescriptor,
-  visibleBlocks,
-  visibleFields,
-  caseContext,
-  isRehydrating,
-  formData, // Used for context extraction and form value restoration
-  dataSourceCache,
-  syncFormDataToContext: syncFormData,
-  rehydrateRules: rehydrate,
-  fetchDataSource: loadDataSource,
-}: FormContainerProps) {
+export default function FormContainer() {
+  // Use hooks to access Redux state
+  const formState = useSelector((state: RootState) => getFormState(state));
+  const dispatch = useDispatch<AppDispatch>();
+
+  const {
+    mergedDescriptor,
+    caseContext,
+    isRehydrating,
+    formData,
+    dataSourceCache,
+  } = formState;
+
+  // Get visible blocks and fields using selectors
+  const visibleBlocks = useSelector((state: RootState) => getVisibleBlocks(state));
+  const visibleFields = useSelector((state: RootState) => getVisibleFields(state));
+
+  // Create callbacks for dispatching actions
+  const syncFormData = useCallback(
+    (formData: Partial<FormData>) => {
+      dispatch(syncFormDataToContext({ formData }));
+    },
+    [dispatch]
+  );
+
+  const rehydrate = useCallback(
+    (caseContext: CaseContext) => {
+      // Dispatch thunk for rehydration
+      // Note: Task 7 will replace this with a debounced TanStack Query mutation hook
+      dispatch(rehydrateRulesThunk(caseContext));
+    },
+    [dispatch]
+  );
+
+  const loadDataSource = useCallback(
+    (fieldPath: string, url: string, auth?: { type: 'bearer' | 'apikey'; token?: string; headerName?: string }) => {
+      // Dispatch thunk for data source loading
+      // Note: This could be replaced with useDataSource hook in the future,
+      // but the current pattern of callback-based loading works well for dynamic fields
+      dispatch(fetchDataSourceThunk({ fieldPath, url, auth }));
+    },
+    [dispatch]
+  );
+
   // Create a key based on validation rules to force form remount when rules change
   // This ensures the Zod resolver is re-initialized with updated validation rules
   const formKey = useMemo(() => {
@@ -202,35 +211,3 @@ function FormContainerComponent({
     />
   );
 }
-
-/**
- * Map Redux state to component props
- */
-const mapStateToProps = (state: RootState): StateProps => {
-  const formState = getFormState(state);
-  return {
-    mergedDescriptor: formState.mergedDescriptor,
-    visibleBlocks: getVisibleBlocks(state),
-    visibleFields: getVisibleFields(state),
-    caseContext: formState.caseContext,
-    isRehydrating: formState.isRehydrating,
-    formData: formState.formData,
-    dataSourceCache: formState.dataSourceCache,
-  };
-};
-
-/**
- * Map Redux actions to component props
- */
-const mapDispatchToProps: DispatchProps = {
-  syncFormDataToContext,
-  rehydrateRules,
-  fetchDataSource,
-};
-
-/**
- * Connected Form Container Component
- */
-const FormContainer = connect(mapStateToProps, mapDispatchToProps)(FormContainerComponent) as ComponentType;
-
-export default FormContainer;
