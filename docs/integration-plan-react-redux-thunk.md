@@ -110,16 +110,14 @@ The form descriptor engine uses a hybrid architecture:
 
 ## Redux Store Adaptation
 
-### Current Implementation (Redux Saga)
+### Implementation (Redux Thunk + TanStack Query)
 
 **Location**: `src/store/`
 
-**Current Files**:
+**Files**:
 - `form-dux.ts` - Redux reducer, actions, selectors
-- `form-sagas.ts` - Redux sagas for async operations
-- `store.ts` - Redux store with saga middleware
-
-### Target Implementation (Redux Thunk)
+- `form-thunks.ts` - Redux thunks for async operations that update Redux state
+- `store.ts` - Redux store with Redux Toolkit (includes Redux Thunk by default)
 
 #### 1. Redux Dux (Take with Minor Changes)
 
@@ -127,8 +125,8 @@ The form descriptor engine uses a hybrid architecture:
 
 **Changes Needed**:
 - ✅ **Take as-is** - Reducer, actions, and selectors work with Redux Thunk
-- ⚠️ **Remove saga-specific action types** (if any)
-- ✅ **Keep all action creators** - they work with thunks
+- ✅ **Add thunk action handlers** - Handle `fulfilled`, `pending`, and `rejected` action types from thunks
+- ✅ **Keep all action creators** - they work with thunks and are used for manual dispatches
 
 **What to Copy**:
 ```typescript
@@ -148,9 +146,9 @@ export const getVisibleFields = ...;
 
 #### 2. Redux Thunks (New File)
 
-**File**: `src/store/form-thunks.ts` (create new)
+**File**: `src/store/form-thunks.ts`
 
-**Purpose**: Replace `form-sagas.ts` with Redux thunks
+**Purpose**: Redux thunks for async operations that update Redux state
 
 **Key Thunks to Create**:
 
@@ -255,14 +253,15 @@ export const submitFormThunk = createAsyncThunk(
 
 **Reducer Updates** (in `form-dux.ts`):
 
-```typescript
-// Add extra reducers for thunk actions
-import { fetchGlobalDescriptorThunk, rehydrateRulesThunk } from './form-thunks';
+The reducer handles both regular actions and thunk actions using Redux Toolkit's `.match()` method:
 
-export const reducer = (state: FormState = initialState, action: ActionObject): FormState => {
-  // ... existing cases ...
+```typescript
+import { fetchGlobalDescriptorThunk, rehydrateRulesThunk, fetchDataSourceThunk } from './form-thunks';
+
+export const reducer = (state: FormState = initialState, action: ActionObject | any): FormState => {
+  // Handle thunk actions first (they take precedence)
   
-  // Handle thunk fulfilled actions
+  // fetchGlobalDescriptorThunk.fulfilled
   if (fetchGlobalDescriptorThunk.fulfilled.match(action)) {
     return {
       ...state,
@@ -271,8 +270,14 @@ export const reducer = (state: FormState = initialState, action: ActionObject): 
     };
   }
   
+  // rehydrateRulesThunk.pending
+  if (rehydrateRulesThunk.pending.match(action)) {
+    return { ...state, isRehydrating: true };
+  }
+  
+  // rehydrateRulesThunk.fulfilled
   if (rehydrateRulesThunk.fulfilled.match(action)) {
-    const { rulesObject } = action.payload;
+    const rulesObject = action.payload;
     if (rulesObject && state.globalDescriptor) {
       const updatedMergedDescriptor = mergeDescriptorWithRules(
         state.globalDescriptor,
@@ -287,39 +292,36 @@ export const reducer = (state: FormState = initialState, action: ActionObject): 
     return { ...state, isRehydrating: false };
   }
   
-  if (rehydrateRulesThunk.pending.match(action)) {
-    return { ...state, isRehydrating: true };
+  // rehydrateRulesThunk.rejected
+  if (rehydrateRulesThunk.rejected.match(action)) {
+    return { ...state, isRehydrating: false };
   }
   
-  // ... other thunk handlers ...
+  // fetchDataSourceThunk.fulfilled
+  if (fetchDataSourceThunk.fulfilled.match(action)) {
+    const { fieldPath } = action.meta.arg;
+    const data = action.payload;
+    return {
+      ...state,
+      dataSourceCache: {
+        ...state.dataSourceCache,
+        [fieldPath]: data,
+      },
+    };
+  }
+  
+  // Handle regular (non-thunk) actions
+  switch (action.type) {
+    // ... existing cases for loadGlobalDescriptor, syncFormDataToContext, etc.
+  }
 };
 ```
 
 #### 3. Store Configuration (Adapt)
 
-**File**: `src/store/store.ts` (adapt from current)
+**File**: `src/store/store.ts`
 
-**Current (Saga)**:
-```typescript
-import { configureStore } from '@reduxjs/toolkit';
-import createSagaMiddleware from 'redux-saga';
-import { reducer } from './form-dux';
-import { formSagas } from './form-sagas';
-
-const sagaMiddleware = createSagaMiddleware();
-
-export const store = configureStore({
-  reducer: {
-    form: reducer,
-  },
-  middleware: (getDefaultMiddleware) =>
-    getDefaultMiddleware().concat(sagaMiddleware),
-});
-
-sagaMiddleware.run(formSagas);
-```
-
-**Target (Thunk)**:
+**Implementation**:
 ```typescript
 import { configureStore } from '@reduxjs/toolkit';
 import { reducer } from './form-dux';
@@ -353,93 +355,127 @@ Use TanStack Query for operations that are pure server state:
 - ✅ Rehydrating rules (if you want automatic refetching on context change)
 - ✅ Loading data sources (excellent for caching and invalidation)
 
-### Hybrid Approach (Recommended)
+### Hybrid Approach (Implemented)
 
 **Use TanStack Query for**:
-- Fetching global descriptor
-- Loading data sources (with caching)
+- ✅ Fetching global descriptor (`useGlobalDescriptor` hook)
+  - Automatic caching with 5-minute stale time
+  - Automatic Redux state synchronization on success
+  - Request deduplication
+- ✅ Loading data sources (`useDataSource` hook)
+  - Dynamic query keys based on fieldPath and evaluated URL
+  - 2-minute stale time for frequently changing data
+  - Automatic Redux cache synchronization
+- ✅ Form submission (`useSubmitForm` hook)
+  - Mutation-based (no caching)
 
 **Use Redux Thunk for**:
-- Rehydrating rules (needs to update Redux state immediately)
-- Syncing form data to Redux
+- ✅ Rehydrating rules (`rehydrateRulesThunk`)
+  - Updates Redux state immediately
+  - Includes 500ms debouncing
+  - Can be replaced with `useDebouncedRehydration` hook for TanStack Query mutation
+- ✅ Syncing form data to Redux (`syncFormDataToContext` action)
 
-**Example TanStack Query Setup**:
+**TanStack Query Hooks** (`src/hooks/use-form-query.ts`):
 
 ```typescript
-// src/hooks/use-form-descriptor-query.ts
-import { useQuery, useMutation } from '@tanstack/react-query';
-import type { GlobalFormDescriptor, RulesObject, CaseContext } from '@/types/form-descriptor';
-
-// Fetch global descriptor
-export function useGlobalDescriptor(endpoint: string = '/api/form/global-descriptor') {
-  return useQuery<GlobalFormDescriptor>({
-    queryKey: ['form', 'global-descriptor'],
-    queryFn: async () => {
-      const response = await fetch(endpoint);
-      if (!response.ok) throw new Error('Failed to fetch descriptor');
-      return response.json();
-    },
-  });
+// Fetch global descriptor with automatic Redux sync
+export function useGlobalDescriptor(
+  endpoint: string = '/api/form/global-descriptor',
+  options?: UseQueryOptions
+) {
+  // Automatically syncs to Redux via useEffect when data is available
+  // Stale time: 5 minutes (descriptors rarely change)
+  // Cache time: 30 minutes
 }
 
-// Rehydrate rules (mutation because it's triggered by user action)
-export function useRehydrateRules() {
-  return useMutation<RulesObject, Error, CaseContext>({
-    mutationFn: async (caseContext: CaseContext) => {
-      const response = await fetch('/api/rules/context', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(caseContext),
-      });
-      if (!response.ok) throw new Error('Failed to rehydrate rules');
-      return response.json();
-    },
-  });
+// Load data source with automatic Redux cache sync
+export function useDataSource(
+  params: { fieldPath: string; config: DataSourceConfig; formContext: FormContext; enabled?: boolean },
+  options?: UseQueryOptions
+) {
+  // Automatically syncs to Redux dataSourceCache via useEffect
+  // Stale time: 2 minutes (data sources may change more frequently)
+  // Cache time: 10 minutes
 }
 
-// Load data source (query with dynamic key)
-export function useDataSource(fieldPath: string, url: string, enabled: boolean = true) {
-  return useQuery({
-    queryKey: ['form', 'data-source', fieldPath, url],
-    queryFn: async () => {
-      // Use loadDataSourceUtil from utils
-      // ...
-    },
-    enabled,
-  });
+// Submit form (mutation, no caching)
+export function useSubmitForm(options?: UseMutationOptions) {
+  // Returns mutation object for form submission
 }
 ```
+
+**Debounced Rehydration Hook** (`src/hooks/use-debounced-rehydration.ts`):
+
+```typescript
+// Custom hook combining debouncing with TanStack Query mutation
+export function useDebouncedRehydration() {
+  // Debounces CaseContext changes by 500ms
+  // Cancels previous calls on rapid changes
+  // Automatically syncs to Redux on success/error
+  return {
+    mutate: (caseContext: CaseContext) => void,
+    isPending: boolean,
+    isError: boolean,
+    isSuccess: boolean,
+    error: Error | null,
+    data: RulesObject | undefined,
+  };
+}
+```
+
+**Caching Configuration**:
+
+- **Global Descriptor**: 
+  - Stale time: 5 minutes (rarely changes)
+  - Cache time: 30 minutes
+  - Query key: `['form', 'global-descriptor', endpoint]`
+
+- **Data Sources**:
+  - Stale time: 2 minutes (may change more frequently)
+  - Cache time: 10 minutes
+  - Query key: `['form', 'data-source', fieldPath, evaluatedUrl]`
+  - Dynamic keys ensure proper cache invalidation when form context changes
+
+- **Redux State Sync**:
+  - All TanStack Query hooks automatically sync to Redux state via `useEffect`
+  - Ensures compatibility with existing Redux-based components
+  - Provides single source of truth in Redux while benefiting from Query caching
 
 **Integration in Form Container**:
 
 ```typescript
 // In form-container.tsx
-import { useGlobalDescriptor, useRehydrateRules } from '@/hooks/use-form-descriptor-query';
-import { useDispatch, useSelector } from 'react-redux';
-import { applyRulesUpdate } from '@/store/form-dux';
+import { useSelector, useDispatch } from 'react-redux';
+import { rehydrateRulesThunk, fetchDataSourceThunk } from '@/store/form-thunks';
+import type { AppDispatch } from '@/store/store';
 
-function FormContainer() {
-  const dispatch = useDispatch();
-  const { data: globalDescriptor, isLoading } = useGlobalDescriptor();
-  const rehydrateMutation = useRehydrateRules();
-  
-  // When descriptor loads, dispatch to Redux
-  useEffect(() => {
-    if (globalDescriptor) {
-      dispatch(loadGlobalDescriptor({ descriptor: globalDescriptor }));
-    }
-  }, [globalDescriptor, dispatch]);
-  
-  // When rules are rehydrated, merge into Redux
-  useEffect(() => {
-    if (rehydrateMutation.data) {
-      dispatch(applyRulesUpdate({ rulesObject: rehydrateMutation.data }));
-    }
-  }, [rehydrateMutation.data, dispatch]);
-  
+export default function FormContainer() {
+  // Use hooks to access Redux state
+  const formState = useSelector((state: RootState) => getFormState(state));
+  const dispatch = useDispatch<AppDispatch>();
+
+  // Create callbacks for dispatching thunks
+  const rehydrate = useCallback(
+    (caseContext: CaseContext) => {
+      dispatch(rehydrateRulesThunk(caseContext));
+      // Or use: useDebouncedRehydration() hook for TanStack Query mutation
+    },
+    [dispatch]
+  );
+
+  const loadDataSource = useCallback(
+    (fieldPath: string, url: string, auth?: AuthConfig) => {
+      dispatch(fetchDataSourceThunk({ fieldPath, url, auth }));
+    },
+    [dispatch]
+  );
+
   // ... rest of component
 }
 ```
+
+**Note**: Global descriptor loading is typically handled by parent pages using `useGlobalDescriptor()` hook, which automatically syncs to Redux.
 
 ---
 
@@ -447,16 +483,10 @@ function FormContainer() {
 
 ### Form Container Adaptation
 
-**Current** (using `connect()` HOC):
-```typescript
-const mapStateToProps = (state: RootState): StateProps => { ... };
-const mapDispatchToProps: DispatchProps = { ... };
-const FormContainer = connect(mapStateToProps, mapDispatchToProps)(FormContainerComponent);
-```
-
-**Target** (using React-Redux hooks):
+**Implementation** (using React-Redux hooks):
 ```typescript
 import { useSelector, useDispatch } from 'react-redux';
+import type { AppDispatch } from '@/store/store';
 import { getFormState, getVisibleBlocks, getVisibleFields, syncFormDataToContext } from '@/store/form-dux';
 import { rehydrateRulesThunk, fetchDataSourceThunk } from '@/store/form-thunks';
 
@@ -725,8 +755,8 @@ export default FormContainer;
 
 | Component | Current | Target | Changes |
 |----------|---------|--------|---------|
-| **Store** | Redux Saga | Redux Thunk | Convert sagas to thunks |
-| **Async Ops** | Redux Saga | Redux Thunk + TanStack Query | Use thunks for Redux state, queries for server state |
+| **Store** | Redux Saga | Redux Toolkit (includes Redux Thunk) | Redux Toolkit includes thunk middleware by default |
+| **Async Ops** | Redux Saga | Redux Thunk + TanStack Query | Use thunks for Redux state updates, TanStack Query for server state with caching |
 | **Container** | `connect()` HOC | React-Redux hooks | Use `useSelector` and `useDispatch` |
 | **API Routes** | Next.js API routes | Your API | Update endpoint URLs |
 | **Debouncing** | Saga `delay()` | `setTimeout` or `lodash.debounce` | Use standard JS debouncing |
@@ -775,6 +805,36 @@ The form engine preserves form values during re-hydration by:
 2. Restoring values from Redux when form remounts (due to validation rule changes)
 
 This is handled automatically by `useFormDescriptor` hook - no changes needed.
+
+### TanStack Query Caching Strategy
+
+The form engine uses TanStack Query for server state with the following caching configuration:
+
+**Global Descriptor**:
+- **Stale Time**: 5 minutes (descriptors rarely change)
+- **Cache Time**: 30 minutes
+- **Query Key**: `['form', 'global-descriptor', endpoint]`
+- **Automatic Redux Sync**: Yes (via `useEffect` in `useGlobalDescriptor` hook)
+
+**Data Sources**:
+- **Stale Time**: 2 minutes (data may change more frequently)
+- **Cache Time**: 10 minutes
+- **Query Key**: `['form', 'data-source', fieldPath, evaluatedUrl]`
+- **Dynamic Keys**: Query key includes evaluated URL to handle template-based URLs
+- **Automatic Redux Sync**: Yes (via `useEffect` in `useDataSource` hook)
+
+**Benefits**:
+- Automatic request deduplication (multiple components requesting same data)
+- Background refetching when data becomes stale
+- Intelligent cache invalidation based on query keys
+- Reduced API calls through intelligent caching
+- Redux state remains synchronized for compatibility
+
+**Rehydration**:
+- Uses `useDebouncedRehydration` hook with TanStack Query mutation
+- 500ms debounce to prevent excessive API calls
+- Automatic Redux state sync on success/error
+- Mutation-based (no caching, as it's triggered by user actions)
 
 ### Validation Rule Updates
 

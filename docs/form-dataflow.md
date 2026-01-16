@@ -37,16 +37,17 @@ useEffect(() => {
 
 **Flow**:
 1. Page component mounts
-2. `useEffect` dispatches `fetchGlobalDescriptor()` action
-3. Redux Saga intercepts the action
+2. `useGlobalDescriptor()` hook is called
+3. TanStack Query fetches the descriptor with automatic caching
 
-### Step 2: Saga Fetches Global Descriptor
+### Step 2: TanStack Query Fetches Global Descriptor
 
-**Location**: `src/store/form-sagas.ts` → `loadGlobalDescriptorSaga`
+**Location**: `src/hooks/use-form-query.ts` → `useGlobalDescriptor`
 
 **Flow**:
-1. Saga makes GET request to `/api/form/global-descriptor`
+1. TanStack Query makes GET request to `/api/form/global-descriptor`
 2. API route (`src/app/api/form/global-descriptor/route.ts`) returns `GlobalFormDescriptor` JSON
+3. Query automatically syncs to Redux state via `useEffect`
 3. Saga dispatches `loadGlobalDescriptor({ descriptor })` action
 4. Redux reducer updates state:
    - `globalDescriptor` = fetched descriptor
@@ -313,12 +314,12 @@ disabled: '{{not newsletter}}'
 3. `hasContextChanged()` compares old vs new context
 4. Returns `true` if any discriminant field value changed
 
-### Step 3: Re-hydration Saga
+### Step 3: Re-hydration
 
-**Location**: `src/store/form-sagas.ts` → `rehydrateRulesSaga`
+**Location**: `src/store/form-thunks.ts` → `rehydrateRulesThunk` or `src/hooks/use-debounced-rehydration.ts`
 
 **Flow**:
-1. Saga receives `rehydrateRules(caseContext)` action
+1. Thunk receives `rehydrateRulesThunk(caseContext)` or hook receives `mutate(caseContext)`
 2. **Debounces** for 500ms to prevent excessive API calls
 3. Sets `isRehydrating: true` in Redux state
 4. Makes POST request to `/api/rules/context` with `CaseContext`
@@ -431,12 +432,12 @@ case applyRulesUpdate().type: {
 2. Field component checks `dataSourceCache` for cached data
 3. If not cached, calls `onLoadDataSource(fieldPath, url, auth)`
 
-### Step 2: Data Source Saga
+### Step 2: Data Source Loading
 
-**Location**: `src/store/form-sagas.ts` → `loadDataSourceSaga`
+**Location**: `src/store/form-thunks.ts` → `fetchDataSourceThunk` or `src/hooks/use-form-query.ts` → `useDataSource`
 
 **Flow**:
-1. Saga receives `fetchDataSource(fieldPath, url, auth)` action
+1. Thunk receives `fetchDataSourceThunk({ fieldPath, url, auth })` or hook is called with params
 2. Gets `mergedDescriptor` and `formData` from Redux state
 3. Finds field descriptor to get full `DataSourceConfig`
 4. Builds `formContext` from form data
@@ -505,12 +506,12 @@ case applyRulesUpdate().type: {
 2. Dispatches `submitForm(url, method, formData, headers, auth)` action
 3. Submission saga handles the request
 
-### Step 3: Submission Saga
+### Step 3: Form Submission
 
-**Location**: `src/store/form-sagas.ts` → `submitFormSaga`
+**Location**: `src/store/form-thunks.ts` → `submitFormThunk` or `src/hooks/use-form-query.ts` → `useSubmitForm`
 
 **Flow**:
-1. Saga receives submission action
+1. Thunk receives submission params or mutation is called
 2. Builds request headers (including auth if provided)
 3. Makes HTTP request (GET/POST/PUT/PATCH) to submission URL
 4. If successful:
@@ -707,11 +708,13 @@ case applyRulesUpdate().type: {
 
 ```
 Page Component
-    ↓ dispatch(fetchGlobalDescriptor())
-Redux Saga (loadGlobalDescriptorSaga)
+    ↓ useGlobalDescriptor() hook
+TanStack Query (useQuery)
     ↓ GET /api/form/global-descriptor
 API Route
     ↓ returns GlobalFormDescriptor
+TanStack Query cache + useEffect
+    ↓ dispatch(loadGlobalDescriptor())
 Redux Reducer (loadGlobalDescriptor)
     ↓ updates:
       - globalDescriptor = fetched descriptor
@@ -776,9 +779,9 @@ FormContainer.handleDiscriminantChange(newFormData)
 3. hasContextChanged() → Check if changed
    - Compares old vs new context
     ↓
-4. rehydrateRules(updatedContext) → Trigger saga
-    ↓
-Redux Saga (rehydrateRulesSaga)
+4. rehydrateRulesThunk(updatedContext) → Dispatch thunk
+    ↓ (or useDebouncedRehydration() hook)
+Redux Thunk (rehydrateRulesThunk)
     ↓ debounce 500ms
 POST /api/rules/context with CaseContext
     ↓
@@ -821,7 +824,7 @@ Field component needs data
     ↓
 onLoadDataSource(fieldPath, url, auth)
     ↓
-Redux Saga (loadDataSourceSaga)
+Redux Thunk (fetchDataSourceThunk) or TanStack Query (useDataSource hook)
     ↓
 loadDataSourceUtil(dataSourceConfig, formContext)
     ↓
@@ -851,7 +854,7 @@ If valid: onSubmit(formData)
     ↓
 submitForm(url, method, formData, headers, auth)
     ↓
-Redux Saga (submitFormSaga)
+Redux Thunk (submitFormThunk) or TanStack Query (useSubmitForm hook)
     ↓
 HTTP request to submission URL
     ↓
@@ -944,7 +947,8 @@ itemsTemplate: '{"label":"{{item.firstName}} {{item.lastName}}","value":"{{item.
 
 ### State Management
 - `src/store/form-dux.ts` - Redux reducer, actions, selectors
-- `src/store/form-sagas.ts` - Redux sagas for async operations
+- `src/store/form-thunks.ts` - Redux thunks for async operations
+- `src/store/store.ts` - Redux store configuration (Redux Toolkit)
 - `src/store/store.ts` - Redux store configuration
 
 ### Utilities
@@ -992,7 +996,7 @@ This section provides a complete walkthrough of the re-hydration process from st
    - `hasContextChanged()` detects change (was empty, now "US")
 
 5. **Trigger Re-hydration**: Dispatch re-hydration action
-   - `rehydrateRules({ country: "US" })` → Redux Saga
+   - `rehydrateRulesThunk({ country: "US" })` → Redux Thunk (or `useDebouncedRehydration()` hook)
 
 6. **Saga Debounce**: Wait 500ms to prevent excessive calls
    - `isRehydrating: true` in Redux state
@@ -1088,7 +1092,7 @@ This section provides a complete walkthrough of the re-hydration process from st
    - `hasContextChanged()` detects change (was empty, now "US")
 
 5. **Trigger Re-hydration**: Dispatch re-hydration action
-   - `rehydrateRules({ country: "US" })` → Redux Saga
+   - `rehydrateRulesThunk({ country: "US" })` → Redux Thunk (or `useDebouncedRehydration()` hook)
 
 6. **Saga Debounce**: Wait 500ms to prevent excessive calls
    - `isRehydrating: true` in Redux state

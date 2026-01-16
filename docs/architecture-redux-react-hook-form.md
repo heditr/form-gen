@@ -114,9 +114,9 @@ FormContainer.handleDiscriminantChange()
 1. syncFormDataToContext() → Redux
 2. updateCaseContext() → Extract context
 3. hasContextChanged() → Check if changed
-4. rehydrateRules() → Trigger re-hydration saga
-    ↓
-Redux Saga: POST /api/rules/context
+4. rehydrateRulesThunk() → Trigger re-hydration thunk
+    ↓ (or useDebouncedRehydration() hook)
+Redux Thunk / TanStack Query: POST /api/rules/context
     ↓
 Backend returns RulesObject
     ↓
@@ -218,6 +218,8 @@ When discriminant fields change:
 - `src/components/form-presentation.tsx` - Presentation component
 - `src/hooks/use-form-descriptor.ts` - Form descriptor hook
 - `src/store/form-dux.ts` - Redux state management
-- `src/store/form-sagas.ts` - Redux sagas for async operations
+- `src/store/form-thunks.ts` - Redux thunks for async operations
+- `src/hooks/use-form-query.ts` - TanStack Query hooks for server state
+- `src/hooks/use-debounced-rehydration.ts` - Debounced rehydration hook with TanStack Query
 - `src/utils/context-extractor.ts` - Context extraction utilities
 - `src/utils/form-descriptor-integration.ts` - Integration utilities
