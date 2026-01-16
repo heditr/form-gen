@@ -189,6 +189,12 @@ export const rehydrateRulesThunk = createAsyncThunk(
 );
 
 // 3. Load Data Source Thunk
+interface AuthConfig {
+  type: 'bearer' | 'apikey';
+  token?: string;
+  headerName?: string;
+}
+
 export const fetchDataSourceThunk = createAsyncThunk(
   'form/fetchDataSource',
   async ({ fieldPath, url, auth }: { fieldPath: string; url: string; auth?: AuthConfig }, { getState }) => {
@@ -202,12 +208,47 @@ export const fetchDataSourceThunk = createAsyncThunk(
 );
 
 // 4. Submit Form Thunk
+interface SubmitFormParams {
+  url: string;
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH';
+  formData: Partial<FormData>;
+  headers?: Record<string, string>;
+  auth?: {
+    type: 'bearer' | 'apikey';
+    token?: string;
+    headerName?: string;
+  };
+}
+
 export const submitFormThunk = createAsyncThunk(
   'form/submitForm',
   async ({ url, method, formData, headers, auth }: SubmitFormParams) => {
     // Build headers with auth
-    // Make request
-    // Return response
+    const requestHeaders: Record<string, string> = {
+      'Content-Type': 'application/json',
+      ...headers,
+    };
+    
+    if (auth) {
+      if (auth.type === 'bearer' && auth.token) {
+        requestHeaders['Authorization'] = `Bearer ${auth.token}`;
+      } else if (auth.type === 'apikey' && auth.token && auth.headerName) {
+        requestHeaders[auth.headerName] = auth.token;
+      }
+    }
+    
+    const response = await fetch(url, {
+      method,
+      headers: requestHeaders,
+      body: JSON.stringify(formData),
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Form submission failed');
+    }
+    
+    return await response.json();
   }
 );
 ```
