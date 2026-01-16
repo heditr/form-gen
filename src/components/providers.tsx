@@ -3,12 +3,13 @@
 /**
  * Providers Component
  * 
- * Wraps the app with Redux Provider and initializes Handlebars helpers.
- * This must be a client component since Redux and Handlebars need to run on the client.
+ * Wraps the app with Redux Provider, TanStack Query Provider, and initializes Handlebars helpers.
+ * This must be a client component since Redux, TanStack Query, and Handlebars need to run on the client.
  */
 
 import { useEffect } from 'react';
 import { Provider } from 'react-redux';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { store } from '@/store/store';
 import { registerHandlebarsHelpers } from '@/utils/handlebars-helpers';
 
@@ -24,13 +25,34 @@ function HandlebarsInitializer() {
 }
 
 /**
- * Redux Provider wrapper
+ * Create QueryClient instance
+ * 
+ * Configured with default options for form descriptor engine:
+ * - Retry disabled for faster error feedback
+ * - Refetch on window focus disabled (form data shouldn't auto-refetch)
+ */
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: false,
+      refetchOnWindowFocus: false,
+    },
+    mutations: {
+      retry: false,
+    },
+  },
+});
+
+/**
+ * Redux and TanStack Query Provider wrapper
  */
 export function ReduxProvider({ children }: { children: React.ReactNode }) {
   return (
-    <Provider store={store}>
-      <HandlebarsInitializer />
-      {children}
-    </Provider>
+    <QueryClientProvider client={queryClient}>
+      <Provider store={store}>
+        <HandlebarsInitializer />
+        {children}
+      </Provider>
+    </QueryClientProvider>
   );
 }
