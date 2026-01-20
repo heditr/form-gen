@@ -70,7 +70,7 @@ export function useFormDescriptor(
   });
 
   // Track registered fields (for compatibility, but not needed with Zod)
-  const registeredFields = useMemo(() => new Set<string>(), []);
+  const registeredFields = useRef(new Set<string>());
 
   // Get discriminant fields
   const discriminantFields = useMemo(
@@ -81,24 +81,24 @@ export function useFormDescriptor(
   // Register a field (kept for API compatibility, but Zod handles validation)
   const registerField = useCallback(
     (fieldId: string) => {
-      if (!descriptor || registeredFields.has(fieldId)) {
+      if (!descriptor || registeredFields.current.has(fieldId)) {
         return;
       }
       // With Zod resolver, fields are automatically validated
       // This is kept for API compatibility but doesn't need to do anything
-      registeredFields.add(fieldId);
+      registeredFields.current.add(fieldId);
     },
-    [descriptor, registeredFields]
+    [descriptor]
   );
 
   // Unregister a field (kept for API compatibility)
   const unregisterField = useCallback(
     (fieldId: string) => {
-      if (registeredFields.has(fieldId)) {
-        registeredFields.delete(fieldId);
+      if (registeredFields.current.has(fieldId)) {
+        registeredFields.current.delete(fieldId);
       }
     },
-    [registeredFields]
+    []
   );
 
   // Update validation rules when descriptor changes
