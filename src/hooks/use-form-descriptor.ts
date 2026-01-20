@@ -5,7 +5,7 @@
  * including field registration, validation rule updates, and Redux synchronization.
  */
 
-import { useEffect, useMemo, useCallback } from 'react';
+import { useEffect, useMemo, useCallback, useRef } from 'react';
 import { useForm, useWatch, type UseFormReturn, type FieldValues } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { GlobalFormDescriptor, FormData } from '@/types/form-descriptor';
@@ -138,16 +138,33 @@ export function useFormDescriptor(
   // This ensures form values are preserved when form remounts due to validation rule changes
   // Use useWatch instead of form.watch() to avoid React Compiler memoization issues
   const watchedValues = useWatch({ control: form.control });
+  
+  // Use ref to track previous values and prevent infinite loops
+  // Only sync when values actually change, not just when object reference changes
+  const previousValuesRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!descriptor || !onDiscriminantChange) {
       return;
     }
 
+    // Serialize current values to compare with previous
+    // Handle null/undefined by converting to empty object for comparison
+    const currentValues = watchedValues ?? {};
+    const currentValuesString = JSON.stringify(currentValues);
+    
+    // Only sync if values actually changed (not just object reference)
+    if (currentValuesString === previousValuesRef.current) {
+      return;
+    }
+
+    // Update ref with new values
+    previousValuesRef.current = currentValuesString;
+
     // Sync all form data to Redux whenever any field changes
     // This allows form values to be restored when the form remounts
     // The container's handleDiscriminantChange will handle discriminant field logic
-    const formData = watchedValues as Partial<FormData>;
+    const formData = currentValues as Partial<FormData>;
     onDiscriminantChange(formData);
   }, [descriptor, watchedValues, onDiscriminantChange]);
 
