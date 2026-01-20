@@ -6,7 +6,7 @@
  */
 
 import { useEffect, useMemo, useCallback } from 'react';
-import { useForm, type UseFormReturn, type FieldValues } from 'react-hook-form';
+import { useForm, useWatch, type UseFormReturn, type FieldValues } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { GlobalFormDescriptor, FormData } from '@/types/form-descriptor';
 import {
@@ -136,22 +136,20 @@ export function useFormDescriptor(
 
   // Watch all form values and sync to Redux for restoration on remount
   // This ensures form values are preserved when form remounts due to validation rule changes
+  // Use useWatch instead of form.watch() to avoid React Compiler memoization issues
+  const watchedValues = useWatch({ control: form.control });
+
   useEffect(() => {
     if (!descriptor || !onDiscriminantChange) {
       return;
     }
 
-    // Watch all form values and sync to Redux whenever any field changes
+    // Sync all form data to Redux whenever any field changes
     // This allows form values to be restored when the form remounts
-    const subscription = form.watch((value) => {
-      const formData = value as Partial<FormData>;
-      // Sync all form data to Redux for restoration on remount
-      // The container's handleDiscriminantChange will handle discriminant field logic
-      onDiscriminantChange(formData);
-    });
-
-    return () => subscription.unsubscribe();
-  }, [descriptor, form, onDiscriminantChange]);
+    // The container's handleDiscriminantChange will handle discriminant field logic
+    const formData = watchedValues as Partial<FormData>;
+    onDiscriminantChange(formData);
+  }, [descriptor, watchedValues, onDiscriminantChange]);
 
   // Auto-register all fields from descriptor on mount/update
   // With Zod resolver, this is mainly for tracking purposes
