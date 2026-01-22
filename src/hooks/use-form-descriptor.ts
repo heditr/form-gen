@@ -8,18 +8,20 @@
 import { useEffect, useMemo, useCallback, useRef } from 'react';
 import { useForm, useWatch, type UseFormReturn, type FieldValues } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import type { GlobalFormDescriptor, FormData } from '@/types/form-descriptor';
+import type { GlobalFormDescriptor, FormData, CaseContext } from '@/types/form-descriptor';
 import {
   extractDefaultValues,
   mapBackendErrorsToForm,
   identifyDiscriminantFields,
   buildZodSchemaFromDescriptor,
-  type MappedFormError,
 } from '@/utils/form-descriptor-integration';
+import type { FormContext } from '@/utils/template-evaluator';
 
 export interface UseFormDescriptorOptions {
   onDiscriminantChange?: (formData: Partial<FormData>) => void;
   savedFormData?: Partial<FormData>; // Form data from Redux to restore on remount
+  caseContext?: CaseContext; // Case context for template evaluation
+  formData?: Partial<FormData>; // Current form data for template evaluation
 }
 
 export interface UseFormDescriptorReturn {
@@ -42,10 +44,20 @@ export function useFormDescriptor(
   descriptor: GlobalFormDescriptor | null,
   options: UseFormDescriptorOptions = {}
 ): UseFormDescriptorReturn {
-  const { onDiscriminantChange, savedFormData } = options;
+  const { onDiscriminantChange, savedFormData, caseContext = {}, formData: contextFormData = {} } = options;
 
-  // Extract default values from descriptor
-  const defaultValues = useMemo(() => extractDefaultValues(descriptor), [descriptor]);
+  // Build form context for template evaluation
+  const formContext: FormContext = useMemo(() => ({
+    caseContext,
+    formData: contextFormData,
+    ...contextFormData, // Also allow direct access to form values
+  }), [caseContext, contextFormData]);
+
+  // Extract default values from descriptor with context for template evaluation
+  const defaultValues = useMemo(
+    () => extractDefaultValues(descriptor, formContext),
+    [descriptor, formContext]
+  );
 
   // Merge saved form data with defaults to preserve values on remount
   const initialValues = useMemo(() => {

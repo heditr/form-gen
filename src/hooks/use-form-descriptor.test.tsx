@@ -5,7 +5,7 @@
  * work correctly.
  */
 
-import { describe, test, expect } from 'vitest';
+import { describe, test, expect, beforeAll } from 'vitest';
 import {
   extractDefaultValues,
   getFieldValidationRules,
@@ -13,8 +13,14 @@ import {
   identifyDiscriminantFields,
 } from '@/utils/form-descriptor-integration';
 import type { GlobalFormDescriptor } from '@/types/form-descriptor';
+import { registerHandlebarsHelpers } from '@/utils/handlebars-helpers';
+import type { FormContext } from '@/utils/template-evaluator';
 
 describe('form descriptor integration', () => {
+  beforeAll(() => {
+    registerHandlebarsHelpers();
+  });
+
   describe('extractDefaultValues', () => {
     test('given form initialization, should extract default values from descriptor fields', () => {
       const descriptor: GlobalFormDescriptor = {
@@ -104,6 +110,178 @@ describe('form descriptor integration', () => {
       expect(defaultValues.field3).toBe(false);
       // File fields should get null
       expect(defaultValues.field4).toBe(null);
+    });
+
+    test('given descriptor with template defaultValue and context, should evaluate template before setting default', () => {
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'block1',
+            title: 'Block 1',
+            fields: [
+              {
+                id: 'field1',
+                type: 'text',
+                label: 'Field 1',
+                validation: [],
+                defaultValue: '{{caseContext.country}}',
+              },
+              {
+                id: 'field2',
+                type: 'checkbox',
+                label: 'Field 2',
+                validation: [],
+                defaultValue: '{{#if caseContext.needSignature}}true{{else}}false{{/if}}',
+              },
+            ],
+          },
+        ],
+        submission: {
+          url: '/api/submit',
+          method: 'POST',
+        },
+      };
+
+      const context: FormContext = {
+        caseContext: {
+          country: 'US',
+          needSignature: true,
+        },
+      };
+
+      const defaultValues = extractDefaultValues(descriptor, context);
+
+      expect(defaultValues.field1).toBe('US');
+      expect(defaultValues.field2).toBe(true);
+    });
+
+    test('given descriptor with static defaultValue, should use value directly', () => {
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'block1',
+            title: 'Block 1',
+            fields: [
+              {
+                id: 'field1',
+                type: 'text',
+                label: 'Field 1',
+                validation: [],
+                defaultValue: 'static value',
+              },
+              {
+                id: 'field2',
+                type: 'number',
+                label: 'Field 2',
+                validation: [],
+                defaultValue: 42,
+              },
+            ],
+          },
+        ],
+        submission: {
+          url: '/api/submit',
+          method: 'POST',
+        },
+      };
+
+      const defaultValues = extractDefaultValues(descriptor);
+
+      expect(defaultValues.field1).toBe('static value');
+      expect(defaultValues.field2).toBe(42);
+    });
+
+    test('given context with formData and caseContext, should make both available to templates', () => {
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'block1',
+            title: 'Block 1',
+            fields: [
+              {
+                id: 'field1',
+                type: 'text',
+                label: 'Field 1',
+                validation: [],
+                defaultValue: '{{caseContext.country}} - {{formData.city}}',
+              },
+            ],
+          },
+        ],
+        submission: {
+          url: '/api/submit',
+          method: 'POST',
+        },
+      };
+
+      const context: FormContext = {
+        caseContext: { country: 'US' },
+        formData: { city: 'New York' },
+      };
+
+      const defaultValues = extractDefaultValues(descriptor, context);
+
+      expect(defaultValues.field1).toBe('US - New York');
+    });
+
+    test('given file field with template evaluating to URL, should return URL string', () => {
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'block1',
+            title: 'Block 1',
+            fields: [
+              {
+                id: 'document',
+                type: 'file',
+                label: 'Document',
+                validation: [],
+                defaultValue: '{{caseContext.documentUrl}}',
+              },
+            ],
+          },
+        ],
+        submission: {
+          url: '/api/submit',
+          method: 'POST',
+        },
+      };
+
+      const context: FormContext = {
+        caseContext: { documentUrl: 'https://example.com/file.pdf' },
+      };
+
+      const defaultValues = extractDefaultValues(descriptor, context);
+
+      expect(defaultValues.document).toBe('https://example.com/file.pdf');
+    });
+
+    test('given file field with template evaluating to "null", should return null', () => {
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'block1',
+            title: 'Block 1',
+            fields: [
+              {
+                id: 'document',
+                type: 'file',
+                label: 'Document',
+                validation: [],
+                defaultValue: 'null',
+              },
+            ],
+          },
+        ],
+        submission: {
+          url: '/api/submit',
+          method: 'POST',
+        },
+      };
+
+      const defaultValues = extractDefaultValues(descriptor);
+
+      expect(defaultValues.document).toBeNull();
     });
   });
 

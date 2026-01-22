@@ -211,4 +211,54 @@ describe('form-descriptor types', () => {
       expect(rules.fields).toBeDefined();
     });
   });
+
+  describe('File field types', () => {
+    test('given a file field descriptor, should allow defaultValue as URL string', () => {
+      const field: FieldDescriptor = {
+        id: 'document',
+        type: 'file',
+        label: 'Document',
+        defaultValue: 'https://example.com/file.pdf',
+        validation: [],
+      };
+
+      expect(field.defaultValue).toBe('https://example.com/file.pdf');
+    });
+
+    test('given a file field descriptor, should allow defaultValue as array of URL strings', () => {
+      const field: FieldDescriptor = {
+        id: 'documents',
+        type: 'file',
+        label: 'Documents',
+        defaultValue: ['https://example.com/file1.pdf', 'https://example.com/file2.pdf'],
+        validation: [],
+      };
+
+      expect(field.defaultValue).toEqual(['https://example.com/file1.pdf', 'https://example.com/file2.pdf']);
+    });
+
+    test('given a file field descriptor, should allow defaultValue as null', () => {
+      const field: FieldDescriptor = {
+        id: 'document',
+        type: 'file',
+        label: 'Document',
+        defaultValue: null,
+        validation: [],
+      };
+
+      expect(field.defaultValue).toBeNull();
+    });
+
+    test('given a file field descriptor, should allow defaultValue as Handlebars template string', () => {
+      const field: FieldDescriptor = {
+        id: 'document',
+        type: 'file',
+        label: 'Document',
+        defaultValue: '{{caseContext.documentUrl}}',
+        validation: [],
+      };
+
+      expect(field.defaultValue).toBe('{{caseContext.documentUrl}}');
+    });
+  });
 });

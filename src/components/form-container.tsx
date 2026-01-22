@@ -95,9 +95,12 @@ function FormInner({
   // Initialize useFormDescriptor hook - this will create a new form instance
   // when this component remounts (due to key change)
   // Pass savedFormData to restore form values from Redux
+  // Pass caseContext and formData for template evaluation in default values
   const { form } = useFormDescriptor(mergedDescriptor, {
     onDiscriminantChange: handleDiscriminantChange,
     savedFormData, // Restore form values from Redux when form remounts
+    caseContext, // Case context for template evaluation
+    formData: savedFormData, // Current form data for template evaluation
   });
 
   // Prepare props for presentation component

@@ -9,14 +9,20 @@ import type { FieldError } from 'react-hook-form';
 import { z } from 'zod';
 import type { GlobalFormDescriptor, FormData } from '@/types/form-descriptor';
 import { convertToReactHookFormRules, convertToZodSchema } from './validation-rule-adapter';
+import { evaluateDefaultValue } from './default-value-evaluator';
+import type { FormContext } from './template-evaluator';
 
 /**
  * Extract default values from form descriptor fields
  * 
  * @param descriptor - Global form descriptor
+ * @param context - Optional form context for template evaluation (formData, caseContext)
  * @returns Object with field IDs as keys and default values as values
  */
-export function extractDefaultValues(descriptor: GlobalFormDescriptor | null): Partial<FormData> {
+export function extractDefaultValues(
+  descriptor: GlobalFormDescriptor | null,
+  context: FormContext = {}
+): Partial<FormData> {
   if (!descriptor) {
     return {};
   }
@@ -27,7 +33,13 @@ export function extractDefaultValues(descriptor: GlobalFormDescriptor | null): P
     for (const field of block.fields) {
       // Always set a default value to ensure controlled inputs
       if (field.defaultValue !== undefined) {
-        defaultValues[field.id as keyof FormData] = field.defaultValue as FormData[keyof FormData];
+        // Evaluate defaultValue as Handlebars template if it's a string, otherwise use directly
+        const evaluatedValue = evaluateDefaultValue(
+          field.defaultValue,
+          field.type,
+          context
+        );
+        defaultValues[field.id as keyof FormData] = evaluatedValue as FormData[keyof FormData];
       } else {
         // Set type-appropriate default values for uncontrolled -> controlled transition
         switch (field.type) {
