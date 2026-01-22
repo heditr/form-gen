@@ -48,7 +48,6 @@ export default function NumberField({
       <Controller
         name={field.id}
         control={form.control}
-        defaultValue={field.defaultValue !== undefined ? (field.defaultValue as number) : 0}
         render={({ field: controllerField }) => (
           <Input
             id={field.id}

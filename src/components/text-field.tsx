@@ -48,7 +48,6 @@ export default function TextField({
       <Controller
         name={field.id}
         control={form.control}
-        defaultValue={field.defaultValue !== undefined ? (field.defaultValue as string) : ''}
         render={({ field: controllerField }) => (
           <Input
             id={field.id}

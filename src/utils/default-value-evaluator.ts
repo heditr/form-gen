@@ -26,6 +26,13 @@ export function evaluateDefaultValue(
     return defaultValue;
   }
 
+  // Check if this looks like a Handlebars template (contains {{ or }})
+  // If not, treat it as a plain string value
+  const isTemplate = defaultValue.includes('{{') && defaultValue.includes('}}');
+  if (!isTemplate) {
+    return defaultValue;
+  }
+
   // Evaluate Handlebars template
   const evaluated = evaluateTemplate(defaultValue, context);
 

@@ -15,6 +15,7 @@ import {
   identifyDiscriminantFields,
   buildZodSchemaFromDescriptor,
 } from '@/utils/form-descriptor-integration';
+import { identifyFieldsWithTemplateDefaults } from '@/utils/field-descriptor-utils';
 import type { FormContext } from '@/utils/template-evaluator';
 
 export interface UseFormDescriptorOptions {
@@ -59,17 +60,34 @@ export function useFormDescriptor(
     [descriptor, formContext]
   );
 
+  // Identify fields with template defaultValues (need to be re-evaluated when context changes)
+  const fieldsWithTemplateDefaults = useMemo(
+    () => identifyFieldsWithTemplateDefaults(descriptor),
+    [descriptor]
+  );
+
   // Merge saved form data with defaults to preserve values on remount
+  // Exclude fields with template defaults from savedFormData so newly evaluated defaults take precedence
   const initialValues = useMemo(() => {
     if (!savedFormData || Object.keys(savedFormData).length === 0) {
       return defaultValues;
     }
-    // Merge saved form data with defaults, with saved data taking precedence
+    
+    // Filter savedFormData to exclude fields with template defaults
+    // This allows newly evaluated defaults to take effect when context changes
+    const filteredSavedData: Partial<FormData> = {};
+    for (const [key, value] of Object.entries(savedFormData)) {
+      if (!fieldsWithTemplateDefaults.has(key)) {
+        filteredSavedData[key as keyof FormData] = value as FormData[keyof FormData];
+      }
+    }
+    
+    // Merge filtered saved data with defaults, with saved data taking precedence for non-template fields
     return {
       ...defaultValues,
-      ...savedFormData,
+      ...filteredSavedData,
     };
-  }, [defaultValues, savedFormData]);
+  }, [defaultValues, savedFormData, fieldsWithTemplateDefaults]);
 
   // Build Zod schema from descriptor
   const zodSchema = useMemo(() => buildZodSchemaFromDescriptor(descriptor), [descriptor]);

@@ -56,10 +56,11 @@ export function convertToReactHookFormRules(rules: ValidationRule[] | undefined 
         break;
 
       case 'pattern': {
-        // Convert string pattern to RegExp if needed (e.g., when loaded from JSON)
+        // Always create a new RegExp instance to avoid mutating the one in Redux state
+        // RegExp.test() mutates lastIndex, which violates Redux immutability rules
         const regexPattern = typeof rule.value === 'string' 
           ? new RegExp(rule.value) 
-          : rule.value;
+          : new RegExp(rule.value.source, rule.value.flags);
         result.pattern = {
           value: regexPattern,
           message: rule.message,
@@ -218,10 +219,11 @@ export function convertToZodSchema(
 
       case 'pattern':
         if (fieldType === 'text' || fieldType === 'dropdown' || fieldType === 'autocomplete' || fieldType === 'date') {
-          // Convert string pattern to RegExp if needed (e.g., when loaded from JSON)
+          // Always create a new RegExp instance to avoid mutating the one in Redux state
+          // RegExp.test() mutates lastIndex, which violates Redux immutability rules
           const regexPattern = typeof rule.value === 'string' 
             ? new RegExp(rule.value) 
-            : rule.value;
+            : new RegExp(rule.value.source, rule.value.flags);
           schema = (schema as z.ZodString).regex(regexPattern, rule.message);
         }
         // pattern doesn't apply to checkbox, file, radio, or number

@@ -7,15 +7,17 @@
  * Displays form state, re-hydration status, and allows interactive testing.
  */
 
-import { useState, useCallback } from 'react';
-import { useSelector } from 'react-redux';
+import { useState, useCallback, useEffect } from 'react';
+import { useSelector, useDispatch } from 'react-redux';
 import FormContainer from '@/components/form-container';
 import { useGlobalDescriptor } from '@/hooks/use-form-query';
-import { getFormState } from '@/store/form-dux';
+import { getFormState, initializeCaseContextFromPrefill, updateCaseContextValues } from '@/store/form-dux';
 import type { RootState } from '@/store/form-dux';
+import type { AppDispatch } from '@/store/store';
 import { Button } from '@/components/ui/button';
 
 export default function DemoPage() {
+  const dispatch = useDispatch<AppDispatch>();
   const formState = useSelector((state: RootState) => getFormState(state));
   const [showDebug, setShowDebug] = useState(false);
   const [submissionResult, setSubmissionResult] = useState<Record<string, unknown> | null>(null);
@@ -32,12 +34,60 @@ export default function DemoPage() {
   // This automatically syncs to Redux state on success
   const { refetch: refetchDescriptor } = useGlobalDescriptor('/api/form/global-descriptor-demo');
 
+  // Automatically initialize case context with test values on page load
+  // Only initialize if context is empty to avoid overwriting existing values
+  useEffect(() => {
+    const hasContext = caseContext && Object.keys(caseContext).length > 0;
+    if (!hasContext) {
+      // Set CasePrefill values
+      dispatch(initializeCaseContextFromPrefill({
+        casePrefill: {
+          incorporationCountry: 'US',
+          processType: 'standard',
+          needSignature: true,
+        },
+      }));
+      // Set custom context values for template testing (email, phone, etc.)
+      dispatch(updateCaseContextValues({
+        caseContext: {
+          email: 'test@example.com',
+          phone: '+1-555-123-4567',
+          documentUrl: 'https://example.com/sample-document.pdf',
+          priority: 5,
+          newsletter: true,
+        },
+      }));
+    }
+  }, [dispatch, caseContext]);
+
   // Reset form handler
   const handleReset = useCallback(() => {
     setSubmissionResult(null);
     // Reload the descriptor to reset form
     refetchDescriptor();
   }, [refetchDescriptor]);
+
+  // Initialize case context with test values for demo
+  const handleInitTestContext = useCallback(() => {
+    // Set CasePrefill values
+    dispatch(initializeCaseContextFromPrefill({
+      casePrefill: {
+        incorporationCountry: 'US',
+        processType: 'standard',
+        needSignature: true,
+      },
+    }));
+    // Set custom context values for template testing (email, phone, etc.)
+    dispatch(updateCaseContextValues({
+      caseContext: {
+        email: 'test@example.com',
+        phone: '+1-555-123-4567',
+        documentUrl: 'https://example.com/sample-document.pdf',
+        priority: 5,
+        newsletter: true,
+      },
+    }));
+  }, [dispatch]);
 
   // Get visible blocks count
   const visibleBlocksCount = mergedDescriptor?.blocks?.length || 0;
@@ -70,6 +120,9 @@ export default function DemoPage() {
                 onClick={() => setShowDebug(!showDebug)}
               >
                 {showDebug ? 'Hide' : 'Show'} Debug Panel
+              </Button>
+              <Button variant="outline" onClick={handleInitTestContext}>
+                Init Test Context
               </Button>
               <Button variant="outline" onClick={handleReset}>
                 Reset Form

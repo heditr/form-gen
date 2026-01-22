@@ -112,6 +112,23 @@ export const initializeCaseContextFromPrefill = ({
   };
 };
 
+/**
+ * Update CaseContext with arbitrary values
+ * 
+ * Use this when you need to set caseContext values that aren't part of CasePrefill,
+ * such as custom fields for template evaluation (e.g., email, phone, etc.)
+ * 
+ * This will merge the provided values into the existing context.
+ * 
+ * @param caseContext - Partial CaseContext with values to set
+ */
+export const updateCaseContextValues = ({
+  caseContext: newContextValues = {},
+}: { caseContext?: Partial<CaseContext> } = {}): ActionObject<{ caseContext: Partial<CaseContext> }> => ({
+  type: `${slice}/updateCaseContextValues`,
+  payload: { caseContext: newContextValues },
+});
+
 // Reducer
 // Action can be either our custom ActionObject or Redux Toolkit thunk actions
 export const reducer = (state: FormState = initialState, action: ActionObject | { type: string; payload?: unknown; meta?: { arg?: unknown }; error?: unknown }): FormState => {
@@ -246,6 +263,19 @@ export const reducer = (state: FormState = initialState, action: ActionObject | 
         caseContext: {
           ...state.caseContext,
           ...caseContext,
+        },
+      };
+    }
+
+    case updateCaseContextValues().type: {
+      const { caseContext: newContextValues } = action.payload as { caseContext: Partial<CaseContext> };
+      // Merge with existing context to preserve any values already set from form data
+      // The new values take precedence for the specific fields they define
+      return {
+        ...state,
+        caseContext: {
+          ...state.caseContext,
+          ...newContextValues,
         },
       };
     }

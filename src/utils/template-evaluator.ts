@@ -39,9 +39,10 @@ export function evaluateTemplate(template: string | undefined, context: FormCont
 
   try {
     const compiled = Handlebars.compile(template);
-    return compiled(context);
+    const result = compiled(context);
+    return result;
   } catch (error) {
-    console.error('Error evaluating template:', error);
+    console.error('Error evaluating template:', error, 'Template:', template, 'Context:', context);
     return '';
   }
 }

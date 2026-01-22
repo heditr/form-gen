@@ -170,8 +170,9 @@ export default function FormContainer() {
     [dispatch]
   );
 
-  // Create a key based on validation rules to force form remount when rules change
+  // Create a key based on validation rules and caseContext to force form remount
   // This ensures the Zod resolver is re-initialized with updated validation rules
+  // and default values are re-evaluated when caseContext changes
   const formKey = useMemo(() => {
     if (!mergedDescriptor) {
       return 'no-descriptor';
@@ -192,8 +193,13 @@ export default function FormContainer() {
         return `${field.id}:${ruleTypes}`;
       })
       .join('|');
-    return `form-${validationHash}`;
-  }, [mergedDescriptor]);
+    
+    // Include caseContext in the key so form remounts when context changes
+    // This allows default values to be re-evaluated with new context
+    const contextHash = JSON.stringify(caseContext);
+    
+    return `form-${validationHash}-ctx-${contextHash}`;
+  }, [mergedDescriptor, caseContext]);
 
   // Render inner form component with key to force remount when validation rules change
   // This ensures the form is re-created with the new Zod schema when rules are updated

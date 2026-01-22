@@ -150,7 +150,8 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
               id: 'email',
               type: 'text',
               label: 'Email Address',
-              description: 'Enter your email',
+              description: 'Enter your email (default from caseContext if available)',
+              defaultValue: '{{caseContext.email}}',
               validation: [
                 {
                   type: 'required',
@@ -158,7 +159,7 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
                 },
                 {
                   type: 'pattern',
-                  value: '^[^@]+@[^@]+\\.[^@]+$',
+                  value: /^[^@]+@[^@]+\.[^@]+$/,
                   message: 'Please enter a valid email address',
                 },
               ],
@@ -167,7 +168,8 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
               id: 'phone',
               type: 'text',
               label: 'Phone Number',
-              description: 'Enter your phone number',
+              description: 'Enter your phone number (default from caseContext if available)',
+              defaultValue: '{{caseContext.phone}}',
               validation: [
                 {
                   type: 'required',
@@ -210,7 +212,7 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
                 },
                 {
                   type: 'pattern',
-                  value: '^\\d{2}-\\d{7}$',
+                  value: /^\d{2}-\d{7}$/,
                   message: 'Tax ID must be in format XX-XXXXXXX',
                 },
               ],
@@ -262,7 +264,7 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
                 },
                 {
                   type: 'pattern',
-                  value: '^\\d{3}-\\d{2}-\\d{4}$',
+                  value: /^\d{3}-\d{2}-\d{4}$/,
                   message: 'SSN must be in format XXX-XX-XXXX',
                 },
               ],
@@ -368,8 +370,8 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
               id: 'newsletter',
               type: 'checkbox',
               label: 'Subscribe to newsletter',
-              description: 'Receive updates via email',
-              defaultValue: false,
+              description: 'Receive updates via email (default from caseContext if available)',
+              defaultValue: '{{#if caseContext.newsletter}}true{{else}}false{{/if}}',
               validation: [],
             },
             {
@@ -393,8 +395,22 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
               id: 'documents',
               type: 'file',
               label: 'Supporting Documents',
-              description: 'Upload any supporting documents',
+              description: 'Upload any supporting documents (default URL from caseContext if available)',
+              defaultValue: '{{caseContext.documentUrl}}',
               validation: [],
+            },
+            {
+              id: 'priority',
+              type: 'number',
+              label: 'Priority Level',
+              description: 'Priority level (default from caseContext if available)',
+              defaultValue: '{{caseContext.priority}}',
+              validation: [
+                {
+                  type: 'required',
+                  message: 'Priority is required',
+                },
+              ],
             },
           ],
         },
