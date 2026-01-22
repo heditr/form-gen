@@ -7,12 +7,14 @@
  */
 
 import { createAsyncThunk } from '@reduxjs/toolkit';
-import type { GlobalFormDescriptor, RulesObject, CaseContext, FormData } from '@/types/form-descriptor';
+import type { ThunkDispatch, UnknownAction } from '@reduxjs/toolkit';
+import type { GlobalFormDescriptor, RulesObject, CaseContext, CasePrefill, FormData } from '@/types/form-descriptor';
 import {
   getFormState,
   triggerRehydration,
   applyRulesUpdate,
   loadDataSource,
+  initializeCaseContextFromPrefill,
   type RootState,
 } from './form-dux';
 import { loadDataSource as loadDataSourceUtil } from '@/utils/data-source-loader';
@@ -82,7 +84,7 @@ export const fetchGlobalDescriptorThunk = createAsyncThunk<
 export const rehydrateRulesThunk = createAsyncThunk<
   RulesObject, // Return type
   CaseContext, // Argument type
-  { dispatch: any; rejectValue: string } // Reject value type
+  { dispatch: ThunkDispatch<RootState, unknown, UnknownAction>; rejectValue: string } // Reject value type
 >(
   'form/rehydrateRules',
   async (caseContext: CaseContext, { dispatch, rejectWithValue }) => {
@@ -171,6 +173,67 @@ export const fetchDataSourceThunk = createAsyncThunk<
       dispatch(loadDataSource({ fieldPath, data: items }));
       
       return items;
+    } catch (error) {
+      return rejectWithValue(error instanceof Error ? error.message : 'Unknown error');
+    }
+  }
+);
+
+/**
+ * Thunk to fetch case data and initialize case context
+ * 
+ * Returns: CasePrefill (the case data)
+ * 
+ * This thunk fetches case data from the server and automatically initializes
+ * the case context from the CasePrefill data. Use this when:
+ * - Loading an existing case
+ * - Refreshing case data
+ * - Navigating to a case detail page
+ * 
+ * The case context will be updated in Redux, and if the context changes,
+ * you may want to trigger a rehydration to get updated rules.
+ * 
+ * Example usage:
+ * ```typescript
+ * const dispatch = useDispatch<AppDispatch>();
+ * 
+ * // Fetch case data
+ * const result = await dispatch(fetchCaseDataThunk('/api/cases/123'));
+ * if (fetchCaseDataThunk.fulfilled.match(result)) {
+ *   const casePrefill = result.payload;
+ *   // Case context is now initialized in Redux
+ *   // Optionally trigger rehydration if needed:
+ *   const caseContext = initializeCaseContext(casePrefill);
+ *   dispatch(rehydrateRulesThunk(caseContext));
+ * }
+ * ```
+ */
+export const fetchCaseDataThunk = createAsyncThunk<
+  CasePrefill, // Return type
+  string, // Argument type (endpoint or case ID)
+  { dispatch: ThunkDispatch<RootState, unknown, UnknownAction>; rejectValue: string } // Reject value type
+>(
+  'form/fetchCaseData',
+  async (endpointOrCaseId: string, { dispatch, rejectWithValue }) => {
+    try {
+      // If it's just an ID, construct the endpoint
+      const endpoint = endpointOrCaseId.startsWith('/') 
+        ? endpointOrCaseId 
+        : `/api/cases/${endpointOrCaseId}`;
+      
+      const response = await apiCall(endpoint, { method: 'GET' });
+
+      if (!response.ok) {
+        return rejectWithValue(`Failed to fetch case data: ${response.status}`);
+      }
+
+      const caseData: CasePrefill = await response.json();
+      
+      // Initialize case context from the fetched prefill data
+      // This will merge with any existing context values
+      dispatch(initializeCaseContextFromPrefill({ casePrefill: caseData }));
+      
+      return caseData;
     } catch (error) {
       return rejectWithValue(error instanceof Error ? error.message : 'Unknown error');
     }

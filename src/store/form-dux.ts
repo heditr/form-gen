@@ -10,12 +10,14 @@
 import type {
   GlobalFormDescriptor,
   CaseContext,
+  CasePrefill,
   RulesObject,
   BlockDescriptor,
   FieldDescriptor,
   FormData,
 } from '@/types/form-descriptor';
 import { mergeDescriptorWithRules } from '@/utils/descriptor-merger';
+import { initializeCaseContext } from '@/utils/context-extractor';
 import {
   fetchGlobalDescriptorThunk,
   rehydrateRulesThunk,
@@ -87,6 +89,28 @@ export const loadDataSource = ({
   type: `${slice}/loadDataSource`,
   payload: { fieldPath, data },
 });
+
+/**
+ * Initialize or update CaseContext from CasePrefill
+ * 
+ * Use this when:
+ * - Case is first created and you have CasePrefill data
+ * - Case data is fetched from the server and you want to update the context
+ * 
+ * This will merge the prefill values into the existing context, preserving
+ * any context values that were already set from form data.
+ * 
+ * @param casePrefill - Case prefill data with initial values
+ */
+export const initializeCaseContextFromPrefill = ({
+  casePrefill = {},
+}: { casePrefill?: CasePrefill } = {}): ActionObject<{ caseContext: CaseContext }> => {
+  const caseContext = initializeCaseContext(casePrefill);
+  return {
+    type: `${slice}/initializeCaseContextFromPrefill`,
+    payload: { caseContext },
+  };
+};
 
 // Reducer
 // Action can be either our custom ActionObject or Redux Toolkit thunk actions
@@ -209,6 +233,19 @@ export const reducer = (state: FormState = initialState, action: ActionObject | 
         dataSourceCache: {
           ...state.dataSourceCache,
           [fieldPath]: data,
+        },
+      };
+    }
+
+    case initializeCaseContextFromPrefill().type: {
+      const { caseContext } = action.payload as { caseContext: CaseContext };
+      // Merge with existing context to preserve any values already set from form data
+      // The prefill values take precedence for the specific fields they define
+      return {
+        ...state,
+        caseContext: {
+          ...state.caseContext,
+          ...caseContext,
         },
       };
     }
