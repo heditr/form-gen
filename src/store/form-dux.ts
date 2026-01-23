@@ -7,6 +7,7 @@
  * formData in Redux state is synced from react-hook-form for context extraction purposes.
  */
 
+import { createSelector } from '@reduxjs/toolkit';
 import type {
   GlobalFormDescriptor,
   CaseContext,
@@ -288,18 +289,27 @@ export const reducer = (state: FormState = initialState, action: ActionObject | 
 // Selectors
 export const getFormState = (state: RootState): FormState => state[slice];
 
-export const getVisibleBlocks = (state: RootState): BlockDescriptor[] => {
-  const mergedDescriptor = state[slice].mergedDescriptor;
-  if (!mergedDescriptor || !mergedDescriptor.blocks) {
-    return [];
+// Memoized selector for visible blocks
+// Returns the same array reference if mergedDescriptor.blocks hasn't changed
+export const getVisibleBlocks = createSelector(
+  [getFormState],
+  (formState): BlockDescriptor[] => {
+    const mergedDescriptor = formState.mergedDescriptor;
+    if (!mergedDescriptor || !mergedDescriptor.blocks) {
+      return [];
+    }
+    // Note: Status template evaluation will be implemented in a later task
+    // For now, return all blocks
+    return mergedDescriptor.blocks;
   }
-  // Note: Status template evaluation will be implemented in a later task
-  // For now, return all blocks
-  return mergedDescriptor.blocks;
-};
+);
 
-export const getVisibleFields = (state: RootState): FieldDescriptor[] => {
-  const blocks = getVisibleBlocks(state);
-  return blocks.flatMap((block) => block.fields || []);
-};
+// Memoized selector for visible fields
+// Returns the same array reference if blocks haven't changed
+export const getVisibleFields = createSelector(
+  [getVisibleBlocks],
+  (blocks): FieldDescriptor[] => {
+    return blocks.flatMap((block) => block.fields || []);
+  }
+);
 
