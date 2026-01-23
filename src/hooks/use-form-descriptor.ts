@@ -67,26 +67,43 @@ export function useFormDescriptor(
   );
 
   // Merge saved form data with defaults to preserve values on remount
-  // Exclude fields with template defaults from savedFormData so newly evaluated defaults take precedence
+  // For template fields: preserve user-entered values if they differ from the new default
+  // This ensures user changes are preserved while allowing defaults to update when context changes
   const initialValues = useMemo(() => {
     if (!savedFormData || Object.keys(savedFormData).length === 0) {
       return defaultValues;
     }
     
-    // Filter savedFormData to exclude fields with template defaults
-    // This allows newly evaluated defaults to take effect when context changes
-    const filteredSavedData: Partial<FormData> = {};
-    for (const [key, value] of Object.entries(savedFormData)) {
-      if (!fieldsWithTemplateDefaults.has(key)) {
-        filteredSavedData[key as keyof FormData] = value as FormData[keyof FormData];
+    // Merge saved data with defaults
+    const merged: Partial<FormData> = { ...defaultValues };
+    
+    for (const [key, savedValue] of Object.entries(savedFormData)) {
+      const fieldId = key as keyof FormData;
+      const newDefault = defaultValues[fieldId];
+      
+      if (fieldsWithTemplateDefaults.has(key)) {
+        // For template fields: preserve saved value if it exists and differs from new default
+        // This handles two cases:
+        // 1. User changed the field -> preserve their change
+        // 2. Context changed but saved value differs -> preserve (likely user change)
+        // If saved value matches new default, use new default (allows context updates)
+        if (savedValue !== undefined && savedValue !== null) {
+          // Compare values (handle different types)
+          const valuesDiffer = JSON.stringify(savedValue) !== JSON.stringify(newDefault);
+          if (valuesDiffer) {
+            // Values differ - user likely changed it, preserve their value
+            merged[fieldId] = savedValue as FormData[keyof FormData];
+          }
+          // If values match, use new default (already in merged) - allows context updates
+        }
+        // If savedValue is undefined/null, use the newly evaluated default (already in merged)
+      } else {
+        // For non-template fields: always preserve saved value
+        merged[fieldId] = savedValue as FormData[keyof FormData];
       }
     }
     
-    // Merge filtered saved data with defaults, with saved data taking precedence for non-template fields
-    return {
-      ...defaultValues,
-      ...filteredSavedData,
-    };
+    return merged;
   }, [defaultValues, savedFormData, fieldsWithTemplateDefaults]);
 
   // Build Zod schema from descriptor
