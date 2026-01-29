@@ -193,7 +193,7 @@ describe('Response Transformer', () => {
       expect(result).toHaveLength(0);
     });
 
-    test('given complex nested response, should transform correctly', () => {
+    test('given nested response with iteratorTemplate path, should extract and transform nested array', () => {
       const data = {
         results: [
           { title: 'Title 1', identifier: 'id1' },
@@ -201,16 +201,141 @@ describe('Response Transformer', () => {
         ],
       };
       const config = createMockConfig({
+        iteratorTemplate: 'results',
         itemsTemplate: '{{item.title}}:{{item.identifier}}',
       });
       const context = createMockContext();
 
-      // Note: This test assumes the data structure matches what the transformer expects
-      // In practice, iteratorTemplate might be used to extract results array first
+      const result = transformResponse(data, config, context);
+
+      expect(result).toHaveLength(2);
+      expect(result[0]).toEqual({ label: 'Title 1:id1', value: 'Title 1:id1' });
+      expect(result[1]).toEqual({ label: 'Title 2:id2', value: 'Title 2:id2' });
+    });
+
+    test('given nested response with iteratorTemplate Handlebars expression evaluating to path, should extract and transform nested array', () => {
+      const data = {
+        data: {
+          items: [
+            { name: 'Item 1', code: 'A1' },
+            { name: 'Item 2', code: 'A2' },
+          ],
+        },
+      };
+      // Handlebars expression that evaluates to a path string
+      const context = createMockContext({
+        arrayPath: 'data.items',
+      });
+      const config = createMockConfig({
+        iteratorTemplate: '{{arrayPath}}',
+        itemsTemplate: '{{item.name}} ({{item.code}})',
+      });
+
+      const result = transformResponse(data, config, context);
+
+      expect(result).toHaveLength(2);
+      expect(result[0]).toEqual({ label: 'Item 1 (A1)', value: 'Item 1 (A1)' });
+      expect(result[1]).toEqual({ label: 'Item 2 (A2)', value: 'Item 2 (A2)' });
+    });
+
+    test('given nested response with deep path, should extract nested array', () => {
+      const data = {
+        response: {
+          payload: {
+            list: [
+              { label: 'Option 1', value: 'opt1' },
+              { label: 'Option 2', value: 'opt2' },
+            ],
+          },
+        },
+      };
+      const config = createMockConfig({
+        iteratorTemplate: 'response.payload.list',
+        itemsTemplate: '{"label":"{{item.label}}","value":"{{item.value}}"}',
+      });
+      const context = createMockContext();
+
+      const result = transformResponse(data, config, context);
+
+      expect(result).toHaveLength(2);
+      expect(result[0]).toEqual({ label: 'Option 1', value: 'opt1' });
+      expect(result[1]).toEqual({ label: 'Option 2', value: 'opt2' });
+    });
+
+    test('given itemsTemplate with RESPONSE access, should access full response', () => {
+      const data = {
+        metadata: { version: '1.0' },
+        items: [
+          { name: 'Item 1', id: 1 },
+        ],
+      };
+      const config = createMockConfig({
+        iteratorTemplate: 'items',
+        itemsTemplate: '{{item.name}} (v{{RESPONSE.metadata.version}})',
+      });
+      const context = createMockContext();
+
       const result = transformResponse(data, config, context);
 
       expect(result).toHaveLength(1);
-      // The transformer will try to transform the whole object
+      expect(result[0].label).toBe('Item 1 (v1.0)');
+    });
+
+    test('given iteratorTemplate with simple path, should extract array from nested object', () => {
+      const data = {
+        items: [
+          { name: 'Item 1' },
+          { name: 'Item 2' },
+        ],
+      };
+      const config = createMockConfig({
+        iteratorTemplate: 'items',
+        itemsTemplate: '{{item.name}}',
+      });
+      const context = createMockContext();
+
+      const result = transformResponse(data, config, context);
+
+      expect(result).toHaveLength(2);
+      expect(result[0].label).toBe('Item 1');
+      expect(result[1].label).toBe('Item 2');
+    });
+
+    test('given invalid iteratorTemplate path, should fall back to direct data access', () => {
+      const data = [
+        { name: 'Item 1' },
+        { name: 'Item 2' },
+      ];
+      const config = createMockConfig({
+        iteratorTemplate: 'nonexistent.path',
+        itemsTemplate: '{{item.name}}',
+      });
+      const context = createMockContext();
+
+      const result = transformResponse(data, config, context);
+
+      // Should fall back to treating data as array directly
+      expect(result).toHaveLength(2);
+      expect(result[0].label).toBe('Item 1');
+      expect(result[1].label).toBe('Item 2');
+    });
+
+    test('given complex nested response without iteratorTemplate, should transform single object', () => {
+      const data = {
+        results: [
+          { title: 'Title 1', identifier: 'id1' },
+          { title: 'Title 2', identifier: 'id2' },
+        ],
+      };
+      const config = createMockConfig({
+        itemsTemplate: '{{item.results}}',
+      });
+      const context = createMockContext();
+
+      // Without iteratorTemplate, it will try to transform the whole object
+      const result = transformResponse(data, config, context);
+
+      expect(result).toHaveLength(1);
       expect(result[0].label).toBeTruthy();
     });
   });
