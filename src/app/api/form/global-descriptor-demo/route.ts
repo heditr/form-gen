@@ -159,7 +159,7 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
                 },
                 {
                   type: 'pattern',
-                  value: /^[^@]+@[^@]+\.[^@]+$/,
+                  value: '^[^@]+@[^@]+\\.[^@]+$',
                   message: 'Please enter a valid email address',
                 },
               ],
@@ -212,7 +212,7 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
                 },
                 {
                   type: 'pattern',
-                  value: /^\d{2}-\d{7}$/,
+                  value: '^\\d{2}-\\d{7}$',
                   message: 'Tax ID must be in format XX-XXXXXXX',
                 },
               ],
@@ -264,7 +264,7 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
                 },
                 {
                   type: 'pattern',
-                  value: /^\d{3}-\d{2}-\d{4}$/,
+                  value: '^\\d{3}-\\d{2}-\\d{4}$',
                   message: 'SSN must be in format XXX-XX-XXXX',
                 },
               ],

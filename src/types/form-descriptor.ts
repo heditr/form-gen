@@ -35,7 +35,7 @@ export type ValidationRule =
     }
   | {
       type: 'pattern';
-      value: RegExp;
+      value: RegExp | string;
       message: string;
     }
   | {

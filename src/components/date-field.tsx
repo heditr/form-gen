@@ -52,6 +52,7 @@ export default function DateField({
             id={field.id}
             type="date"
             {...controllerField}
+            value={controllerField.value ?? ''}
             disabled={isDisabled}
             className={cn(
               errorMessage && 'border-destructive focus-visible:ring-destructive'

@@ -53,6 +53,7 @@ export default function TextField({
             id={field.id}
             type="text"
             {...controllerField}
+            value={controllerField.value ?? ''}
             disabled={isDisabled}
             className={cn(
               errorMessage && 'border-destructive focus-visible:ring-destructive'

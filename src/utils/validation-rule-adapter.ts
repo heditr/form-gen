@@ -147,23 +147,49 @@ export function convertToZodSchema(
   }
 
   // Start with base schema based on field type
-  let schema: z.ZodTypeAny;
+  // Preprocess undefined values to appropriate defaults to prevent type errors
+  // This allows validation rules (like required) to show proper error messages
+  let baseSchema: z.ZodTypeAny;
+  let needsPreprocessing = false;
+  let preprocessFn: ((val: unknown) => unknown) | null = null;
+  
   switch (fieldType) {
     case 'checkbox':
-      schema = z.boolean();
+      baseSchema = z.boolean();
+      // Preprocess undefined to false so validation can run
+      needsPreprocessing = true;
+      preprocessFn = (val) => (val === undefined || val === null ? false : val);
       break;
     case 'file':
-      schema = z.union([z.instanceof(File), z.array(z.instanceof(File)), z.null()]);
+      baseSchema = z.union([z.instanceof(File), z.array(z.instanceof(File)), z.null()]);
+      // Preprocess undefined to null so validation can run
+      needsPreprocessing = true;
+      preprocessFn = (val) => (val === undefined ? null : val);
       break;
     case 'radio':
-      schema = z.union([z.string(), z.number()]);
+      baseSchema = z.union([z.string(), z.number()]);
+      // Preprocess undefined to empty string so validation can run
+      needsPreprocessing = true;
+      preprocessFn = (val) => (val === undefined || val === null ? '' : val);
       break;
     case 'number':
-      schema = z.number();
+      // Use union to accept number or undefined, then refine will check if required
+      baseSchema = z.union([z.number(), z.undefined()]);
+      // Don't preprocess - let refine handle undefined for required validation
+      needsPreprocessing = false;
       break;
     default:
-      schema = z.string();
+      // For string fields, preprocess undefined to empty string
+      baseSchema = z.string();
+      needsPreprocessing = true;
+      preprocessFn = (val) => (val === undefined || val === null ? '' : val);
+      break;
   }
+
+  // Apply preprocessing to handle undefined values
+  let schema: z.ZodTypeAny = needsPreprocessing && preprocessFn
+    ? z.preprocess(preprocessFn, baseSchema)
+    : baseSchema;
 
   // Apply validation rules
   for (const rule of rules) {
@@ -193,26 +219,50 @@ export function convertToZodSchema(
             message: rule.message,
           });
         } else if (fieldType === 'number') {
-          // For number, required means it must be a valid number (not NaN)
-          schema = (schema as z.ZodNumber).refine((val) => !isNaN(val) && val !== null && val !== undefined, {
+          // For number, required means it must be a valid number (not NaN or undefined)
+          schema = schema.refine((val) => {
+            if (val === undefined || val === null) {
+              return false;
+            }
+            const numVal = typeof val === 'number' ? val : Number(val);
+            return !isNaN(numVal);
+          }, {
             message: rule.message,
           });
         } else {
           // For string fields (text, dropdown, autocomplete, date), ensure not empty
-          schema = (schema as z.ZodString).min(1, rule.message);
+          // Use refine instead of min() since schema is now ZodEffects from preprocessing
+          schema = schema.refine((val) => {
+            const strVal = String(val ?? '');
+            return strVal.length >= 1;
+          }, {
+            message: rule.message,
+          });
         }
         break;
 
       case 'minLength':
         if (fieldType === 'text' || fieldType === 'dropdown' || fieldType === 'autocomplete' || fieldType === 'date') {
-          schema = (schema as z.ZodString).min(rule.value, rule.message);
+          // Use refine since schema might be ZodEffects from preprocessing
+          schema = schema.refine((val) => {
+            const strVal = String(val ?? '');
+            return strVal.length >= rule.value;
+          }, {
+            message: rule.message,
+          });
         }
         // minLength doesn't apply to checkbox, file, radio, or number
         break;
 
       case 'maxLength':
         if (fieldType === 'text' || fieldType === 'dropdown' || fieldType === 'autocomplete' || fieldType === 'date') {
-          schema = (schema as z.ZodString).max(rule.value, rule.message);
+          // Use refine since schema might be ZodEffects from preprocessing
+          schema = schema.refine((val) => {
+            const strVal = String(val ?? '');
+            return strVal.length <= rule.value;
+          }, {
+            message: rule.message,
+          });
         }
         // maxLength doesn't apply to checkbox, file, radio, or number
         break;
@@ -221,10 +271,29 @@ export function convertToZodSchema(
         if (fieldType === 'text' || fieldType === 'dropdown' || fieldType === 'autocomplete' || fieldType === 'date') {
           // Always create a new RegExp instance to avoid mutating the one in Redux state
           // RegExp.test() mutates lastIndex, which violates Redux immutability rules
-          const regexPattern = typeof rule.value === 'string' 
-            ? new RegExp(rule.value) 
-            : new RegExp(rule.value.source, rule.value.flags);
-          schema = (schema as z.ZodString).regex(regexPattern, rule.message);
+          let regexPattern: RegExp;
+          if (typeof rule.value === 'string') {
+            // Strip leading/trailing slashes if present (common when patterns are serialized from JSON)
+            let patternString = rule.value;
+            if (patternString.startsWith('/') && patternString.endsWith('/')) {
+              patternString = patternString.slice(1, -1);
+            }
+            regexPattern = new RegExp(patternString);
+          } else {
+            regexPattern = new RegExp(rule.value.source, rule.value.flags);
+          }
+          // Use refine since schema might be ZodEffects from preprocessing
+          // Skip pattern validation for empty strings - let required validation handle those
+          schema = schema.refine((val) => {
+            const strVal = String(val ?? '');
+            // If empty, skip pattern validation (required validation will catch it)
+            if (strVal.length === 0) {
+              return true;
+            }
+            return regexPattern.test(strVal);
+          }, {
+            message: rule.message,
+          });
         }
         // pattern doesn't apply to checkbox, file, radio, or number
         break;

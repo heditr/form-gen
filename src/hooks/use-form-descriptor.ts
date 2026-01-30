@@ -69,36 +69,39 @@ export function useFormDescriptor(
   // Merge saved form data with defaults to preserve values on remount
   // For template fields: preserve user-entered values if they differ from the new default
   // This ensures user changes are preserved while allowing defaults to update when context changes
+  // IMPORTANT: Always ensure all values are defined (never undefined) to prevent uncontrolled input warnings
   const initialValues = useMemo(() => {
     if (!savedFormData || Object.keys(savedFormData).length === 0) {
       return defaultValues;
     }
     
     // Merge saved data with defaults
+    // Start with defaults to ensure all fields have defined values
     const merged: Partial<FormData> = { ...defaultValues };
     
     for (const [key, savedValue] of Object.entries(savedFormData)) {
       const fieldId = key as keyof FormData;
       const newDefault = defaultValues[fieldId];
       
+      // Skip undefined/null values to prevent uncontrolled input warnings
+      if (savedValue === undefined || savedValue === null) {
+        continue;
+      }
+      
       if (fieldsWithTemplateDefaults.has(key)) {
-        // For template fields: preserve saved value if it exists and differs from new default
+        // For template fields: preserve saved value if it differs from new default
         // This handles two cases:
         // 1. User changed the field -> preserve their change
         // 2. Context changed but saved value differs -> preserve (likely user change)
         // If saved value matches new default, use new default (allows context updates)
-        if (savedValue !== undefined && savedValue !== null) {
-          // Compare values (handle different types)
-          const valuesDiffer = JSON.stringify(savedValue) !== JSON.stringify(newDefault);
-          if (valuesDiffer) {
-            // Values differ - user likely changed it, preserve their value
-            merged[fieldId] = savedValue as FormData[keyof FormData];
-          }
-          // If values match, use new default (already in merged) - allows context updates
+        const valuesDiffer = JSON.stringify(savedValue) !== JSON.stringify(newDefault);
+        if (valuesDiffer) {
+          // Values differ - user likely changed it, preserve their value
+          merged[fieldId] = savedValue as FormData[keyof FormData];
         }
-        // If savedValue is undefined/null, use the newly evaluated default (already in merged)
+        // If values match, use new default (already in merged) - allows context updates
       } else {
-        // For non-template fields: always preserve saved value
+        // For non-template fields: always preserve saved value (if defined)
         merged[fieldId] = savedValue as FormData[keyof FormData];
       }
     }
