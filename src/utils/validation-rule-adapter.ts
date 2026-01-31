@@ -136,7 +136,8 @@ export function convertToZodSchema(
       case 'checkbox':
         return z.boolean();
       case 'file':
-        return z.union([z.instanceof(File), z.array(z.instanceof(File)), z.null()]);
+        // File fields store URL strings (not File objects)
+        return z.union([z.string(), z.array(z.string()), z.null()]);
       case 'radio':
         return z.union([z.string(), z.number()]);
       case 'number':
@@ -161,7 +162,8 @@ export function convertToZodSchema(
       preprocessFn = (val) => (val === undefined || val === null ? false : val);
       break;
     case 'file':
-      baseSchema = z.union([z.instanceof(File), z.array(z.instanceof(File)), z.null()]);
+      // File fields store URL strings (not File objects)
+      baseSchema = z.union([z.string(), z.array(z.string()), z.null()]);
       // Preprocess undefined to null so validation can run
       needsPreprocessing = true;
       preprocessFn = (val) => (val === undefined ? null : val);
@@ -201,8 +203,19 @@ export function convertToZodSchema(
             message: rule.message,
           });
         } else if (fieldType === 'file') {
-          // For file, required means it cannot be null
-          schema = (schema as z.ZodUnion<[z.ZodType<File>, z.ZodType<File[]>, z.ZodNull]>).refine((val) => val !== null, {
+          // For file, required means it cannot be null or empty string
+          schema = schema.refine((val) => {
+            if (val === null || val === undefined) {
+              return false;
+            }
+            if (typeof val === 'string') {
+              return val.trim().length > 0;
+            }
+            if (Array.isArray(val)) {
+              return val.length > 0 && val.every((item) => typeof item === 'string' && item.trim().length > 0);
+            }
+            return false;
+          }, {
             message: rule.message,
           });
         } else if (fieldType === 'radio') {
