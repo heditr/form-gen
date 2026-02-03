@@ -206,6 +206,12 @@ export function constructSubmissionRequest(
       headers['Authorization'] = `Bearer ${config.auth.token}`;
     } else if (config.auth.type === 'apikey' && config.auth.token && config.auth.headerName) {
       headers[config.auth.headerName] = config.auth.token;
+    } else if (config.auth.type === 'basic' && config.auth.username && config.auth.password) {
+      // Basic authentication: Base64 encode username:password
+      const credentials = typeof btoa !== 'undefined'
+        ? btoa(`${config.auth.username}:${config.auth.password}`)
+        : Buffer.from(`${config.auth.username}:${config.auth.password}`).toString('base64');
+      headers['Authorization'] = `Basic ${credentials}`;
     }
   }
 

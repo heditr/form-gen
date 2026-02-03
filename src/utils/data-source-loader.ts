@@ -33,7 +33,9 @@ export async function loadDataSource(
 
   // Check cache first (cache key includes URL and auth to prevent conflicts)
   const authKey = config.auth 
-    ? `${config.auth.type}:${config.auth.token || ''}:${config.auth.headerName || ''}`
+    ? config.auth.type === 'basic'
+      ? `${config.auth.type}:${config.auth.username || ''}:${config.auth.password || ''}`
+      : `${config.auth.type}:${config.auth.token || ''}:${config.auth.headerName || ''}`
     : 'no-auth';
   const cacheKey = `${url}::${authKey}`;
   
@@ -51,6 +53,13 @@ export async function loadDataSource(
       headers['Authorization'] = `Bearer ${config.auth.token}`;
     } else if (config.auth.type === 'apikey' && config.auth.token && config.auth.headerName) {
       headers[config.auth.headerName] = config.auth.token;
+    } else if (config.auth.type === 'basic' && config.auth.username && config.auth.password) {
+      // Basic authentication: Base64 encode username:password
+      // Use btoa for browser compatibility, or Buffer for Node.js
+      const credentials = typeof btoa !== 'undefined'
+        ? btoa(`${config.auth.username}:${config.auth.password}`)
+        : Buffer.from(`${config.auth.username}:${config.auth.password}`).toString('base64');
+      headers['Authorization'] = `Basic ${credentials}`;
     }
   }
 

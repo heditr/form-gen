@@ -87,16 +87,20 @@ export type FieldDefaultValue<T extends FieldType> =
  * @property url - Handlebars-templated URL for fetching data
  * @property itemsTemplate - Handlebars template for transforming API response
  * @property iteratorTemplate - Optional template for iterating over array responses
- * @property auth - Optional authentication configuration
+ * @property dataSourceId - Unique identifier for the data source (used to look up auth credentials server-side)
+ * @property auth - Optional authentication configuration (deprecated: use dataSourceId instead)
  */
 export interface DataSourceConfig {
   url: string;
   itemsTemplate: string;
   iteratorTemplate?: string;
+  dataSourceId?: string;
   auth?: {
-    type: 'bearer' | 'apikey';
+    type: 'bearer' | 'apikey' | 'basic';
     token?: string;
     headerName?: string;
+    username?: string;
+    password?: string;
   };
 }
 
@@ -171,9 +175,11 @@ export interface SubmissionConfig {
   payloadTemplate?: string;
   headers?: Record<string, string>;
   auth?: {
-    type: 'bearer' | 'apikey';
+    type: 'bearer' | 'apikey' | 'basic';
     token?: string;
     headerName?: string;
+    username?: string;
+    password?: string;
   };
 }
 
