@@ -10,7 +10,10 @@ import type {
   FieldDescriptor,
   ValidationRule,
   FormData,
+  FieldItem,
 } from '@/types/form-descriptor';
+import { loadDataSource } from './data-source-loader';
+import type { FormContext } from './template-evaluator';
 
 /**
  * Validation error format
@@ -39,7 +42,7 @@ function validateField(
   }
 
   for (const rule of field.validation) {
-    const error = validateRule(rule, value, field.type);
+    const error = validateRule(rule, value);
     if (error) {
       errors.push({
         field: field.id,
@@ -56,13 +59,11 @@ function validateField(
  * 
  * @param rule - Validation rule to apply
  * @param value - Value to validate
- * @param fieldType - Type of field (for type-specific validation)
  * @returns Error message if validation fails, null if valid
  */
 function validateRule(
   rule: ValidationRule,
-  value: unknown,
-  fieldType: string
+  value: unknown
 ): string | null {
   switch (rule.type) {
     case 'required': {
@@ -137,6 +138,56 @@ function validateRule(
 }
 
 /**
+ * Validate a single field value against its validation rules and data source
+ * 
+ * @param field - Field descriptor with validation rules and optional data source
+ * @param value - Field value to validate
+ * @param formContext - Form context for template evaluation (for data source URL templates)
+ * @returns Array of validation errors (empty if valid)
+ */
+export async function validateFieldValue(
+  field: FieldDescriptor,
+  value: unknown,
+  formContext: FormContext
+): Promise<ValidationError[]> {
+  const errors: ValidationError[] = [];
+
+  // Validate field against its validation rules
+  const ruleErrors = validateField(field, value);
+  errors.push(...ruleErrors);
+
+  // Validate data source if field has dataSource and value is provided
+  if (field.dataSource && value !== null && value !== undefined && value !== '') {
+    try {
+      // Load data source items
+      const items = await loadDataSource(field.dataSource, formContext);
+      
+      // Check if value exists in items
+      const valueExists = items.some((item: FieldItem) => {
+        // Compare by value property
+        return item.value === value || String(item.value) === String(value);
+      });
+
+      if (!valueExists) {
+        errors.push({
+          field: field.id,
+          message: `Value "${value}" is not from valid data source options`,
+          code: 'INVALID_DATA_SOURCE_VALUE',
+        });
+      }
+    } catch (error) {
+      // If data source loading fails, we can't validate the value
+      // Log the error but don't fail validation (data source might be temporarily unavailable)
+      console.error(`Failed to load data source for field ${field.id}:`, error);
+      // Optionally, we could add a warning error here, but for now we'll skip it
+      // to avoid false positives when data sources are temporarily unavailable
+    }
+  }
+
+  return errors;
+}
+
+/**
  * Validate form values against merged descriptor
  * 
  * @param descriptor - Merged GlobalFormDescriptor with all validation rules
@@ -149,17 +200,20 @@ export async function validateFormValues(
 ): Promise<ValidationError[]> {
   const errors: ValidationError[] = [];
 
+  // Create form context from formValues for template evaluation
+  const formContext: FormContext = {
+    ...formValues,
+    formData: formValues,
+  };
+
   // Iterate through all blocks and fields
   for (const block of descriptor.blocks) {
     for (const field of block.fields) {
       const value = formValues[field.id];
       
-      // Validate field against its validation rules
-      const fieldErrors = validateField(field, value);
+      // Validate field against its validation rules and data source
+      const fieldErrors = await validateFieldValue(field, value, formContext);
       errors.push(...fieldErrors);
-
-      // TODO: Validate data source values (will be implemented in task 2)
-      // For now, skip data source validation
     }
   }
 
