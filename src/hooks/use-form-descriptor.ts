@@ -119,8 +119,6 @@ export function useFormDescriptor(
     mode: 'onChange', // Validate on change for immediate feedback
   });
 
-  console.log(form.getValues())
-
   // Track registered fields (for compatibility, but not needed with Zod)
   const registeredFields = useRef(new Set<string>());
 
