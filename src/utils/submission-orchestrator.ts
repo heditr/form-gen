@@ -76,19 +76,37 @@ export function scrollToFirstError<T extends Record<string, unknown>>(
 }
 
 /**
+ * Check if form data contains File objects (pending uploads)
+ * 
+ * @param formValues - Form values to check
+ * @returns True if form data contains File objects
+ */
+export function hasFileObjects(formValues: Partial<FormData>): boolean {
+  for (const value of Object.values(formValues)) {
+    if (value instanceof File) {
+      return true;
+    }
+    if (Array.isArray(value) && value.some(item => item instanceof File)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
  * Evaluate payload template with form values
  * 
  * @param template - Optional Handlebars template for payload transformation
  * @param formValues - Form values from react-hook-form
- * @returns Evaluated payload as JSON string
+ * @returns Evaluated payload as JSON string or object (for multipart)
  */
 export function evaluatePayloadTemplate(
   template: string | undefined,
   formValues: Partial<FormData>
-): string {
-  // If no template provided, return JSON stringified form values
+): string | Partial<FormData> {
+  // If no template provided, return form values directly (for multipart) or JSON stringified (for JSON)
   if (!template || template.trim() === '') {
-    return JSON.stringify(formValues);
+    return formValues;
   }
 
   // Evaluate template with form values as context
@@ -99,29 +117,88 @@ export function evaluatePayloadTemplate(
 
   const evaluated = evaluateTemplate(template, context);
   
-  // If template evaluation returns empty, fall back to JSON stringified values
+  // If template evaluation returns empty, return form values directly
   if (!evaluated || evaluated.trim() === '') {
-    return JSON.stringify(formValues);
+    return formValues;
   }
 
-  return evaluated;
+  // Try to parse as JSON, if it fails, return as string
+  try {
+    return JSON.parse(evaluated);
+  } catch {
+    // If not valid JSON, return as string (for JSON submission)
+    return evaluated;
+  }
+}
+
+/**
+ * Construct FormData from form values for multipart submission
+ * 
+ * @param formValues - Form values (may contain File objects)
+ * @param evaluatedPayload - Evaluated payload from template (object)
+ * @returns FormData instance
+ */
+export function constructFormData(
+  formValues: Partial<FormData>,
+  evaluatedPayload: Partial<FormData>
+): FormData {
+  const formData = new FormData();
+
+  // Use evaluated payload if it's an object, otherwise use original form values
+  const dataToUse = typeof evaluatedPayload === 'object' && !Array.isArray(evaluatedPayload) && evaluatedPayload !== null
+    ? evaluatedPayload
+    : formValues;
+
+  // Add all fields to FormData
+  for (const [key, value] of Object.entries(dataToUse)) {
+    if (value === undefined || value === null) {
+      continue;
+    }
+
+    if (value instanceof File) {
+      // Single file
+      formData.append(key, value);
+    } else if (Array.isArray(value)) {
+      // Array of files or other values
+      for (const item of value) {
+        if (item instanceof File) {
+          formData.append(key, item);
+        } else {
+          // For non-file arrays, append as JSON string
+          formData.append(key, JSON.stringify(item));
+        }
+      }
+    } else {
+      // Regular field - convert to string
+      formData.append(key, String(value));
+    }
+  }
+
+  return formData;
 }
 
 /**
  * Construct submission request from config and payload
  * 
  * @param config - Submission configuration from descriptor
- * @param payload - Request body payload (JSON string)
+ * @param payload - Request body payload (JSON string or FormData)
+ * @param hasFiles - Whether the payload contains File objects
  * @returns Request configuration for fetch
  */
 export function constructSubmissionRequest(
   config: SubmissionConfig,
-  payload: string
+  payload: string | FormData,
+  hasFiles: boolean = false
 ): RequestInit {
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
     ...config.headers,
   };
+
+  // Only set Content-Type for JSON submissions
+  // For multipart/form-data, browser will set Content-Type with boundary
+  if (!hasFiles) {
+    headers['Content-Type'] = 'application/json';
+  }
 
   // Add authentication headers
   if (config.auth) {
@@ -182,14 +259,36 @@ export function createSubmissionOrchestrator(): SubmissionOrchestrator {
       // onValid - called when validation passes
       async (validData: T) => {
         try {
+          const formValues = validData as Partial<FormData>;
+          
+          // Check if form data contains File objects (pending uploads)
+          const containsFiles = hasFileObjects(formValues);
+
           // Evaluate payload template
-          const payload = evaluatePayloadTemplate(
+          const evaluatedPayload = evaluatePayloadTemplate(
             submission.payloadTemplate,
-            validData as Partial<FormData>
+            formValues
           );
 
+          // Construct request body based on whether files are present
+          let requestBody: string | FormData;
+          if (containsFiles) {
+            // Use multipart/form-data for file uploads
+            requestBody = constructFormData(formValues, evaluatedPayload);
+          } else {
+            // Use JSON for non-file submissions
+            // If evaluated payload is an object, stringify it; otherwise use as-is
+            requestBody = typeof evaluatedPayload === 'string'
+              ? evaluatedPayload
+              : JSON.stringify(evaluatedPayload);
+          }
+
           // Construct request
-          const requestInit = constructSubmissionRequest(submission, payload);
+          const requestInit = constructSubmissionRequest(
+            submission,
+            requestBody,
+            containsFiles
+          );
 
           // Make submission request
           const response = await fetch(submission.url, requestInit);

@@ -11,6 +11,8 @@ import {
   scrollToFirstError,
   evaluatePayloadTemplate,
   constructSubmissionRequest,
+  hasFileObjects,
+  constructFormData,
 } from './submission-orchestrator';
 import type {
   GlobalFormDescriptor,
@@ -79,10 +81,11 @@ describe('submission orchestrator', () => {
 
       const payload = evaluatePayloadTemplate(template, formValues);
 
-      expect(payload).toBe('{"email": "test@example.com", "name": "John Doe"}');
+      // Template evaluation returns parsed JSON object
+      expect(payload).toEqual({ email: 'test@example.com', name: 'John Doe' });
     });
 
-    test('given no template, should return JSON stringified form values', () => {
+    test('given no template, should return form values object', () => {
       const formValues: Partial<FormData> = {
         email: 'test@example.com',
         name: 'John Doe',
@@ -90,17 +93,17 @@ describe('submission orchestrator', () => {
 
       const payload = evaluatePayloadTemplate(undefined, formValues);
 
-      expect(payload).toBe(JSON.stringify(formValues));
+      expect(payload).toEqual(formValues);
     });
 
-    test('given empty template, should return JSON stringified form values', () => {
+    test('given empty template, should return form values object', () => {
       const formValues: Partial<FormData> = {
         email: 'test@example.com',
       };
 
       const payload = evaluatePayloadTemplate('', formValues);
 
-      expect(payload).toBe(JSON.stringify(formValues));
+      expect(payload).toEqual(formValues);
     });
   });
 
@@ -120,7 +123,7 @@ describe('submission orchestrator', () => {
 
       const payload = '{"email": "test@example.com"}';
 
-      const request = constructSubmissionRequest(config, payload);
+      const request = constructSubmissionRequest(config, payload, false);
 
       expect(request.method).toBe('POST');
       expect((request.headers as Record<string, string>)['Content-Type']).toBe('application/json');
@@ -142,7 +145,7 @@ describe('submission orchestrator', () => {
 
       const payload = '{}';
 
-      const request = constructSubmissionRequest(config, payload);
+      const request = constructSubmissionRequest(config, payload, false);
 
       expect((request.headers as Record<string, string>)['X-API-Key']).toBe('api-key-123');
       expect((request.headers as Record<string, string>)['Authorization']).toBeUndefined();
@@ -156,7 +159,7 @@ describe('submission orchestrator', () => {
 
       const payload = '{}';
 
-      const request = constructSubmissionRequest(config, payload);
+      const request = constructSubmissionRequest(config, payload, false);
 
       expect((request.headers as Record<string, string>)['Authorization']).toBeUndefined();
     });
@@ -169,7 +172,7 @@ describe('submission orchestrator', () => {
 
       const payload = '{}';
 
-      const request = constructSubmissionRequest(config, payload);
+      const request = constructSubmissionRequest(config, payload, false);
 
       expect(request.body).toBeUndefined();
     });
@@ -419,12 +422,226 @@ describe('submission orchestrator', () => {
 
       await submitHandler();
 
+      // Body should be JSON stringified evaluated payload
       expect(global.fetch).toHaveBeenCalledWith(
         expect.any(String),
         expect.objectContaining({
-          body: '{"email": "test@example.com", "name": "John"}',
+          body: expect.any(String),
         })
       );
+      
+      // Verify the body contains the expected data
+      const callArgs = vi.mocked(global.fetch).mock.calls[0];
+      const requestInit = callArgs[1] as RequestInit;
+      const bodyString = requestInit.body as string;
+      const bodyData = JSON.parse(bodyString);
+      expect(bodyData).toEqual({ email: 'test@example.com', name: 'John' });
+
+      vi.restoreAllMocks();
+    });
+  });
+
+  describe('hasFileObjects', () => {
+    test('given form data with File object, should return true', () => {
+      const file = new File(['content'], 'test.txt', { type: 'text/plain' });
+      const formValues: Partial<FormData> = {
+        email: 'test@example.com',
+        document: file,
+      };
+
+      expect(hasFileObjects(formValues)).toBe(true);
+    });
+
+    test('given form data with array of Files, should return true', () => {
+      const file1 = new File(['content1'], 'test1.txt', { type: 'text/plain' });
+      const file2 = new File(['content2'], 'test2.txt', { type: 'text/plain' });
+      const formValues: Partial<FormData> = {
+        email: 'test@example.com',
+        documents: [file1, file2],
+      };
+
+      expect(hasFileObjects(formValues)).toBe(true);
+    });
+
+    test('given form data with only URL strings, should return false', () => {
+      const formValues: Partial<FormData> = {
+        email: 'test@example.com',
+        document: 'https://example.com/file.pdf',
+      };
+
+      expect(hasFileObjects(formValues)).toBe(false);
+    });
+
+    test('given form data with no files, should return false', () => {
+      const formValues: Partial<FormData> = {
+        email: 'test@example.com',
+        name: 'John',
+      };
+
+      expect(hasFileObjects(formValues)).toBe(false);
+    });
+  });
+
+  describe('constructFormData', () => {
+    test('given form values with File objects, should construct FormData', () => {
+      const file = new File(['content'], 'test.txt', { type: 'text/plain' });
+      const formValues: Partial<FormData> = {
+        email: 'test@example.com',
+        document: file,
+      };
+
+      const formData = constructFormData(formValues, formValues);
+
+      expect(formData).toBeInstanceOf(FormData);
+      expect(formData.get('email')).toBe('test@example.com');
+      expect(formData.get('document')).toBe(file);
+    });
+
+    test('given form values with array of Files, should append all files', () => {
+      const file1 = new File(['content1'], 'test1.txt', { type: 'text/plain' });
+      const file2 = new File(['content2'], 'test2.txt', { type: 'text/plain' });
+      const formValues: Partial<FormData> = {
+        email: 'test@example.com',
+        documents: [file1, file2],
+      };
+
+      const formData = constructFormData(formValues, formValues);
+
+      expect(formData).toBeInstanceOf(FormData);
+      expect(formData.get('email')).toBe('test@example.com');
+      // FormData.getAll for arrays
+      const documents = formData.getAll('documents');
+      expect(documents).toHaveLength(2);
+      expect(documents[0]).toBe(file1);
+      expect(documents[1]).toBe(file2);
+    });
+
+    test('given form values with URL strings, should append as strings', () => {
+      const formValues: Partial<FormData> = {
+        email: 'test@example.com',
+        document: 'https://example.com/file.pdf',
+      };
+
+      const formData = constructFormData(formValues, formValues);
+
+      expect(formData).toBeInstanceOf(FormData);
+      expect(formData.get('email')).toBe('test@example.com');
+      expect(formData.get('document')).toBe('https://example.com/file.pdf');
+    });
+  });
+
+  describe('multipart submission', () => {
+    test('given form data with File objects, should use multipart/form-data', async () => {
+      const file = new File(['content'], 'test.txt', { type: 'text/plain' });
+      const mockForm = {
+        handleSubmit: vi.fn((onValid) => async (e?: unknown) => {
+          await onValid({ email: 'test@example.com', document: file });
+        }),
+        formState: {
+          errors: {},
+        },
+        getValues: vi.fn(() => ({ email: 'test@example.com', document: file })),
+      } as unknown as UseFormReturn<MockFormValues>;
+
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [],
+        submission: {
+          url: '/api/submit',
+          method: 'POST',
+        },
+      };
+
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ success: true }),
+      });
+
+      const orchestrator = createSubmissionOrchestrator();
+      const mockSetError = vi.fn();
+      const mockOnSuccess = vi.fn();
+      const mockOnError = vi.fn();
+
+      const submitHandler = orchestrator.createSubmitHandler(
+        mockForm,
+        descriptor,
+        {
+          setError: mockSetError,
+          onSuccess: mockOnSuccess,
+          onError: mockOnError,
+        }
+      );
+
+      await submitHandler();
+
+      // Verify fetch was called
+      expect(global.fetch).toHaveBeenCalled();
+      
+      // Verify Content-Type header is NOT set (browser sets boundary)
+      const callArgs = vi.mocked(global.fetch).mock.calls[0];
+      const requestInit = callArgs[1] as RequestInit;
+      const headers = requestInit.headers as Record<string, string>;
+      expect(headers['Content-Type']).toBeUndefined();
+      
+      // Verify body is FormData
+      expect(requestInit.body).toBeInstanceOf(FormData);
+
+      vi.restoreAllMocks();
+    });
+
+    test('given form data with only URL strings, should use application/json', async () => {
+      const mockForm = {
+        handleSubmit: vi.fn((onValid) => async (e?: unknown) => {
+          await onValid({ email: 'test@example.com', document: 'https://example.com/file.pdf' });
+        }),
+        formState: {
+          errors: {},
+        },
+        getValues: vi.fn(() => ({ email: 'test@example.com', document: 'https://example.com/file.pdf' })),
+      } as unknown as UseFormReturn<MockFormValues>;
+
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [],
+        submission: {
+          url: '/api/submit',
+          method: 'POST',
+        },
+      };
+
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ success: true }),
+      });
+
+      const orchestrator = createSubmissionOrchestrator();
+      const mockSetError = vi.fn();
+      const mockOnSuccess = vi.fn();
+      const mockOnError = vi.fn();
+
+      const submitHandler = orchestrator.createSubmitHandler(
+        mockForm,
+        descriptor,
+        {
+          setError: mockSetError,
+          onSuccess: mockOnSuccess,
+          onError: mockOnError,
+        }
+      );
+
+      await submitHandler();
+
+      // Verify fetch was called
+      expect(global.fetch).toHaveBeenCalled();
+      
+      // Verify Content-Type header is set to application/json
+      const callArgs = vi.mocked(global.fetch).mock.calls[0];
+      const requestInit = callArgs[1] as RequestInit;
+      const headers = requestInit.headers as Record<string, string>;
+      expect(headers['Content-Type']).toBe('application/json');
+      
+      // Verify body is JSON string
+      expect(typeof requestInit.body).toBe('string');
 
       vi.restoreAllMocks();
     });

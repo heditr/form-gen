@@ -282,19 +282,48 @@ function FormContainerWithSubmissionComponent({
     // Get current form values
     const formValues = form.getValues();
     
+    // Check if form data contains File objects
+    const { hasFileObjects } = await import('@/utils/submission-orchestrator');
+    const containsFiles = hasFileObjects(formValues as Partial<FormData>);
+
     // Evaluate payload template
-    const payload = evaluatePayloadTemplate(
+    const evaluatedPayload = evaluatePayloadTemplate(
       mergedDescriptor.submission.payloadTemplate,
       formValues as Partial<FormData>
     );
 
+    // Construct request body
+    let requestBody: string | FormData;
+    let payloadString: string;
+    if (containsFiles) {
+      const { constructFormData } = await import('@/utils/submission-orchestrator');
+      // For multipart, use form values directly (evaluated payload is for JSON)
+      const payloadData = typeof evaluatedPayload === 'object' && !Array.isArray(evaluatedPayload) && evaluatedPayload !== null
+        ? evaluatedPayload
+        : formValues as Partial<FormData>;
+      requestBody = constructFormData(formValues as Partial<FormData>, payloadData);
+      // For display purposes, stringify the evaluated payload
+      payloadString = typeof evaluatedPayload === 'string'
+        ? evaluatedPayload
+        : JSON.stringify(evaluatedPayload);
+    } else {
+      requestBody = typeof evaluatedPayload === 'string'
+        ? evaluatedPayload
+        : JSON.stringify(evaluatedPayload);
+      payloadString = requestBody;
+    }
+
     // Construct request to get headers
-    const requestInit = constructSubmissionRequest(mergedDescriptor.submission, payload);
+    const requestInit = constructSubmissionRequest(
+      mergedDescriptor.submission,
+      requestBody,
+      containsFiles
+    );
     const headers = requestInit.headers as Record<string, string>;
 
     // Update state with payload and headers before submission
     onSubmissionStateChange({
-      payload,
+      payload: payloadString,
       requestHeaders: headers,
       response: null,
       responseStatus: null,
@@ -313,7 +342,7 @@ function FormContainerWithSubmissionComponent({
         },
         onSuccess: (response: unknown) => {
           onSubmissionStateChange({
-            payload,
+            payload: payloadString,
             requestHeaders: headers,
             response,
             responseStatus: 200,
@@ -326,7 +355,7 @@ function FormContainerWithSubmissionComponent({
           if (error && typeof error === 'object' && 'errors' in error) {
             const backendError = error as { errors?: Array<{ field: string; message: string }>; error?: string };
             onSubmissionStateChange({
-              payload,
+              payload: payloadString,
               requestHeaders: headers,
               response: error,
               responseStatus: 400,
@@ -336,7 +365,7 @@ function FormContainerWithSubmissionComponent({
             });
           } else {
             onSubmissionStateChange({
-              payload,
+              payload: payloadString,
               requestHeaders: headers,
               response: error,
               responseStatus: null,
