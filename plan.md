@@ -2,6 +2,7 @@
 
 ## Active Epics
 
+- [Backend Validation Epic](tasks/backend-validation-epic.md) - 📋 PLANNED
 - [DefaultValue Handlebars Evaluation Epic](tasks/defaultvalue-handlebars-epic.md) - 📋 PLANNED
 - [Demo Page Epic](tasks/demo-page-epic.md) - 📋 PLANNED
 - [KYC Form Engine v3.1 Epic](tasks/kyc-form-engine-epic.md) - 📋 PLANNED
