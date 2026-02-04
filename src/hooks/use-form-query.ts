@@ -136,10 +136,10 @@ export function useDataSource(
     queryFn: async () => {
       // Use the data-source-loader utility which handles:
       // - URL template evaluation (already done for query key, but utility does it again)
-      // - Authentication
+      // - Authentication (via proxy if dataSourceId is present, or direct if auth is provided)
       // - API calls
       // - Response transformation using itemsTemplate
-      const items = await loadDataSourceUtil(config, formContext);
+      const items = await loadDataSourceUtil(config, formContext, fieldPath);
       return items;
     },
     staleTime: 2 * 60 * 1000, // 2 minutes - data sources may change more frequently

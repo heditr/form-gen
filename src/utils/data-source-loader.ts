@@ -9,6 +9,7 @@ import type { DataSourceConfig, FieldItem } from '@/types/form-descriptor';
 import type { FormContext } from './template-evaluator';
 import { transformResponse } from './response-transformer';
 import { evaluateTemplate } from './template-evaluator';
+import { loadDataSourceViaProxy } from './data-source-proxy';
 
 /**
  * Cache for API responses to prevent duplicate requests
@@ -19,15 +20,29 @@ const responseCache = new Map<string, FieldItem[]>();
 /**
  * Load data from a data source API
  * 
- * @param config - Data source configuration with URL template, items template, and auth
+ * If dataSourceId is present, uses backend proxy endpoint for secure authentication.
+ * Otherwise, falls back to direct API call (for backward compatibility).
+ * 
+ * @param config - Data source configuration with URL template, items template, and optional dataSourceId or auth
  * @param context - Form context for template evaluation
+ * @param fieldId - Optional field identifier (required when using dataSourceId)
  * @returns Promise resolving to array of field items
  * @throws Error if API call fails or response is not ok
  */
 export async function loadDataSource(
   config: DataSourceConfig,
-  context: FormContext
+  context: FormContext,
+  fieldId?: string
 ): Promise<FieldItem[]> {
+  // If dataSourceId is present, use backend proxy for secure authentication
+  if (config.dataSourceId) {
+    if (!fieldId) {
+      throw new Error('fieldId is required when using dataSourceId');
+    }
+    return loadDataSourceViaProxy(fieldId, config, context);
+  }
+
+  // Fall back to direct API call for backward compatibility (when auth is provided directly)
   // Evaluate URL template with form context
   const url = evaluateTemplate(config.url, context);
 

@@ -128,11 +128,11 @@ export const rehydrateRulesThunk = createAsyncThunk<
  */
 export const fetchDataSourceThunk = createAsyncThunk<
   unknown, // Return type (the data items)
-  { fieldPath: string; url: string; auth?: AuthConfig }, // Argument type
+  { fieldPath: string; url: string; auth?: AuthConfig }, // Argument type (url and auth kept for backward compatibility, but not used)
   { state: RootState; rejectValue: string } // Reject value type
 >(
   'form/fetchDataSource',
-  async ({ fieldPath, url, auth }, { getState, dispatch, rejectWithValue }) => {
+  async ({ fieldPath }, { getState, dispatch, rejectWithValue }) => {
     try {
       const state = getState();
       const formState = getFormState(state);
@@ -163,11 +163,11 @@ export const fetchDataSourceThunk = createAsyncThunk<
       
       // Use the data-source-loader utility which handles:
       // - URL template evaluation
-      // - Authentication
+      // - Authentication (via proxy if dataSourceId is present, or direct if auth is provided)
       // - API calls
       // - Response transformation using itemsTemplate
       // - Caching
-      const items = await loadDataSourceUtil(fieldDescriptor.dataSource, formContext);
+      const items = await loadDataSourceUtil(fieldDescriptor.dataSource, formContext, fieldPath);
       
       // Dispatch action to store in Redux cache
       dispatch(loadDataSource({ fieldPath, data: items }));

@@ -9,6 +9,11 @@ import { loadDataSource, clearDataSourceCache } from './data-source-loader';
 import type { DataSourceConfig, FieldItem } from '@/types/form-descriptor';
 import type { FormContext } from './template-evaluator';
 
+// Mock data source proxy
+vi.mock('./data-source-proxy', () => ({
+  loadDataSourceViaProxy: vi.fn(),
+}));
+
 // Mock fetch globally
 global.fetch = vi.fn();
 
@@ -38,6 +43,65 @@ describe('loadDataSource', () => {
   afterEach(() => {
     vi.clearAllMocks();
     clearDataSourceCache();
+  });
+
+  test('given dataSourceId, should use proxy endpoint instead of direct API call', async () => {
+    const { loadDataSourceViaProxy } = await import('./data-source-proxy');
+    const mockItems: FieldItem[] = [
+      { label: 'Option 1', value: 'opt1' },
+      { label: 'Option 2', value: 'opt2' },
+    ];
+
+    vi.mocked(loadDataSourceViaProxy).mockResolvedValueOnce(mockItems);
+
+    const config: DataSourceConfig = {
+      url: '/api/external/data',
+      itemsTemplate: '{"label":"{{item.name}}","value":"{{item.code}}"}',
+      dataSourceId: 'test-api',
+    };
+    const context = createMockContext({ country: 'US' });
+
+    const items = await loadDataSource(config, context, 'testField');
+
+    expect(loadDataSourceViaProxy).toHaveBeenCalledWith('testField', config, context);
+    expect(items).toEqual(mockItems);
+    // Should not call fetch directly
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  test('given dataSourceId without fieldId, should throw error', async () => {
+    const config: DataSourceConfig = {
+      url: '/api/external/data',
+      itemsTemplate: '{"label":"{{item.name}}","value":"{{item.code}}"}',
+      dataSourceId: 'test-api',
+    };
+    const context = createMockContext();
+
+    await expect(
+      loadDataSource(config, context)
+    ).rejects.toThrow('fieldId is required when using dataSourceId');
+  });
+
+  test('given auth config without dataSourceId, should use direct API call (backward compatibility)', async () => {
+    const config: DataSourceConfig = {
+      url: '/api/data',
+      itemsTemplate: '{"label":"{{item.name}}","value":"{{item.code}}"}',
+      auth: {
+        type: 'bearer',
+        token: 'test-token',
+      },
+    };
+    const context = createMockContext();
+
+    const mockResponse = [{ name: 'Item 1', code: 'code1' }];
+    vi.mocked(global.fetch).mockResolvedValueOnce({
+      ok: true,
+      json: async () => mockResponse,
+    } as Response);
+
+    await loadDataSource(config, context);
+
+    expect(global.fetch).toHaveBeenCalled();
   });
 
   test('given dataSource config, should evaluate URL template with form context', async () => {
