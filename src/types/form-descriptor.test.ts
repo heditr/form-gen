@@ -8,6 +8,7 @@
 import { describe, test, expect } from 'vitest';
 import type {
   GlobalFormDescriptor,
+  SubFormDescriptor,
   BlockDescriptor,
   FieldDescriptor,
   ValidationRule,
@@ -141,11 +142,26 @@ describe('form-descriptor types', () => {
 
       expect(block.status?.readonly).toBeDefined();
     });
+
+    test('given a block that composes a sub-form, should support subFormRef and instance ID', () => {
+      const block: BlockDescriptor = {
+        id: 'incorporation-address',
+        title: 'Incorporation Address',
+        fields: [],
+        subFormRef: 'address',
+        subFormInstanceId: 'incorporation',
+      };
+
+      expect(block.subFormRef).toBe('address');
+      expect(block.subFormInstanceId).toBe('incorporation');
+    });
   });
 
   describe('GlobalFormDescriptor', () => {
     test('given a form descriptor structure, should define blocks, fields, and submission config', () => {
       const descriptor: GlobalFormDescriptor = {
+        id: 'kyc-form-v1',
+        title: 'KYC Onboarding Form',
         version: '1.0.0',
         blocks: [
           {
@@ -167,10 +183,89 @@ describe('form-descriptor types', () => {
         },
       };
 
+      expect(descriptor.id).toBe('kyc-form-v1');
+      expect(descriptor.title).toBe('KYC Onboarding Form');
       expect(descriptor.blocks).toBeDefined();
       expect(descriptor.blocks.length).toBe(1);
       expect(descriptor.submission).toBeDefined();
       expect(descriptor.submission.url).toBe('/api/submit');
+    });
+
+    test('given a form descriptor with sub-form references, should reference sub-forms via block subFormRef', () => {
+      const descriptor: GlobalFormDescriptor = {
+        id: 'kyc-form-v1',
+        blocks: [
+          {
+            id: 'incorporation-address',
+            title: 'Incorporation Address',
+            fields: [],
+            subFormRef: 'address',
+            subFormInstanceId: 'incorporation',
+          },
+          {
+            id: 'onboarding-address',
+            title: 'Onboarding Address',
+            fields: [],
+            subFormRef: 'address',
+            subFormInstanceId: 'onboarding',
+          },
+        ],
+        submission: {
+          url: '/api/submit',
+          method: 'POST',
+        },
+      };
+
+      expect(descriptor.blocks[0].subFormRef).toBe('address');
+      expect(descriptor.blocks[0].subFormInstanceId).toBe('incorporation');
+      expect(descriptor.blocks[1].subFormRef).toBe('address');
+      expect(descriptor.blocks[1].subFormInstanceId).toBe('onboarding');
+    });
+  });
+
+  describe('SubFormDescriptor', () => {
+    test('given a sub-form descriptor, should have optional submission config', () => {
+      const subForm: SubFormDescriptor = {
+        id: 'address-subform',
+        title: 'Address Sub-Form',
+        version: '1.0.0',
+        blocks: [
+          {
+            id: 'address-block',
+            title: 'Address',
+            fields: [
+              {
+                id: 'line1',
+                type: 'text',
+                label: 'Address Line 1',
+                validation: [],
+              },
+            ],
+          },
+        ],
+      };
+
+      expect(subForm.id).toBe('address-subform');
+      expect(subForm.submission).toBeUndefined();
+    });
+
+    test('given a sub-form with submission, should support optional submission config', () => {
+      const subForm: SubFormDescriptor = {
+        id: 'popin-subform',
+        title: 'Popin Sub-Form',
+        version: '1.0.0',
+        blocks: [],
+        submission: {
+          url: '/api/popin-submit',
+          method: 'POST',
+        },
+      };
+
+      expect(subForm.id).toBe('popin-subform');
+      expect(subForm.title).toBe('Popin Sub-Form');
+      expect(subForm.version).toBe('1.0.0');
+      expect(subForm.submission).toBeDefined();
+      expect(subForm.submission?.url).toBe('/api/popin-submit');
     });
   });
 
@@ -230,7 +325,7 @@ describe('form-descriptor types', () => {
         id: 'documents',
         type: 'file',
         label: 'Documents',
-        defaultValue: ['https://example.com/file1.pdf', 'https://example.com/file2.pdf'],
+        defaultValue: 'https://example.com/file1.pdf',
         validation: [],
       };
 

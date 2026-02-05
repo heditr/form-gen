@@ -1,7 +1,8 @@
 /**
  * Type definitions for the KYC Form Engine form descriptor system
  * 
- * These types define the hierarchical structure: GlobalFormDescriptor → Blocks → Fields
+ * These types define the hierarchical structure: GlobalFormDescriptor → Blocks → Fields,
+ * with optional SubFormDescriptor support for reusable form fragments.
  * with support for dynamic data sources, validation rules, and status templates.
  */
 
@@ -151,6 +152,9 @@ export interface FieldDescriptor {
  * @property description - Optional description/help text
  * @property fields - Array of field descriptors within this block
  * @property status - Optional status templates for conditional visibility/enabling
+ * @property subFormRef - Optional ID of a SubFormDescriptor to compose into this block
+ * @property subFormInstanceId - Optional instance identifier to distinguish multiple uses
+ * of the same sub-form template (e.g., incorporation vs onboarding address)
  */
 export interface BlockDescriptor {
   id: string;
@@ -158,6 +162,8 @@ export interface BlockDescriptor {
   description?: string;
   fields: FieldDescriptor[];
   status?: StatusTemplates;
+  subFormRef?: string;
+  subFormInstanceId?: string;
 }
 
 /**
@@ -189,14 +195,46 @@ export interface SubmissionConfig {
  * The root descriptor containing all blocks, fields, and submission configuration.
  * This is the base structure that gets merged with RulesObject during re-hydration.
  * 
+ * Sub-forms are referenced via BlockDescriptor.subFormRef, so there's no need for
+ * a separate includes array - the resolver can traverse blocks to find all sub-form references.
+ * 
+ * @property id - Optional identifier for the descriptor when stored externally (e.g., in a database)
+ * @property title - Optional human-readable title for the form descriptor
  * @property version - Version identifier for the descriptor
- * @property blocks - Array of block descriptors
+ * @property blocks - Array of block descriptors (may include blocks with subFormRef)
  * @property submission - Submission configuration
  */
 export interface GlobalFormDescriptor {
+  id?: string;
+  title?: string;
   version?: string;
   blocks: BlockDescriptor[];
   submission: SubmissionConfig;
+}
+
+/**
+ * Sub-form descriptor
+ * 
+ * A reusable form fragment that can be composed into a GlobalFormDescriptor via
+ * BlockDescriptor.subFormRef. It represents a reusable block structure that can
+ * be included multiple times with different instance IDs.
+ * 
+ * Unlike GlobalFormDescriptor, submission is optional because sub-forms are typically
+ * just structural blocks. However, submission can be provided for cases where a sub-form
+ * needs its own submission endpoint (e.g., popin flows or block-scoped submissions).
+ * 
+ * @property id - Required identifier for the sub-form (used for database storage and resolution)
+ * @property title - Required human-readable title for the sub-form
+ * @property version - Required version identifier for the sub-form
+ * @property blocks - Array of block descriptors within this sub-form
+ * @property submission - Optional submission configuration (only needed if sub-form has its own submission)
+ */
+export interface SubFormDescriptor {
+  id: string;
+  title: string;
+  version: string;
+  blocks: BlockDescriptor[];
+  submission?: SubmissionConfig;
 }
 
 /**

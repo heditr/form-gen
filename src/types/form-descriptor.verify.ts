@@ -18,6 +18,7 @@ import type {
   DataSourceConfig,
   StatusTemplates,
   SubmissionConfig,
+  SubFormDescriptor,
 } from './form-descriptor';
 
 // Verify ValidationRule type
@@ -77,6 +78,8 @@ const blockWithStatus: BlockDescriptor = {
 
 // Verify GlobalFormDescriptor
 const globalDescriptor: GlobalFormDescriptor = {
+  id: 'kyc-form-v1',
+  title: 'KYC Onboarding Form',
   version: '1.0.0',
   blocks: [blockWithStatus],
   submission: {
@@ -86,6 +89,26 @@ const globalDescriptor: GlobalFormDescriptor = {
     headers: {
       'Content-Type': 'application/json',
     },
+  },
+};
+
+// Verify SubFormDescriptor (submission is optional)
+const subFormWithoutSubmission: SubFormDescriptor = {
+  id: 'address-subform',
+  title: 'Address Sub-Form',
+  version: '1.0.0',
+  blocks: [blockWithStatus],
+};
+
+// Verify SubFormDescriptor with optional submission
+const subFormWithSubmission: SubFormDescriptor = {
+  id: 'popin-subform',
+  title: 'Popin Sub-Form',
+  version: '1.0.0',
+  blocks: [blockWithStatus],
+  submission: {
+    url: '/api/subform-submit',
+    method: 'POST',
   },
 };
 
@@ -129,6 +152,8 @@ export {
   fieldWithDataSource,
   blockWithStatus,
   globalDescriptor,
+  subFormWithoutSubmission,
+  subFormWithSubmission,
   caseContext,
   rulesObject,
 };
