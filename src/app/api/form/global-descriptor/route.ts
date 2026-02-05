@@ -7,6 +7,9 @@
 
 import { NextResponse } from 'next/server';
 import type { GlobalFormDescriptor } from '@/types/form-descriptor';
+import { resolveSubForms } from '@/utils/sub-form-resolver';
+import { fetchSubForms } from '../sub-form/[id]/sub-form-fetcher';
+import { collectSubFormReferences } from './sub-form-collector';
 
 /**
  * GET handler for global form descriptor
@@ -193,7 +196,35 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
       },
     };
 
-    return NextResponse.json(globalDescriptor, {
+    // Resolve sub-forms if any are referenced
+    const subFormRefs = collectSubFormReferences(globalDescriptor);
+    let resolvedDescriptor = globalDescriptor;
+
+    if (subFormRefs.length > 0) {
+      try {
+        // Fetch all referenced sub-forms
+        const subFormMap = await fetchSubForms(subFormRefs);
+        
+        // Resolve and merge sub-forms into the descriptor
+        resolvedDescriptor = resolveSubForms(globalDescriptor, subFormMap);
+      } catch (error) {
+        // If sub-form resolution fails, return error response
+        const errorMessage = error instanceof Error ? error.message : 'Failed to resolve sub-forms';
+        console.error('Error resolving sub-forms:', error);
+        
+        return NextResponse.json(
+          { error: errorMessage },
+          {
+            status: 500,
+            headers: {
+              'Content-Type': 'application/json',
+            },
+          }
+        );
+      }
+    }
+
+    return NextResponse.json(resolvedDescriptor, {
       status: 200,
       headers: {
         'Content-Type': 'application/json',
