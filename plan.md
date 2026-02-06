@@ -10,6 +10,7 @@
 - [Redux Saga to Redux Thunk + TanStack Query Migration Epic](tasks/redux-thunk-tanstack-query-migration-epic.md) - 📋 PLANNED
 - [JSONLogic Integration Epic](tasks/jsonlogic-integration-epic.md) - 📋 PLANNED
 - [Sub-Form Support Epic](tasks/sub-form-support-epic.md) - 📋 PLANNED
+- [Popin Block Component Epic](tasks/popin-block-component-epic.md) - 📋 PLANNED
 
 ## Completed Epics
 
