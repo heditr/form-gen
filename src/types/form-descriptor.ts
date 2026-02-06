@@ -145,6 +145,49 @@ export interface FieldDescriptor {
 }
 
 /**
+ * Popin load configuration for loading data when popin opens
+ * 
+ * @property url - Handlebars-templated URL for fetching data
+ * @property dataSourceId - Unique identifier for the data source (used to look up auth credentials server-side)
+ * @property auth - Optional authentication configuration (deprecated: use dataSourceId instead)
+ * 
+ * Note: Response is expected to be an object (like CaseContext shape), not an array.
+ * Response is merged directly into formContext, no transformation needed.
+ */
+export interface PopinLoadConfig {
+  url: string;
+  dataSourceId?: string;
+  auth?: {
+    type: 'bearer' | 'apikey' | 'basic';
+    token?: string;
+    headerName?: string;
+    username?: string;
+    password?: string;
+  };
+}
+
+/**
+ * Popin submit configuration for calling endpoint when validate button clicked
+ * 
+ * @property url - Handlebars-templated URL endpoint
+ * @property method - HTTP method (POST, PUT, PATCH)
+ * @property payloadTemplate - Optional Handlebars template for transforming form data
+ * @property auth - Optional authentication configuration
+ */
+export interface PopinSubmitConfig {
+  url: string;
+  method: 'POST' | 'PUT' | 'PATCH';
+  payloadTemplate?: string;
+  auth?: {
+    type: 'bearer' | 'apikey' | 'basic';
+    token?: string;
+    headerName?: string;
+    username?: string;
+    password?: string;
+  };
+}
+
+/**
  * Block descriptor definition
  * 
  * @property id - Unique identifier for the block
@@ -155,6 +198,9 @@ export interface FieldDescriptor {
  * @property subFormRef - Optional ID of a SubFormDescriptor to compose into this block
  * @property subFormInstanceId - Optional instance identifier to distinguish multiple uses
  * of the same sub-form template (e.g., incorporation vs onboarding address)
+ * @property popin - If true, block is standalone popin (never renders inline, only via button triggers)
+ * @property popinLoad - Optional: Load object data when popin opens (merged into formContext)
+ * @property popinSubmit - Optional: Call endpoint when validate button clicked, prevent closing on error
  */
 export interface BlockDescriptor {
   id: string;
@@ -164,6 +210,9 @@ export interface BlockDescriptor {
   status?: StatusTemplates;
   subFormRef?: string;
   subFormInstanceId?: string;
+  popin?: boolean;
+  popinLoad?: PopinLoadConfig;
+  popinSubmit?: PopinSubmitConfig;
 }
 
 /**

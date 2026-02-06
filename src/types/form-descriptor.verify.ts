@@ -19,6 +19,8 @@ import type {
   StatusTemplates,
   SubmissionConfig,
   SubFormDescriptor,
+  PopinLoadConfig,
+  PopinSubmitConfig,
 } from './form-descriptor';
 
 // Verify ValidationRule type
@@ -73,6 +75,56 @@ const blockWithStatus: BlockDescriptor = {
     hidden: '{{#if hidePersonalInfo}}true{{/if}}',
     disabled: '{{#if readonly}}true{{/if}}',
     readonly: '{{#if isReadonly}}true{{/if}}',
+  },
+};
+
+// Verify BlockDescriptor with popin flag
+const popinBlock: BlockDescriptor = {
+  id: 'contact-info',
+  title: 'Contact Information',
+  fields: [],
+  popin: true,
+};
+
+// Verify BlockDescriptor with popinLoad config
+const popinBlockWithLoad: BlockDescriptor = {
+  id: 'contact-info',
+  title: 'Contact Information',
+  fields: [],
+  popin: true,
+  popinLoad: {
+    url: '/api/contact/{{entityId}}',
+    dataSourceId: 'contact-api',
+  },
+};
+
+// Verify BlockDescriptor with popinSubmit config
+const popinBlockWithSubmit: BlockDescriptor = {
+  id: 'contact-info',
+  title: 'Contact Information',
+  fields: [],
+  popin: true,
+  popinSubmit: {
+    url: '/api/contact/{{entityId}}',
+    method: 'POST',
+    payloadTemplate: '{{formData}}',
+  },
+};
+
+// Verify PopinLoadConfig type
+const popinLoadConfig: PopinLoadConfig = {
+  url: '/api/data/{{id}}',
+  dataSourceId: 'api-source',
+};
+
+// Verify PopinSubmitConfig type
+const popinSubmitConfig: PopinSubmitConfig = {
+  url: '/api/submit/{{id}}',
+  method: 'PUT',
+  payloadTemplate: '{{formData}}',
+  auth: {
+    type: 'bearer',
+    token: 'token123',
   },
 };
 
@@ -151,6 +203,11 @@ export {
   fieldWithItems,
   fieldWithDataSource,
   blockWithStatus,
+  popinBlock,
+  popinBlockWithLoad,
+  popinBlockWithSubmit,
+  popinLoadConfig,
+  popinSubmitConfig,
   globalDescriptor,
   subFormWithoutSubmission,
   subFormWithSubmission,

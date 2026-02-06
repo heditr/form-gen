@@ -56,6 +56,11 @@ export default function FormPresentation({
   return (
     <form data-testid="form-presentation" className="form-presentation" onSubmit={form.handleSubmit(() => {})}>
       {mergedDescriptor.blocks.map((block) => {
+        // Skip popin blocks - they never render inline, only via button triggers
+        if (block.popin) {
+          return null;
+        }
+
         // Evaluate block visibility
         const isHidden = evaluateHiddenStatus(block, formContext);
         const isDisabled = evaluateDisabledStatus(block, formContext);

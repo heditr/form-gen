@@ -155,6 +155,95 @@ describe('form-descriptor types', () => {
       expect(block.subFormRef).toBe('address');
       expect(block.subFormInstanceId).toBe('incorporation');
     });
+
+    test('given a popin block, should support popin flag', () => {
+      const block: BlockDescriptor = {
+        id: 'contact-info',
+        title: 'Contact Information',
+        fields: [],
+        popin: true,
+      };
+
+      expect(block.popin).toBe(true);
+    });
+
+    test('given a popin block with popinLoad config, should support popinLoad with url and dataSourceId', () => {
+      const block: BlockDescriptor = {
+        id: 'contact-info',
+        title: 'Contact Information',
+        fields: [],
+        popin: true,
+        popinLoad: {
+          url: '/api/contact/{{entityId}}',
+          dataSourceId: 'contact-api',
+        },
+      };
+
+      expect(block.popinLoad).toBeDefined();
+      expect(block.popinLoad?.url).toBe('/api/contact/{{entityId}}');
+      expect(block.popinLoad?.dataSourceId).toBe('contact-api');
+    });
+
+    test('given a popin block with popinLoad config, should support popinLoad with auth', () => {
+      const block: BlockDescriptor = {
+        id: 'contact-info',
+        title: 'Contact Information',
+        fields: [],
+        popin: true,
+        popinLoad: {
+          url: '/api/contact/{{entityId}}',
+          auth: {
+            type: 'bearer',
+            token: 'token123',
+          },
+        },
+      };
+
+      expect(block.popinLoad?.auth).toBeDefined();
+      expect(block.popinLoad?.auth?.type).toBe('bearer');
+      expect(block.popinLoad?.auth?.token).toBe('token123');
+    });
+
+    test('given a popin block with popinSubmit config, should support popinSubmit with url, method, and payloadTemplate', () => {
+      const block: BlockDescriptor = {
+        id: 'contact-info',
+        title: 'Contact Information',
+        fields: [],
+        popin: true,
+        popinSubmit: {
+          url: '/api/contact/{{entityId}}',
+          method: 'POST',
+          payloadTemplate: '{{formData}}',
+        },
+      };
+
+      expect(block.popinSubmit).toBeDefined();
+      expect(block.popinSubmit?.url).toBe('/api/contact/{{entityId}}');
+      expect(block.popinSubmit?.method).toBe('POST');
+      expect(block.popinSubmit?.payloadTemplate).toBe('{{formData}}');
+    });
+
+    test('given a popin block with popinSubmit config, should support popinSubmit with auth', () => {
+      const block: BlockDescriptor = {
+        id: 'contact-info',
+        title: 'Contact Information',
+        fields: [],
+        popin: true,
+        popinSubmit: {
+          url: '/api/contact/{{entityId}}',
+          method: 'PUT',
+          auth: {
+            type: 'apikey',
+            headerName: 'X-API-Key',
+            token: 'key123',
+          },
+        },
+      };
+
+      expect(block.popinSubmit?.auth).toBeDefined();
+      expect(block.popinSubmit?.auth?.type).toBe('apikey');
+      expect(block.popinSubmit?.auth?.headerName).toBe('X-API-Key');
+    });
   });
 
   describe('GlobalFormDescriptor', () => {
