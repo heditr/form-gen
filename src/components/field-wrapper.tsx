@@ -14,6 +14,7 @@ import RadioField from './radio-field';
 import DateField from './date-field';
 import FileField from './file-field';
 import NumberField from './number-field';
+import ButtonField from './button-field';
 
 export interface FieldWrapperProps {
   field: FieldDescriptor;
@@ -111,6 +112,13 @@ export default function FieldWrapper({
         <FileField
           field={field}
           form={form}
+          isDisabled={isDisabled}
+        />
+      );
+    case 'button':
+      return (
+        <ButtonField
+          field={field}
           isDisabled={isDisabled}
         />
       );
