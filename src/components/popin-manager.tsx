@@ -7,7 +7,7 @@
 
 'use client';
 
-import { createContext, useContext, useState, useCallback, useMemo, useEffect } from 'react';
+import { createContext, useContext, useState, useCallback, useMemo } from 'react';
 import type { GlobalFormDescriptor } from '@/types/form-descriptor';
 import type { UseFormReturn, FieldValues } from 'react-hook-form';
 import type { FormContext } from '@/utils/template-evaluator';
@@ -167,10 +167,10 @@ export function PopinManagerProvider({
               />
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={closePopin}>
+              <Button type="button" variant="outline" onClick={closePopin}>
                 Cancel
               </Button>
-              <Button onClick={handleValidate}>
+              <Button type="button" onClick={handleValidate}>
                 Validate
               </Button>
             </DialogFooter>

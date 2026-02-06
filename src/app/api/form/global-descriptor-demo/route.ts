@@ -102,6 +102,17 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
               },
             },
             {
+              id: 'openContactPopin',
+              type: 'button',
+              label: 'Add Contact Information',
+              description: 'Open contact information popin dialog',
+              validation: [],
+              button: {
+                variant: 'single',
+                popinBlockId: 'contact-info',
+              },
+            },
+            {
               id: 'city',
               type: 'autocomplete',
               label: 'City',
@@ -411,6 +422,51 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
                   message: 'Priority is required',
                 },
               ],
+            },
+          ],
+        },
+        // Popin block - standalone, never renders inline
+        {
+          id: 'contact-info',
+          title: 'Contact Information',
+          description: 'Additional contact details (opens in popin dialog)',
+          popin: true,
+          fields: [
+            {
+              id: 'email',
+              type: 'text',
+              label: 'Email Address',
+              description: 'Primary email address',
+              validation: [
+                {
+                  type: 'required',
+                  message: 'Email is required',
+                },
+                {
+                  type: 'pattern',
+                  value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+                  message: 'Invalid email format',
+                },
+              ],
+            },
+            {
+              id: 'phone',
+              type: 'text',
+              label: 'Phone Number',
+              description: 'Contact phone number',
+              validation: [
+                {
+                  type: 'required',
+                  message: 'Phone number is required',
+                },
+              ],
+            },
+            {
+              id: 'alternateEmail',
+              type: 'text',
+              label: 'Alternate Email',
+              description: 'Optional alternate email address',
+              validation: [],
             },
           ],
         },

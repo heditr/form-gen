@@ -45,6 +45,7 @@ export default function ButtonField({
           <p className="text-sm text-muted-foreground mb-2">{field.description}</p>
         )}
         <Button
+          type="button"
           variant={field.button.variant === 'link' ? 'link' : 'default'}
           onClick={handleClick}
           disabled={isDisabled}
@@ -66,6 +67,7 @@ export default function ButtonField({
           <p className="text-sm text-muted-foreground mb-2">{field.description}</p>
         )}
         <Button
+          type="button"
           onClick={() => openPopin(firstItem.popinBlockId)}
           disabled={isDisabled}
         >
