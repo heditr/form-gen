@@ -21,6 +21,8 @@ import type {
   SubFormDescriptor,
   PopinLoadConfig,
   PopinSubmitConfig,
+  ButtonConfig,
+  ButtonMenuItem,
 } from './form-descriptor';
 
 // Verify ValidationRule type
@@ -64,6 +66,48 @@ const fieldWithDataSource: FieldDescriptor = {
   },
   validation: [],
   isDiscriminant: true,
+};
+
+// Verify FieldDescriptor with button (single variant)
+const buttonFieldSingle: FieldDescriptor = {
+  id: 'openContactButton',
+  type: 'button',
+  label: 'Add Contact',
+  validation: [],
+  button: {
+    variant: 'single',
+    popinBlockId: 'contact-info',
+  },
+};
+
+// Verify FieldDescriptor with button (menu variant)
+const buttonFieldMenu: FieldDescriptor = {
+  id: 'addInfoButton',
+  type: 'button',
+  label: 'Add Information',
+  validation: [],
+  button: {
+    variant: 'menu',
+    items: [
+      { label: 'Add Contact', popinBlockId: 'contact-info' },
+      { label: 'Add Owner', popinBlockId: 'owner-info' },
+    ],
+  },
+};
+
+// Verify ButtonConfig type
+const buttonConfig: ButtonConfig = {
+  variant: 'link',
+  popinBlockId: 'documents',
+};
+
+// Verify ButtonMenuItem type
+const buttonMenuItem: ButtonMenuItem = {
+  label: 'Add Contact',
+  popinBlockId: 'contact-info',
+  status: {
+    hidden: '{{#unless (eq entityType "corporation")}}true{{else}}false{{/if}}',
+  },
 };
 
 // Verify BlockDescriptor with status templates
@@ -202,6 +246,10 @@ export {
   patternRule,
   fieldWithItems,
   fieldWithDataSource,
+  buttonFieldSingle,
+  buttonFieldMenu,
+  buttonConfig,
+  buttonMenuItem,
   blockWithStatus,
   popinBlock,
   popinBlockWithLoad,

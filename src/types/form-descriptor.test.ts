@@ -112,6 +112,85 @@ describe('form-descriptor types', () => {
 
       expect(field.isDiscriminant).toBe(true);
     });
+
+    test('given a button field with single variant, should support button type and popinBlockId', () => {
+      const field: FieldDescriptor = {
+        id: 'openContactButton',
+        type: 'button',
+        label: 'Add Contact',
+        validation: [],
+        button: {
+          variant: 'single',
+          popinBlockId: 'contact-info',
+        },
+      };
+
+      expect(field.type).toBe('button');
+      expect(field.button?.variant).toBe('single');
+      expect(field.button?.popinBlockId).toBe('contact-info');
+    });
+
+    test('given a button field with menu variant, should support items array with popinBlockId', () => {
+      const field: FieldDescriptor = {
+        id: 'addInfoButton',
+        type: 'button',
+        label: 'Add Information',
+        validation: [],
+        button: {
+          variant: 'menu',
+          items: [
+            { label: 'Add Contact', popinBlockId: 'contact-info' },
+            { label: 'Add Owner', popinBlockId: 'owner-info' },
+          ],
+        },
+      };
+
+      expect(field.type).toBe('button');
+      expect(field.button?.variant).toBe('menu');
+      expect(field.button?.items).toBeDefined();
+      expect(field.button?.items?.length).toBe(2);
+      expect(field.button?.items?.[0].popinBlockId).toBe('contact-info');
+    });
+
+    test('given a button field with menu variant, should support status templates on menu items', () => {
+      const field: FieldDescriptor = {
+        id: 'addInfoButton',
+        type: 'button',
+        label: 'Add Information',
+        validation: [],
+        button: {
+          variant: 'menu',
+          items: [
+            {
+              label: 'Add Contact',
+              popinBlockId: 'contact-info',
+              status: {
+                hidden: '{{#unless (eq entityType "corporation")}}true{{else}}false{{/if}}',
+              },
+            },
+          ],
+        },
+      };
+
+      expect(field.button?.items?.[0].status).toBeDefined();
+      expect(field.button?.items?.[0].status?.hidden).toBeDefined();
+    });
+
+    test('given a button field with link variant, should support link variant', () => {
+      const field: FieldDescriptor = {
+        id: 'openDocsButton',
+        type: 'button',
+        label: 'Open Documents',
+        validation: [],
+        button: {
+          variant: 'link',
+          popinBlockId: 'documents',
+        },
+      };
+
+      expect(field.button?.variant).toBe('link');
+      expect(field.button?.popinBlockId).toBe('documents');
+    });
   });
 
   describe('BlockDescriptor', () => {

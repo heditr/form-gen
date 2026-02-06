@@ -56,7 +56,8 @@ export type FieldType =
   | 'checkbox'
   | 'date'
   | 'file'
-  | 'number';
+  | 'number'
+  | 'button';
 
 /**
  * Static item for dropdown, radio, or autocomplete fields
@@ -119,10 +120,36 @@ export interface StatusTemplates {
 }
 
 /**
+ * Button menu item configuration
+ * 
+ * @property label - Display label for the menu item
+ * @property popinBlockId - ID of the popin block to open when item is selected
+ * @property status - Optional status templates for conditional visibility of menu item
+ */
+export interface ButtonMenuItem {
+  label: string;
+  popinBlockId: string;
+  status?: StatusTemplates;
+}
+
+/**
+ * Button field configuration
+ * 
+ * @property variant - Button variant: 'single' for single button, 'menu' for dropdown menu, 'link' for link-style button
+ * @property popinBlockId - For single/link variant: ID of the popin block to open when button is clicked
+ * @property items - For menu variant: Array of menu items, each with label and popinBlockId
+ */
+export interface ButtonConfig {
+  variant: 'single' | 'menu' | 'link';
+  popinBlockId?: string;
+  items?: ButtonMenuItem[];
+}
+
+/**
  * Field descriptor definition
  * 
  * @property id - Unique identifier for the field
- * @property type - The type of field (text, dropdown, etc.)
+ * @property type - The type of field (text, dropdown, button, etc.)
  * @property label - Display label for the field
  * @property description - Optional description/help text
  * @property items - Optional static items array (mutually exclusive with dataSource)
@@ -130,6 +157,7 @@ export interface StatusTemplates {
  * @property validation - Array of validation rules
  * @property isDiscriminant - Flag indicating this field triggers re-hydration when changed
  * @property status - Optional status templates for conditional visibility/enabling
+ * @property button - Optional button configuration (only for button type fields)
  */
 export interface FieldDescriptor {
   id: string;
@@ -142,6 +170,7 @@ export interface FieldDescriptor {
   validation: ValidationRule[];
   isDiscriminant?: boolean;
   status?: StatusTemplates;
+  button?: ButtonConfig;
 }
 
 /**
