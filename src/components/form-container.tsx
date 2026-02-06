@@ -24,6 +24,7 @@ import { rehydrateRulesThunk, fetchDataSourceThunk } from '@/store/form-thunks';
 import type { AppDispatch } from '@/store/store';
 import { updateCaseContext, identifyDiscriminantFields, hasContextChanged } from '@/utils/context-extractor';
 import FormPresentation from './form-presentation';
+import { PopinManagerProvider } from './popin-manager';
 
 /**
  * Props passed to presentation component
@@ -103,6 +104,16 @@ function FormInner({
     formData: savedFormData, // Current form data for template evaluation
   });
 
+  // Build form context for template evaluation (used by PopinManager)
+  const formContext = useMemo(() => {
+    const formValues = form.watch();
+    return {
+      ...formValues,
+      caseContext,
+      formData: formValues,
+    };
+  }, [form, caseContext]);
+
   // Prepare props for presentation component
   const presentationProps: FormPresentationProps = useMemo(
     () => ({
@@ -117,7 +128,17 @@ function FormInner({
     [form, visibleBlocks, visibleFields, isRehydrating, mergedDescriptor, loadDataSource, dataSourceCache]
   );
 
-  return <FormPresentation {...presentationProps} />;
+  return (
+    <PopinManagerProvider
+      mergedDescriptor={mergedDescriptor}
+      form={form}
+      formContext={formContext}
+      onLoadDataSource={loadDataSource}
+      dataSourceCache={dataSourceCache}
+    >
+      <FormPresentation {...presentationProps} />
+    </PopinManagerProvider>
+  );
 }
 
 /**
