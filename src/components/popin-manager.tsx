@@ -8,11 +8,13 @@
 'use client';
 
 import { createContext, useContext, useState, useCallback, useMemo, useEffect } from 'react';
-import type { GlobalFormDescriptor } from '@/types/form-descriptor';
+import type { GlobalFormDescriptor, SubmissionConfig, FormData as DescriptorFormData } from '@/types/form-descriptor';
 import type { UseFormReturn, FieldValues } from 'react-hook-form';
 import type { FormContext } from '@/utils/template-evaluator';
 import { resolveBlockById } from '@/utils/block-resolver';
 import { loadPopinData } from '@/utils/popin-load-loader';
+import { evaluatePayloadTemplate, type BackendErrorResponse } from '@/utils/submission-orchestrator';
+import type { BackendError } from '@/utils/form-descriptor-integration';
 import {
   Dialog,
   DialogContent,
@@ -72,6 +74,7 @@ export function PopinManagerProvider({
   const [openBlockId, setOpenBlockId] = useState<string | null>(null);
   const [popinLoadData, setPopinLoadData] = useState<Record<string, unknown> | null>(null);
   const [isLoadingPopinData, setIsLoadingPopinData] = useState(false);
+  const [isSubmittingPopin, setIsSubmittingPopin] = useState(false);
   
   // Build reactive form context from form values
   const formValues = form.watch();
@@ -160,7 +163,7 @@ export function PopinManagerProvider({
   }, []);
 
   // Handle validate button click
-  const handleValidate = useCallback(() => {
+  const handleValidate = useCallback(async () => {
     if (!resolvedBlock) {
       return;
     }
@@ -173,10 +176,100 @@ export function PopinManagerProvider({
       return;
     }
 
-    // TODO: Implement popinSubmit endpoint call
-    // For now, just close
-    closePopin();
-  }, [resolvedBlock, closePopin]);
+    // Build submission config from popinSubmit
+    const popinSubmitConfig: SubmissionConfig = {
+      url: block.popinSubmit.url,
+      method: block.popinSubmit.method,
+      payloadTemplate: block.popinSubmit.payloadTemplate,
+      headers: {},
+      auth: block.popinSubmit.auth,
+    };
+
+    setIsSubmittingPopin(true);
+
+    try {
+      // Get current form values for payload evaluation
+      const formValues = form.getValues() as Partial<DescriptorFormData>;
+
+      // Evaluate payload template with form values
+      const evaluatedPayload = evaluatePayloadTemplate(
+        popinSubmitConfig.payloadTemplate,
+        formValues
+      );
+
+      // Determine request body (JSON only for popinSubmit)
+      const hasBody = popinSubmitConfig.method !== 'GET';
+      let body: string | undefined;
+      if (hasBody) {
+        body = typeof evaluatedPayload === 'string'
+          ? evaluatedPayload
+          : JSON.stringify(evaluatedPayload);
+      }
+
+      // Build headers with authentication
+      const headers: Record<string, string> = {};
+
+      if (popinSubmitConfig.auth) {
+        const auth = popinSubmitConfig.auth;
+        if (auth.type === 'bearer' && auth.token) {
+          headers['Authorization'] = `Bearer ${auth.token}`;
+        } else if (auth.type === 'apikey' && auth.token && auth.headerName) {
+          headers[auth.headerName] = auth.token;
+        } else if (auth.type === 'basic' && auth.username && auth.password) {
+          const credentials = typeof btoa !== 'undefined'
+            ? btoa(`${auth.username}:${auth.password}`)
+            : Buffer.from(`${auth.username}:${auth.password}`).toString('base64');
+          headers['Authorization'] = `Basic ${credentials}`;
+        }
+      }
+
+      if (hasBody) {
+        headers['Content-Type'] = 'application/json';
+      }
+
+      const response = await fetch(popinSubmitConfig.url, {
+        method: popinSubmitConfig.method,
+        headers,
+        body,
+      });
+
+      if (response.ok) {
+        // On success, close popin
+        closePopin();
+        return;
+      }
+
+      // Handle error response from backend
+      let errorResponse: BackendErrorResponse;
+      try {
+        errorResponse = await response.json();
+      } catch {
+        errorResponse = {
+          error: `Popin submit failed with status ${response.status}`,
+        };
+      }
+
+      // Map backend errors to react-hook-form so fields display dedicated errors
+      if (errorResponse.errors && Array.isArray(errorResponse.errors)) {
+        for (const backendError of errorResponse.errors as BackendError[]) {
+          form.setError(backendError.field, {
+            type: 'server',
+            message: backendError.message || 'Validation error',
+          });
+        }
+      }
+
+      // Keep dialog open on error; optional: log generic error
+      if (errorResponse.error) {
+        console.error('Popin submit error:', errorResponse.error);
+      }
+    } catch (error) {
+      // Network or unexpected errors - log and keep dialog open
+      console.error('Popin submit failed:', error);
+    } finally {
+      setIsSubmittingPopin(false);
+    }
+  }, [resolvedBlock, form, closePopin]);
 
   // Context value
   const contextValue = useMemo(() => ({
@@ -220,8 +313,12 @@ export function PopinManagerProvider({
               <Button type="button" variant="outline" onClick={closePopin}>
                 Cancel
               </Button>
-              <Button type="button" onClick={handleValidate}>
-                Validate
+              <Button
+                type="button"
+                onClick={handleValidate}
+                disabled={isSubmittingPopin}
+              >
+                {isSubmittingPopin ? 'Validating...' : 'Validate'}
               </Button>
             </DialogFooter>
           </DialogContent>
