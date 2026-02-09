@@ -431,16 +431,27 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
           title: 'Contact Information',
           description: 'Additional contact details (opens in popin dialog)',
           popin: true,
+          // Load existing contact details when the popin opens
+          popinLoad: {
+            url: '/api/popin-demo/contact-load',
+          },
+          // Submit contact details to demo endpoint when Validate is clicked
+          popinSubmit: {
+            url: '/api/popin-demo/contact-submit',
+            method: 'POST',
+            // Only send the popin contact fields, not the entire form
+            payloadTemplate: '{"contactEmail":"{{formData.contactEmail}}","contactPhone":"{{formData.contactPhone}}","contactAlternateEmail":"{{formData.contactAlternateEmail}}"}',
+          },
           fields: [
             {
-              id: 'email',
+              id: 'contactEmail',
               type: 'text',
-              label: 'Email Address',
-              description: 'Primary email address',
+              label: 'Contact Email',
+              description: 'Email used for notifications about this case',
               validation: [
                 {
                   type: 'required',
-                  message: 'Email is required',
+                  message: 'Contact email is required',
                 },
                 {
                   type: 'pattern',
@@ -450,19 +461,19 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
               ],
             },
             {
-              id: 'phone',
+              id: 'contactPhone',
               type: 'text',
-              label: 'Phone Number',
-              description: 'Contact phone number',
+              label: 'Contact Phone',
+              description: 'Phone number used for follow-up questions',
               validation: [
                 {
                   type: 'required',
-                  message: 'Phone number is required',
+                  message: 'Contact phone number is required',
                 },
               ],
             },
             {
-              id: 'alternateEmail',
+              id: 'contactAlternateEmail',
               type: 'text',
               label: 'Alternate Email',
               description: 'Optional alternate email address',
