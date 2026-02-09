@@ -7,11 +7,12 @@
 
 'use client';
 
-import { createContext, useContext, useState, useCallback, useMemo } from 'react';
+import { createContext, useContext, useState, useCallback, useMemo, useEffect } from 'react';
 import type { GlobalFormDescriptor } from '@/types/form-descriptor';
 import type { UseFormReturn, FieldValues } from 'react-hook-form';
 import type { FormContext } from '@/utils/template-evaluator';
 import { resolveBlockById } from '@/utils/block-resolver';
+import { loadPopinData } from '@/utils/popin-load-loader';
 import {
   Dialog,
   DialogContent,
@@ -69,14 +70,17 @@ export function PopinManagerProvider({
   dataSourceCache,
 }: PopinManagerProviderProps) {
   const [openBlockId, setOpenBlockId] = useState<string | null>(null);
+  const [popinLoadData, setPopinLoadData] = useState<Record<string, unknown> | null>(null);
+  const [isLoadingPopinData, setIsLoadingPopinData] = useState(false);
   
   // Build reactive form context from form values
   const formValues = form.watch();
   const formContext = useMemo(() => ({
     ...formValues,
     ...initialFormContext,
+    ...popinLoadData, // Merge popinLoad data into formContext
     formData: formValues,
-  }), [formValues, initialFormContext]);
+  }), [formValues, initialFormContext, popinLoadData]);
 
   // Resolve the currently open block (re-resolve when formContext changes)
   const resolvedBlock = useMemo(() => {
@@ -85,6 +89,46 @@ export function PopinManagerProvider({
     }
     return resolveBlockById(openBlockId, mergedDescriptor, formContext);
   }, [openBlockId, mergedDescriptor, formContext]);
+
+  // Load popin data when popin opens (if popinLoad config exists)
+  useEffect(() => {
+    if (!resolvedBlock || !resolvedBlock.block.popinLoad) {
+      // Clear popinLoad data when popin closes or has no popinLoad config
+      setPopinLoadData(null);
+      setIsLoadingPopinData(false);
+      return;
+    }
+
+    const loadData = async () => {
+      setIsLoadingPopinData(true);
+      try {
+        // Use formContext without popinLoadData to avoid circular dependency
+        const contextForLoad: FormContext = {
+          ...formValues,
+          ...initialFormContext,
+          formData: formValues,
+        };
+        
+        const data = await loadPopinData(
+          resolvedBlock.block.id,
+          resolvedBlock.block.popinLoad!,
+          contextForLoad
+        );
+        
+        setPopinLoadData(data);
+      } catch (error) {
+        // Handle errors gracefully - log but don't break popin functionality
+        console.error('Failed to load popin data:', error);
+        // Continue without popinLoad data
+        setPopinLoadData(null);
+      } finally {
+        setIsLoadingPopinData(false);
+      }
+    };
+
+    loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resolvedBlock?.block.id, resolvedBlock?.block.popinLoad]);
 
   // Open popin by block ID
   const openPopin = useCallback((blockId: string) => {
@@ -156,15 +200,21 @@ export function PopinManagerProvider({
               <DialogTitle>{resolvedBlock.block.title}</DialogTitle>
             </DialogHeader>
             <div className="py-4">
-              <Block
-                block={resolvedBlock.block}
-                isDisabled={resolvedBlock.isDisabled}
-                isHidden={false}
-                form={form}
-                formContext={formContext}
-                onLoadDataSource={onLoadDataSource}
-                dataSourceCache={dataSourceCache}
-              />
+              {isLoadingPopinData ? (
+                <div className="flex items-center justify-center py-8">
+                  <p className="text-sm text-muted-foreground">Loading...</p>
+                </div>
+              ) : (
+                <Block
+                  block={resolvedBlock.block}
+                  isDisabled={resolvedBlock.isDisabled}
+                  isHidden={false}
+                  form={form}
+                  formContext={formContext}
+                  onLoadDataSource={onLoadDataSource}
+                  dataSourceCache={dataSourceCache}
+                />
+              )}
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={closePopin}>
