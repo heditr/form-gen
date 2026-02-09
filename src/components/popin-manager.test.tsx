@@ -137,7 +137,7 @@ describe('PopinManager', () => {
 
     return {
       register: vi.fn(),
-      control: mockControl as any,
+      control: mockControl as unknown as UseFormReturn<FieldValues>['control'],
       handleSubmit: vi.fn((onValid) => (e?: React.BaseSyntheticEvent) => {
         e?.preventDefault();
         return onValid({});
@@ -836,6 +836,178 @@ describe('PopinManager', () => {
       await waitFor(() => {
         expect(screen.queryByText('Loading...')).not.toBeInTheDocument();
       });
+    });
+  });
+
+  describe('error clearing on popin close', () => {
+    test('given popin with errors displayed, should clear errors when popin closes', async () => {
+      const block = createMockBlock({
+        id: 'contact-info',
+        title: 'Contact Information',
+        fields: [
+          {
+            id: 'contactEmail',
+            type: 'text',
+            label: 'Email',
+            validation: [],
+          },
+          {
+            id: 'contactPhone',
+            type: 'text',
+            label: 'Phone',
+            validation: [],
+          },
+        ],
+      });
+      const descriptor = createMockDescriptor([block]);
+      const form = createMockForm();
+      const formContext = createMockFormContext();
+
+      mockResolveBlockById.mockReturnValue({
+        block,
+        isHidden: false,
+        isDisabled: false,
+      });
+
+      const TestComponent = () => {
+        const { openPopin } = usePopinManager();
+        return (
+          <>
+            <button onClick={() => openPopin('contact-info')} data-testid="trigger-button">
+              Open Popin
+            </button>
+            <button
+              onClick={() => {
+                // Simulate errors being set (as would happen after failed submission)
+                form.setError('contactEmail', { type: 'server', message: 'Email is invalid' });
+                form.setError('contactPhone', { type: 'server', message: 'Phone is required' });
+              }}
+              data-testid="set-errors-button"
+            >
+              Set Errors
+            </button>
+          </>
+        );
+      };
+
+      render(
+        <PopinManagerProvider
+          mergedDescriptor={descriptor}
+          form={form}
+          formContext={formContext}
+          onLoadDataSource={vi.fn()}
+          dataSourceCache={{}}
+        >
+          <TestComponent />
+        </PopinManagerProvider>
+      );
+
+      // Open popin
+      const triggerButton = screen.getByTestId('trigger-button');
+      await userEvent.click(triggerButton);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('dialog')).toBeInTheDocument();
+      });
+
+      // Set errors on popin fields
+      const setErrorsButton = screen.getByTestId('set-errors-button');
+      await userEvent.click(setErrorsButton);
+
+      // Verify errors were set
+      expect(form.setError).toHaveBeenCalledWith('contactEmail', {
+        type: 'server',
+        message: 'Email is invalid',
+      });
+      expect(form.setError).toHaveBeenCalledWith('contactPhone', {
+        type: 'server',
+        message: 'Phone is required',
+      });
+
+      // Close popin by clicking cancel button
+      const cancelButton = screen.getByText('Cancel');
+      await userEvent.click(cancelButton);
+
+      // Verify clearErrors was called for each field ID from the popin block
+      await waitFor(() => {
+        expect(form.clearErrors).toHaveBeenCalledWith('contactEmail');
+        expect(form.clearErrors).toHaveBeenCalledWith('contactPhone');
+      });
+    });
+
+    test('given popin closes after successful submit, should clear errors', async () => {
+      const block = createMockBlock({
+        id: 'contact-info',
+        title: 'Contact Information',
+        fields: [
+          {
+            id: 'contactEmail',
+            type: 'text',
+            label: 'Email',
+            validation: [],
+          },
+        ],
+        popinSubmit: {
+          url: '/api/popin-submit',
+          method: 'POST',
+        },
+      });
+      const descriptor = createMockDescriptor([block]);
+      const form = createMockForm();
+      const formContext = createMockFormContext();
+
+      // Mock successful fetch response
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ success: true }),
+      });
+
+      mockResolveBlockById.mockReturnValue({
+        block,
+        isHidden: false,
+        isDisabled: false,
+      });
+
+      const TestComponent = () => {
+        const { openPopin } = usePopinManager();
+        return (
+          <button onClick={() => openPopin('contact-info')} data-testid="trigger-button">
+            Open Popin
+          </button>
+        );
+      };
+
+      render(
+        <PopinManagerProvider
+          mergedDescriptor={descriptor}
+          form={form}
+          formContext={formContext}
+          onLoadDataSource={vi.fn()}
+          dataSourceCache={{}}
+        >
+          <TestComponent />
+        </PopinManagerProvider>
+      );
+
+      // Open popin
+      const triggerButton = screen.getByTestId('trigger-button');
+      await userEvent.click(triggerButton);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('dialog')).toBeInTheDocument();
+      });
+
+      // Click validate button (should succeed and close popin)
+      const validateButton = screen.getByText('Validate');
+      await userEvent.click(validateButton);
+
+      // Wait for popin to close
+      await waitFor(() => {
+        expect(screen.queryByTestId('dialog')).not.toBeInTheDocument();
+      });
+
+      // Verify clearErrors was called for the field ID from the popin block
+      expect(form.clearErrors).toHaveBeenCalledWith('contactEmail');
     });
   });
 });

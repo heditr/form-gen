@@ -159,8 +159,14 @@ export function PopinManagerProvider({
 
   // Close popin (acts as cancel - discards changes)
   const closePopin = useCallback(() => {
+    // Clear errors for fields in the popin block before closing
+    if (resolvedBlock && resolvedBlock.block.fields) {
+      resolvedBlock.block.fields.forEach((field) => {
+        form.clearErrors(field.id);
+      });
+    }
     setOpenBlockId(null);
-  }, []);
+  }, [resolvedBlock, form]);
 
   // Handle validate button click
   const handleValidate = useCallback(async () => {
