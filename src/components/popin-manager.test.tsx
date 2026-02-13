@@ -10,7 +10,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { UseFormReturn, FieldValues } from 'react-hook-form';
 import { PopinManagerProvider, usePopinManager } from './popin-manager';
-import type { GlobalFormDescriptor, BlockDescriptor } from '@/types/form-descriptor';
+import type { GlobalFormDescriptor, BlockDescriptor, CaseContext } from '@/types/form-descriptor';
 import type { FormContext } from '@/utils/template-evaluator';
 import { registerHandlebarsHelpers } from '@/utils/handlebars-helpers';
 
@@ -92,6 +92,31 @@ vi.mock('@/utils/popin-load-loader', () => ({
     return mockLoadPopinData(blockId, config, formContext);
   },
 }));
+
+// Mock useFormDescriptor
+let mockPopinFormInstance: UseFormReturn<FieldValues>;
+vi.mock('@/hooks/use-form-descriptor', () => ({
+  useFormDescriptor: () => ({
+    form: mockPopinFormInstance,
+    registerField: vi.fn(),
+    unregisterField: vi.fn(),
+    updateValidationRules: vi.fn(),
+    setBackendErrors: vi.fn(),
+    getDiscriminantFields: () => [],
+  }),
+}));
+
+// Mock useQueryClient
+const mockInvalidateQueries = vi.fn();
+vi.mock('@tanstack/react-query', async () => {
+  const actual = await vi.importActual('@tanstack/react-query');
+  return {
+    ...actual,
+    useQueryClient: () => ({
+      invalidateQueries: mockInvalidateQueries,
+    }),
+  };
+});
 
 describe('PopinManager', () => {
   beforeAll(() => {
@@ -178,6 +203,12 @@ describe('PopinManager', () => {
     } as FormContext;
   };
 
+  const createMockCaseContext = (overrides: Partial<CaseContext> = {}): CaseContext => {
+    return {
+      ...overrides,
+    } as CaseContext;
+  };
+
   // Test component that uses the popin manager
   const TestComponent = ({ blockId }: { blockId: string }) => {
     const { openPopin } = usePopinManager();
@@ -191,6 +222,8 @@ describe('PopinManager', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockResolveBlockById.mockReturnValue(null);
+    // Create a fresh mock form for popin in each test
+    mockPopinFormInstance = createMockForm();
   });
 
   describe('openPopin', () => {
@@ -211,6 +244,7 @@ describe('PopinManager', () => {
           mergedDescriptor={descriptor}
           form={form}
           formContext={formContext}
+          caseContext={createMockCaseContext()}
           onLoadDataSource={vi.fn()}
           dataSourceCache={{}}
         >
@@ -242,6 +276,7 @@ describe('PopinManager', () => {
           mergedDescriptor={descriptor}
           form={form}
           formContext={formContext}
+          caseContext={createMockCaseContext()}
           onLoadDataSource={vi.fn()}
           dataSourceCache={{}}
         >
@@ -299,6 +334,7 @@ describe('PopinManager', () => {
           mergedDescriptor={descriptor}
           form={form}
           formContext={formContext}
+          caseContext={createMockCaseContext()}
           onLoadDataSource={vi.fn()}
           dataSourceCache={{}}
         >
@@ -342,6 +378,7 @@ describe('PopinManager', () => {
           mergedDescriptor={descriptor}
           form={form}
           formContext={formContext}
+          caseContext={createMockCaseContext()}
           onLoadDataSource={vi.fn()}
           dataSourceCache={{}}
         >
@@ -381,6 +418,7 @@ describe('PopinManager', () => {
           mergedDescriptor={descriptor}
           form={form}
           formContext={formContext}
+          caseContext={createMockCaseContext()}
           onLoadDataSource={vi.fn()}
           dataSourceCache={{}}
         >
@@ -420,6 +458,7 @@ describe('PopinManager', () => {
           mergedDescriptor={descriptor}
           form={form}
           formContext={formContext}
+          caseContext={createMockCaseContext()}
           onLoadDataSource={vi.fn()}
           dataSourceCache={{}}
         >
@@ -459,6 +498,7 @@ describe('PopinManager', () => {
           mergedDescriptor={descriptor}
           form={form}
           formContext={formContext}
+          caseContext={createMockCaseContext()}
           onLoadDataSource={vi.fn()}
           dataSourceCache={{}}
         >
@@ -499,6 +539,7 @@ describe('PopinManager', () => {
           mergedDescriptor={descriptor}
           form={form}
           formContext={formContext}
+          caseContext={createMockCaseContext()}
           onLoadDataSource={vi.fn()}
           dataSourceCache={{}}
         >
@@ -538,6 +579,7 @@ describe('PopinManager', () => {
           mergedDescriptor={descriptor}
           form={form}
           formContext={formContext}
+          caseContext={createMockCaseContext()}
           onLoadDataSource={vi.fn()}
           dataSourceCache={{}}
         >
@@ -586,6 +628,7 @@ describe('PopinManager', () => {
           mergedDescriptor={descriptor}
           form={form}
           formContext={formContext}
+          caseContext={createMockCaseContext()}
           onLoadDataSource={vi.fn()}
           dataSourceCache={{}}
         >
@@ -623,6 +666,7 @@ describe('PopinManager', () => {
           mergedDescriptor={descriptor}
           form={form}
           formContext={formContext}
+          caseContext={createMockCaseContext()}
           onLoadDataSource={vi.fn()}
           dataSourceCache={{}}
         >
@@ -700,6 +744,7 @@ describe('PopinManager', () => {
           mergedDescriptor={descriptor}
           form={form}
           formContext={formContext}
+          caseContext={createMockCaseContext()}
           onLoadDataSource={vi.fn()}
           dataSourceCache={{}}
         >
@@ -753,6 +798,7 @@ describe('PopinManager', () => {
           mergedDescriptor={descriptor}
           form={form}
           formContext={formContext}
+          caseContext={createMockCaseContext()}
           onLoadDataSource={vi.fn()}
           dataSourceCache={{}}
         >
@@ -814,6 +860,7 @@ describe('PopinManager', () => {
           mergedDescriptor={descriptor}
           form={form}
           formContext={formContext}
+          caseContext={createMockCaseContext()}
           onLoadDataSource={vi.fn()}
           dataSourceCache={{}}
         >
@@ -895,6 +942,7 @@ describe('PopinManager', () => {
           mergedDescriptor={descriptor}
           form={form}
           formContext={formContext}
+          caseContext={createMockCaseContext()}
           onLoadDataSource={vi.fn()}
           dataSourceCache={{}}
         >
@@ -982,6 +1030,7 @@ describe('PopinManager', () => {
           mergedDescriptor={descriptor}
           form={form}
           formContext={formContext}
+          caseContext={createMockCaseContext()}
           onLoadDataSource={vi.fn()}
           dataSourceCache={{}}
         >

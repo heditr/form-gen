@@ -133,6 +133,7 @@ function FormInner({
       mergedDescriptor={mergedDescriptor}
       form={form}
       formContext={formContext}
+      caseContext={caseContext}
       onLoadDataSource={loadDataSource}
       dataSourceCache={dataSourceCache}
     >
