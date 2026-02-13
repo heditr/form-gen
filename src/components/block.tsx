@@ -125,6 +125,7 @@ export default function Block({
               isDisabled={fieldDisabled}
               isHidden={fieldHidden}
               form={form}
+              formContext={formContext}
               onLoadDataSource={onLoadDataSource}
               dataSourceCache={dataSourceCache}
             />

@@ -6,6 +6,7 @@
 
 import type { FieldDescriptor } from '@/types/form-descriptor';
 import type { UseFormReturn, FieldValues } from 'react-hook-form';
+import type { FormContext } from '@/utils/template-evaluator';
 import TextField from './text-field';
 import DropdownField from './dropdown-field';
 import AutocompleteField from './autocomplete-field';
@@ -21,6 +22,7 @@ export interface FieldWrapperProps {
   isDisabled: boolean;
   isHidden: boolean;
   form: UseFormReturn<FieldValues>;
+  formContext: FormContext;
   onLoadDataSource: (fieldPath: string, url: string, auth?: { type: 'bearer' | 'apikey'; token?: string; headerName?: string }) => void;
   dataSourceCache: Record<string, unknown>;
 }
@@ -35,6 +37,7 @@ export default function FieldWrapper({
   isDisabled,
   isHidden,
   form,
+  formContext,
   onLoadDataSource,
   dataSourceCache,
 }: FieldWrapperProps) {
@@ -58,6 +61,7 @@ export default function FieldWrapper({
         <DropdownField
           field={field}
           form={form}
+          formContext={formContext}
           isDisabled={isDisabled}
           onLoadDataSource={onLoadDataSource}
           dataSourceCache={dataSourceCache}
@@ -68,6 +72,7 @@ export default function FieldWrapper({
         <AutocompleteField
           field={field}
           form={form}
+          formContext={formContext}
           isDisabled={isDisabled}
           onLoadDataSource={onLoadDataSource}
           dataSourceCache={dataSourceCache}
@@ -86,6 +91,7 @@ export default function FieldWrapper({
         <RadioField
           field={field}
           form={form}
+          formContext={formContext}
           isDisabled={isDisabled}
           onLoadDataSource={onLoadDataSource}
           dataSourceCache={dataSourceCache}

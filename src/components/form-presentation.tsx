@@ -33,11 +33,12 @@ export default function FormPresentation({
   const formValues = form.watch();
 
   // Build form context for template evaluation
-  // Context includes form data and can be extended with case context
+  // Context includes form data (spread for direct access) and nested formData property
+  // Note: caseContext is not available here, but discriminant fields are included in formValues
   const formContext: FormContext = useMemo(
     () => ({
       ...formValues,
-      // Add any additional context properties here
+      formData: formValues, // Nested property for template access
     }),
     [formValues]
   );

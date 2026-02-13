@@ -5,10 +5,12 @@
  * Supports static items and dynamic data sources with loading states.
  */
 
-import { useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
 import { Controller } from 'react-hook-form';
 import type { FieldDescriptor, FieldItem } from '@/types/form-descriptor';
 import type { UseFormReturn, FieldValues } from 'react-hook-form';
+import type { FormContext } from '@/utils/template-evaluator';
+import { useDataSource } from '@/hooks/use-form-query';
 import { Select } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
@@ -16,8 +18,9 @@ import { cn } from '@/lib/utils';
 export interface DropdownFieldProps {
   field: FieldDescriptor;
   form: UseFormReturn<FieldValues>;
+  formContext: FormContext;
   isDisabled: boolean;
-  onLoadDataSource: (fieldPath: string, url: string, auth?: { type: 'bearer' | 'apikey'; token?: string; headerName?: string }) => void;
+  onLoadDataSource?: (fieldPath: string, url: string, auth?: { type: 'bearer' | 'apikey'; token?: string; headerName?: string }) => void;
   dataSourceCache?: Record<string, unknown>;
 }
 
@@ -31,6 +34,7 @@ export interface DropdownFieldProps {
 export default function DropdownField({
   field,
   form,
+  formContext,
   isDisabled,
   onLoadDataSource,
   dataSourceCache = {},
@@ -39,60 +43,63 @@ export default function DropdownField({
   const error = form.formState.errors[field.id];
   const errorMessage = error?.message as string | undefined;
 
-  // Derive items from field.items or dataSourceCache (avoid setState in effects)
+  // Use useDataSource hook - always call it (React hooks rule), but disable when no dataSource
+  const dataSourceQuery = useDataSource(
+    {
+      fieldPath: field.id,
+      config: field.dataSource || { url: '', itemsTemplate: '' }, // Minimal config when disabled
+      formContext,
+      enabled: !!field.dataSource,
+    },
+    {
+      // Fallback to dataSourceCache for backward compatibility during migration
+      initialData: field.dataSource ? (dataSourceCache[field.id] as FieldItem[] | undefined) : undefined,
+    }
+  );
+
+  // Derive items from field.items or data source query result
   const items = useMemo<FieldItem[]>(() => {
     // If field has static items, use them
     if (field.items) {
       return field.items;
     }
 
-    // If field has dataSource, check cache
+    // If field has dataSource, use hook data or fallback to cache
     if (field.dataSource) {
-      const fieldPath = field.id;
-      const cachedData = dataSourceCache[fieldPath];
-      
-      if (cachedData && Array.isArray(cachedData)) {
-        // For now, assume cached data is already transformed
-        // TODO: Transform using Handlebars itemsTemplate
-        return cachedData as FieldItem[];
+      const data = dataSourceQuery.data || dataSourceCache[field.id];
+      if (data && Array.isArray(data)) {
+        return data as FieldItem[];
+      }
+      // Fallback to callback pattern if hook hasn't loaded yet (backward compatibility)
+      if (!data && onLoadDataSource && field.dataSource.auth) {
+        // Only call callback if auth is compatible (bearer or apikey, not basic)
+        const auth = field.dataSource.auth;
+        if (auth.type === 'bearer' || auth.type === 'apikey') {
+          onLoadDataSource(field.id, field.dataSource.url, {
+            type: auth.type,
+            token: auth.token,
+            headerName: auth.headerName,
+          });
+        }
       }
     }
 
     return [];
-  }, [field.items, field.dataSource, field.id, dataSourceCache]);
+  }, [field.items, field.dataSource, field.id, dataSourceQuery.data, dataSourceCache, onLoadDataSource]);
 
-  // Derive loading state from dataSourceCache (avoid setState in effects)
+  // Derive loading state from hook or cache
   const isLoading = useMemo(() => {
     if (!field.dataSource) {
       return false;
     }
-
-    const fieldPath = field.id;
-    const cachedData = dataSourceCache[fieldPath];
-    
-    // Loading if we have a dataSource but no cached data yet
+    // Use hook loading state if available
+    if (dataSourceQuery.isLoading !== undefined) {
+      return dataSourceQuery.isLoading;
+    }
+    // Fallback to cache check (backward compatibility)
+    const cachedData = dataSourceCache[field.id];
     return !cachedData;
-  }, [field.dataSource, field.id, dataSourceCache]);
-
-  // Load data source when field becomes visible and has dataSource config
-  useEffect(() => {
-    if (!field.dataSource) {
-      return;
-    }
-
-    const fieldPath = field.id;
-    const cachedData = dataSourceCache[fieldPath];
-
-    // If data is already cached, no need to load
-    if (cachedData) {
-      return;
-    }
-
-    // Trigger data loading
-    // TODO: Evaluate URL template with form context
-    // For now, use the URL directly
-    onLoadDataSource(fieldPath, field.dataSource.url, field.dataSource.auth);
-  }, [field.dataSource, field.id, dataSourceCache, onLoadDataSource]);
+  }, [field.dataSource, field.id, dataSourceQuery.isLoading, dataSourceCache]);
 
   return (
     <div data-testid={`dropdown-field-${field.id}`} className="space-y-2">
