@@ -13,6 +13,7 @@ import { useSelector, useDispatch } from 'react-redux';
 import type { UseFormReturn, FieldValues } from 'react-hook-form';
 import type { GlobalFormDescriptor, BlockDescriptor, FieldDescriptor, FormData, CaseContext } from '@/types/form-descriptor';
 import { useFormDescriptor } from '@/hooks/use-form-descriptor';
+import { useDebouncedRehydration } from '@/hooks/use-debounced-rehydration';
 import {
   getVisibleBlocks,
   getVisibleFields,
@@ -20,7 +21,7 @@ import {
   syncFormDataToContext,
   type RootState,
 } from '@/store/form-dux';
-import { rehydrateRulesThunk, fetchDataSourceThunk } from '@/store/form-thunks';
+import { fetchDataSourceThunk } from '@/store/form-thunks';
 import type { AppDispatch } from '@/store/store';
 import { updateCaseContext, identifyDiscriminantFields, hasContextChanged } from '@/utils/context-extractor';
 import FormPresentation from './form-presentation';
@@ -156,7 +157,7 @@ export default function FormContainer() {
   const {
     mergedDescriptor,
     caseContext,
-    isRehydrating,
+    isRehydrating: isRehydratingFromRedux,
     formData,
     dataSourceCache,
   } = formState;
@@ -164,6 +165,12 @@ export default function FormContainer() {
   // Get visible blocks and fields using selectors
   const visibleBlocks = useSelector((state: RootState) => getVisibleBlocks(state));
   const visibleFields = useSelector((state: RootState) => getVisibleFields(state));
+
+  // Use debounced rehydration hook
+  const { mutate: debouncedRehydrate, isPending: isRehydratingFromHook } = useDebouncedRehydration();
+
+  // Combine rehydration states - use hook state if available, fallback to Redux
+  const isRehydrating = isRehydratingFromHook || isRehydratingFromRedux;
 
   // Create callbacks for dispatching actions
   const syncFormData = useCallback(
@@ -175,11 +182,10 @@ export default function FormContainer() {
 
   const rehydrate = useCallback(
     (caseContext: CaseContext) => {
-      // Dispatch thunk for rehydration
-      // Note: Task 7 will replace this with a debounced TanStack Query mutation hook
-      dispatch(rehydrateRulesThunk(caseContext));
+      // Use debounced rehydration hook instead of thunk
+      debouncedRehydrate(caseContext);
     },
-    [dispatch]
+    [debouncedRehydrate]
   );
 
   const loadDataSource = useCallback(

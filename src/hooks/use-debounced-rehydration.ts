@@ -77,40 +77,89 @@ export function useDebouncedRehydration() {
     },
   });
 
+  // Use ref to store the latest context value (so debounced function always uses latest)
+  const latestContextRef = useRef<CaseContext | null>(null);
+  
+  // Use ref to track the last context that was actually sent to prevent duplicates
+  const lastSentContextRef = useRef<string | null>(null);
+  
+  // Use ref to track pending context (scheduled to be sent) to prevent duplicate scheduling
+  const pendingContextRef = useRef<string | null>(null);
+  
+  // Use ref to store the mutate function so it's always up-to-date
+  const mutateRef = useRef(mutation.mutate);
+  
+  // Update ref when mutation changes
+  useEffect(() => {
+    mutateRef.current = mutation.mutate;
+  }, [mutation.mutate]);
+  
   // Use ref to store the debounced function so we can cancel it
   const debouncedMutateRef = useRef<ReturnType<typeof debounce> | null>(null);
+
+  // Initialize debounced function once on mount
+  // Use useEffect to avoid accessing refs during render
+  useEffect(() => {
+    // Create debounced function that uses refs for latest values
+    debouncedMutateRef.current = debounce(
+      () => {
+        // Use the latest context and mutate function from refs (always up-to-date)
+        if (latestContextRef.current !== null) {
+          const contextString = JSON.stringify(latestContextRef.current);
+          
+          // Only call if context actually changed (deduplication)
+          if (contextString !== lastSentContextRef.current) {
+            lastSentContextRef.current = contextString;
+            pendingContextRef.current = null; // Clear pending since we're sending now
+            mutateRef.current(latestContextRef.current);
+          } else {
+            // Same context, clear pending flag
+            pendingContextRef.current = null;
+          }
+        }
+      },
+      500 // 500ms debounce delay
+    );
+
+    // Cleanup function - capture the debounced function in a variable
+    const debouncedFn = debouncedMutateRef.current;
+    return () => {
+      if (debouncedFn) {
+        debouncedFn.cancel();
+      }
+    };
+  }, []); // Empty deps - create once
 
   // Create debounced mutate function
   const debouncedMutate = useCallback(
     (caseContext: CaseContext) => {
-      // Cancel previous debounced call if it exists
+      // Serialize context for comparison
+      const contextString = JSON.stringify(caseContext);
+      
+      // Skip if this is the same context we already sent or are about to send
+      if (contextString === lastSentContextRef.current || contextString === pendingContextRef.current) {
+        return;
+      }
+      
+      // Mark this context as pending
+      pendingContextRef.current = contextString;
+      
+      // Store the latest context in ref
+      latestContextRef.current = caseContext;
+      
+      // Cancel any pending debounced call
       if (debouncedMutateRef.current) {
         debouncedMutateRef.current.cancel();
       }
 
-      // Create new debounced function with the current context
-      // The context is captured in the closure
-      debouncedMutateRef.current = debounce(
-        () => {
-          mutation.mutate(caseContext);
-        },
-        500 // 500ms debounce delay
-      );
-
-      // Trigger the debounced function
-      debouncedMutateRef.current();
+      // Trigger the debounced function (will use latest context from ref)
+      if (debouncedMutateRef.current) {
+        debouncedMutateRef.current();
+      }
     },
-    [mutation]
+    [] // No dependencies - debounced function is stable
   );
 
-  // Clean up debounced function on unmount
-  useEffect(() => {
-    return () => {
-      if (debouncedMutateRef.current) {
-        debouncedMutateRef.current.cancel();
-      }
-    };
-  }, []);
 
   return {
     mutate: debouncedMutate,
