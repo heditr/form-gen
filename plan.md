@@ -12,6 +12,7 @@
 - [Sub-Form Support Epic](tasks/sub-form-support-epic.md) - 📋 PLANNED
 - [Popin Block Component Epic](tasks/popin-block-component-epic.md) - 📋 PLANNED
 - [Popin Isolation Epic](tasks/popin-isolation-epic.md) - 📋 PLANNED
+- [Repeatable Fields Epic](tasks/repeatable-fields-epic.md) - 📋 PLANNED
 
 ## Completed Epics
 
