@@ -8,6 +8,7 @@
 import { describe, test, expect } from 'vitest';
 import { z } from 'zod';
 import type { BlockDescriptor, GlobalFormDescriptor } from '@/types/form-descriptor';
+import type { FormContext } from '@/utils/template-evaluator';
 import { isRepeatableBlock, groupFieldsByRepeatableGroupId, buildZodSchemaFromDescriptor, extractDefaultValues } from './form-descriptor-integration';
 
 describe('form descriptor integration', () => {
@@ -990,6 +991,266 @@ describe('form descriptor integration', () => {
         {
           street: '123 Main St',
           city: '', // Type-appropriate default for text field
+        },
+      ]);
+    });
+  });
+
+  describe('extractDefaultValues template evaluation for repeatable groups', () => {
+    test('given repeatable group with template defaultValue, should evaluate template with context', () => {
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'addresses-block',
+            title: 'Addresses',
+            repeatable: true,
+            fields: [
+              {
+                id: 'street',
+                type: 'text',
+                label: 'Street',
+                repeatableGroupId: 'addresses',
+                validation: [],
+                defaultValue: '{{caseContext.defaultStreet}}',
+              },
+              {
+                id: 'city',
+                type: 'text',
+                label: 'City',
+                repeatableGroupId: 'addresses',
+                validation: [],
+                defaultValue: '{{caseContext.defaultCity}}',
+              },
+            ],
+          },
+        ],
+        submission: {
+          url: '/api/submit',
+          method: 'POST',
+        },
+      };
+
+      const context: FormContext = {
+        caseContext: {
+          defaultStreet: '123 Template St',
+          defaultCity: 'Template City',
+        },
+      };
+
+      const defaultValues = extractDefaultValues(descriptor, context);
+
+      expect(defaultValues.addresses).toEqual([
+        {
+          street: '123 Template St',
+          city: 'Template City',
+        },
+      ]);
+    });
+
+    test('given repeatable group with template referencing formData, should evaluate with form context', () => {
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'addresses-block',
+            title: 'Addresses',
+            repeatable: true,
+            fields: [
+              {
+                id: 'street',
+                type: 'text',
+                label: 'Street',
+                repeatableGroupId: 'addresses',
+                validation: [],
+                defaultValue: '{{formData.userStreet}}',
+              },
+              {
+                id: 'city',
+                type: 'text',
+                label: 'City',
+                repeatableGroupId: 'addresses',
+                validation: [],
+                defaultValue: '{{formData.userCity}}',
+              },
+            ],
+          },
+        ],
+        submission: {
+          url: '/api/submit',
+          method: 'POST',
+        },
+      };
+
+      const context: FormContext = {
+        formData: {
+          userStreet: '456 Form St',
+          userCity: 'Form City',
+        },
+      };
+
+      const defaultValues = extractDefaultValues(descriptor, context);
+
+      expect(defaultValues.addresses).toEqual([
+        {
+          street: '456 Form St',
+          city: 'Form City',
+        },
+      ]);
+    });
+
+    test('given repeatable group with mixed template and static defaults, should evaluate templates correctly', () => {
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'addresses-block',
+            title: 'Addresses',
+            repeatable: true,
+            fields: [
+              {
+                id: 'street',
+                type: 'text',
+                label: 'Street',
+                repeatableGroupId: 'addresses',
+                validation: [],
+                defaultValue: '{{caseContext.defaultStreet}}',
+              },
+              {
+                id: 'city',
+                type: 'text',
+                label: 'City',
+                repeatableGroupId: 'addresses',
+                validation: [],
+                defaultValue: 'Static City',
+              },
+              {
+                id: 'zipCode',
+                type: 'text',
+                label: 'ZIP Code',
+                repeatableGroupId: 'addresses',
+                validation: [],
+                // No defaultValue - should use type-appropriate default
+              },
+            ],
+          },
+        ],
+        submission: {
+          url: '/api/submit',
+          method: 'POST',
+        },
+      };
+
+      const context: FormContext = {
+        caseContext: {
+          defaultStreet: '789 Template St',
+        },
+      };
+
+      const defaultValues = extractDefaultValues(descriptor, context);
+
+      expect(defaultValues.addresses).toEqual([
+        {
+          street: '789 Template St', // From template
+          city: 'Static City', // Static value
+          zipCode: '', // Type-appropriate default
+        },
+      ]);
+    });
+
+    test('given repeatable group with number template, should parse to number', () => {
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'beneficiaries-block',
+            title: 'Beneficiaries',
+            repeatable: true,
+            fields: [
+              {
+                id: 'name',
+                type: 'text',
+                label: 'Name',
+                repeatableGroupId: 'beneficiaries',
+                validation: [],
+                defaultValue: '{{caseContext.defaultName}}',
+              },
+              {
+                id: 'age',
+                type: 'number',
+                label: 'Age',
+                repeatableGroupId: 'beneficiaries',
+                validation: [],
+                defaultValue: '{{caseContext.defaultAge}}',
+              },
+            ],
+          },
+        ],
+        submission: {
+          url: '/api/submit',
+          method: 'POST',
+        },
+      };
+
+      const context: FormContext = {
+        caseContext: {
+          defaultName: 'John Doe',
+          defaultAge: '25', // Template returns string, should parse to number
+        },
+      };
+
+      const defaultValues = extractDefaultValues(descriptor, context);
+
+      expect(defaultValues.beneficiaries).toEqual([
+        {
+          name: 'John Doe',
+          age: 25, // Parsed from string template
+        },
+      ]);
+    });
+
+    test('given repeatable group with boolean template, should parse to boolean', () => {
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'beneficiaries-block',
+            title: 'Beneficiaries',
+            repeatable: true,
+            fields: [
+              {
+                id: 'name',
+                type: 'text',
+                label: 'Name',
+                repeatableGroupId: 'beneficiaries',
+                validation: [],
+                defaultValue: '{{caseContext.defaultName}}',
+              },
+              {
+                id: 'isStudent',
+                type: 'checkbox',
+                label: 'Is Student',
+                repeatableGroupId: 'beneficiaries',
+                validation: [],
+                defaultValue: '{{caseContext.isStudent}}',
+              },
+            ],
+          },
+        ],
+        submission: {
+          url: '/api/submit',
+          method: 'POST',
+        },
+      };
+
+      const context: FormContext = {
+        caseContext: {
+          defaultName: 'Jane Smith',
+          isStudent: 'true', // Template returns string, should parse to boolean
+        },
+      };
+
+      const defaultValues = extractDefaultValues(descriptor, context);
+
+      expect(defaultValues.beneficiaries).toEqual([
+        {
+          name: 'Jane Smith',
+          isStudent: true, // Parsed from string template
         },
       ]);
     });
