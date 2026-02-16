@@ -190,6 +190,61 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
             },
           ],
         },
+        // Non-repeatable address block (referenced by repeatable block)
+        {
+          id: 'address-block',
+          title: 'Address',
+          description: 'A single address entry',
+          fields: [
+            {
+              id: 'street',
+              type: 'text',
+              label: 'Street Address',
+              description: 'Enter street address',
+              validation: [
+                {
+                  type: 'required',
+                  message: 'Street address is required',
+                },
+              ],
+            },
+            {
+              id: 'city',
+              type: 'text',
+              label: 'City',
+              description: 'Enter city',
+              validation: [
+                {
+                  type: 'required',
+                  message: 'City is required',
+                },
+              ],
+            },
+            {
+              id: 'zip',
+              type: 'text',
+              label: 'ZIP/Postal Code',
+              description: 'Enter ZIP or postal code',
+              validation: [
+                {
+                  type: 'required',
+                  message: 'ZIP/Postal code is required',
+                },
+              ],
+            },
+          ],
+        },
+        // Repeatable block that references address-block
+        {
+          id: 'addresses-block',
+          title: 'Addresses',
+          description: 'Add multiple addresses (repeatable field group)',
+          repeatable: true,
+          repeatableBlockRef: 'address-block', // Reference to address-block above
+          minInstances: 1,
+          maxInstances: 5,
+          fields: [], // Fields will be resolved from address-block
+        },
         {
           id: 'corporation-details',
           title: 'Corporation Details',
@@ -488,7 +543,28 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
       },
     };
 
-    return NextResponse.json(globalDescriptor, {
+    // Resolve repeatable block references if any are present
+    let resolvedDescriptor = globalDescriptor;
+    try {
+      const { resolveAllRepeatableBlockRefs } = await import('@/utils/repeatable-block-resolver');
+      resolvedDescriptor = resolveAllRepeatableBlockRefs(globalDescriptor);
+    } catch (error) {
+      // If repeatable block resolution fails, return error response
+      const errorMessage = error instanceof Error ? error.message : 'Failed to resolve repeatable block references';
+      console.error('Error resolving repeatable block references:', error);
+      
+      return NextResponse.json(
+        { error: errorMessage },
+        {
+          status: 500,
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+    }
+
+    return NextResponse.json(resolvedDescriptor, {
       status: 200,
       headers: {
         'Content-Type': 'application/json',
