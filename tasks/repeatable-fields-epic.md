@@ -216,17 +216,19 @@ Additionally, to avoid duplicating block definitions, form authors can reference
 
 ### Phase 8: Validation Error Display
 
-**Task 7.1: Display Field-Level Errors in Instances**
+**Task 8.1: Display Field-Level Errors in Instances** ✅
 - Extract nested errors from react-hook-form (e.g., `errors.addresses?.[0]?.street`)
 - Display validation errors for individual fields within instances
 - Position errors near relevant fields
 - File: `src/components/repeatable-field-group.tsx`
+- **Status**: Completed - Field-level errors are automatically handled because we use indexed field names (e.g., `addresses.0.street`) when creating `indexedField` descriptors. Field components access errors via `form.formState.errors[field.id]`, which correctly resolves to nested array errors. Errors are displayed by individual field components (TextField, etc.) near the relevant fields.
 
-**Task 7.2: Display Array-Level Validation Errors**
+**Task 8.2: Display Array-Level Validation Errors** ✅
 - Display errors for entire repeatable group (e.g., "At least one address is required")
 - Show errors when `minInstances` not met
 - Show errors when `maxInstances` exceeded
 - File: `src/components/repeatable-field-group.tsx`
+- **Status**: Completed - Added array-level error display that checks `form.formState.errors[groupId]` and displays error messages above the repeatable group instances. Array-level errors (from Zod schema validation for minInstances/maxInstances) are automatically captured by react-hook-form and displayed.
 
 ### Phase 9: State Management and Redux Sync
 

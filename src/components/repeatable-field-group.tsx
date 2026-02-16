@@ -138,6 +138,23 @@ export default function RepeatableFieldGroup({
           {block.description}
         </p>
       )}
+      {/* Display array-level validation errors */}
+      {(() => {
+        const arrayError = form.formState.errors[groupId];
+        const arrayErrorMessage = arrayError?.message as string | undefined;
+        if (arrayErrorMessage) {
+          return (
+            <div
+              className="text-sm text-destructive mb-4 p-3 bg-destructive/10 border border-destructive/20 rounded-md"
+              role="alert"
+              data-testid={`repeatable-group-error-${groupId}`}
+            >
+              {arrayErrorMessage}
+            </div>
+          );
+        }
+        return null;
+      })()}
       <div className="repeatable-group-instances space-y-4">
         {fieldArrayFields.length === 0 ? (
           // Empty state
