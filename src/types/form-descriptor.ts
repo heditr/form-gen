@@ -376,19 +376,69 @@ export interface RulesObject {
 }
 
 /**
+ * Helper type to get field value type based on field type
+ */
+type FieldValueType<F extends FieldDescriptor> = 
+  F['type'] extends 'checkbox'
+    ? boolean
+    : F['type'] extends 'file'
+    ? string | string[] | null
+    : F['type'] extends 'radio'
+    ? string | number
+    : F['type'] extends 'number'
+    ? number
+    : string | number | null;
+
+/**
+ * Extract all fields from a descriptor
+ */
+type AllFields<T extends GlobalFormDescriptor> = T['blocks'][number]['fields'][number];
+
+/**
+ * Extract fields that belong to a specific repeatable group
+ */
+type FieldsInGroup<T extends GlobalFormDescriptor, GroupId extends string> = 
+  Extract<AllFields<T>, { repeatableGroupId: GroupId }>;
+
+/**
+ * Create object type for a repeatable group (maps field IDs to their value types)
+ */
+type RepeatableGroupObject<T extends GlobalFormDescriptor, GroupId extends string> = {
+  [K in FieldsInGroup<T, GroupId>['id']]: FieldValueType<Extract<FieldsInGroup<T, GroupId>, { id: K }>>;
+};
+
+/**
+ * Extract all unique repeatable group IDs from a descriptor
+ */
+type RepeatableGroupIds<T extends GlobalFormDescriptor> = 
+  AllFields<T> extends infer F
+    ? F extends FieldDescriptor
+      ? F extends { repeatableGroupId: infer G }
+        ? G extends string
+          ? G
+          : never
+        : never
+      : never
+    : never;
+
+/**
+ * Extract fields that don't belong to any repeatable group
+ */
+type NonRepeatableFields<T extends GlobalFormDescriptor> = 
+  Exclude<AllFields<T>, { repeatableGroupId: string }>;
+
+/**
  * Form data type derived from GlobalFormDescriptor
  * Maps field IDs to their values based on field types
+ * For repeatable groups, maps the group ID to an array of objects containing all fields in that group
  * Note: File fields store URL strings or arrays of URL strings (not File objects)
  */
-export type FormData<T extends GlobalFormDescriptor = GlobalFormDescriptor> = {
-  [K in T['blocks'][number]['fields'][number]['id']]?: 
-    T['blocks'][number]['fields'][number]['type'] extends 'checkbox'
-      ? boolean
-      : T['blocks'][number]['fields'][number]['type'] extends 'file'
-      ? string | string[] | null
-      : T['blocks'][number]['fields'][number]['type'] extends 'radio'
-      ? string | number
-      : T['blocks'][number]['fields'][number]['type'] extends 'number'
-      ? number
-      : string | number | null;
-};
+export type FormData<T extends GlobalFormDescriptor = GlobalFormDescriptor> = 
+  // Add repeatable groups as arrays of objects
+  {
+    [K in RepeatableGroupIds<T>]?: Array<RepeatableGroupObject<T, K>>;
+  } & 
+  // Add non-repeatable fields as individual properties
+  {
+    [K in NonRepeatableFields<T>['id']]?: FieldValueType<Extract<NonRepeatableFields<T>, { id: K }>>;
+  };

@@ -54,13 +54,13 @@ interface StateProps {
 /**
  * Redux dispatch props
  * 
- * Key: Use ReturnType to get the actual return type of the thunk
- * This ensures proper typing when the thunk is dispatched
+ * Key: When dispatching async thunks, dispatch returns a promise
+ * Since we don't await the result, we use 'any' for the return type
  */
 interface DispatchProps {
   syncFormDataToContext: (formData: Partial<FormData>) => void;
-  rehydrateRules: (caseContext: CaseContext) => ReturnType<typeof rehydrateRulesThunk>;
-  fetchDataSource: (fieldPath: string, url: string, auth?: { type: 'bearer' | 'apikey'; token?: string; headerName?: string }) => ReturnType<typeof fetchDataSourceThunk>;
+  rehydrateRules: (caseContext: CaseContext) => void;
+  fetchDataSource: (fieldPath: string, url: string, auth?: { type: 'bearer' | 'apikey'; token?: string; headerName?: string }) => void;
 }
 
 /**
@@ -91,8 +91,8 @@ function FormInner({
   caseContext: CaseContext;
   formData: Partial<FormData>;
   syncFormData: (formData: Partial<FormData>) => void;
-  rehydrate: (caseContext: CaseContext) => ReturnType<typeof rehydrateRulesThunk>;
-  loadDataSource: (fieldPath: string, url: string, auth?: { type: 'bearer' | 'apikey'; token?: string; headerName?: string }) => ReturnType<typeof fetchDataSourceThunk>;
+  rehydrate: (caseContext: CaseContext) => void;
+  loadDataSource: (fieldPath: string, url: string, auth?: { type: 'bearer' | 'apikey'; token?: string; headerName?: string }) => void;
   dataSourceCache: Record<string, unknown>;
 }) {
   const handleDiscriminantChange = useCallback(
@@ -238,10 +238,10 @@ const mapDispatchToProps = (dispatch: AppDispatch): DispatchProps => ({
     dispatch(syncFormDataToContext({ formData }));
   },
   rehydrateRules: (caseContext: CaseContext) => {
-    return dispatch(rehydrateRulesThunk(caseContext));
+    dispatch(rehydrateRulesThunk(caseContext));
   },
   fetchDataSource: (fieldPath: string, url: string, auth?: { type: 'bearer' | 'apikey'; token?: string; headerName?: string }) => {
-    return dispatch(fetchDataSourceThunk({ fieldPath, url, auth }));
+    dispatch(fetchDataSourceThunk({ fieldPath, url, auth }));
   },
 });
 

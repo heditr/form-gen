@@ -14,6 +14,7 @@ import type {
   ValidationRule,
   CaseContext,
   RulesObject,
+  FormData,
 } from './form-descriptor';
 
 describe('form-descriptor types', () => {
@@ -589,6 +590,203 @@ describe('form-descriptor types', () => {
       };
 
       expect(field.defaultValue).toBe('{{caseContext.documentUrl}}');
+    });
+  });
+
+  describe('FormData with repeatable groups', () => {
+    test('given a descriptor with repeatable fields, should support array of objects for repeatable groups', () => {
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'addresses-block',
+            title: 'Addresses',
+            repeatable: true,
+            fields: [
+              {
+                id: 'street',
+                type: 'text',
+                label: 'Street',
+                repeatableGroupId: 'addresses',
+                validation: [],
+              },
+              {
+                id: 'city',
+                type: 'text',
+                label: 'City',
+                repeatableGroupId: 'addresses',
+                validation: [],
+              },
+            ],
+          },
+          {
+            id: 'basic-info',
+            title: 'Basic Info',
+            fields: [
+              {
+                id: 'name',
+                type: 'text',
+                label: 'Name',
+                validation: [],
+              },
+            ],
+          },
+        ],
+        submission: {
+          url: '/api/submit',
+          method: 'POST',
+        },
+      };
+
+      // FormData should have addresses as array of objects, and name as string
+      const formData: FormData<typeof descriptor> = {
+        addresses: [
+          { street: '123 Main St', city: 'New York' },
+          { street: '456 Oak Ave', city: 'Boston' },
+        ],
+        name: 'John Doe',
+      };
+
+      expect(formData.addresses).toBeDefined();
+      expect(Array.isArray(formData.addresses)).toBe(true);
+      expect(formData.addresses?.[0]).toHaveProperty('street');
+      expect(formData.addresses?.[0]).toHaveProperty('city');
+      expect(formData.name).toBe('John Doe');
+    });
+
+    test('given a descriptor with multiple repeatable groups, should support multiple array properties', () => {
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'addresses-block',
+            title: 'Addresses',
+            repeatable: true,
+            fields: [
+              {
+                id: 'street',
+                type: 'text',
+                label: 'Street',
+                repeatableGroupId: 'addresses',
+                validation: [],
+              },
+            ],
+          },
+          {
+            id: 'contacts-block',
+            title: 'Contacts',
+            repeatable: true,
+            fields: [
+              {
+                id: 'email',
+                type: 'text',
+                label: 'Email',
+                repeatableGroupId: 'contacts',
+                validation: [],
+              },
+            ],
+          },
+        ],
+        submission: {
+          url: '/api/submit',
+          method: 'POST',
+        },
+      };
+
+      const formData: FormData<typeof descriptor> = {
+        addresses: [{ street: '123 Main St' }],
+        contacts: [{ email: 'test@example.com' }],
+      };
+
+      expect(formData.addresses).toBeDefined();
+      expect(formData.contacts).toBeDefined();
+      expect(Array.isArray(formData.addresses)).toBe(true);
+      expect(Array.isArray(formData.contacts)).toBe(true);
+    });
+
+    test('given a descriptor with empty repeatable group, should allow empty array', () => {
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'addresses-block',
+            title: 'Addresses',
+            repeatable: true,
+            fields: [
+              {
+                id: 'street',
+                type: 'text',
+                label: 'Street',
+                repeatableGroupId: 'addresses',
+                validation: [],
+              },
+            ],
+          },
+        ],
+        submission: {
+          url: '/api/submit',
+          method: 'POST',
+        },
+      };
+
+      const formData: FormData<typeof descriptor> = {
+        addresses: [],
+      };
+
+      expect(formData.addresses).toBeDefined();
+      expect(Array.isArray(formData.addresses)).toBe(true);
+      expect(formData.addresses?.length).toBe(0);
+    });
+
+    test('given a repeatable group with mixed field types, should correctly type each field', () => {
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'beneficiaries-block',
+            title: 'Beneficiaries',
+            repeatable: true,
+            fields: [
+              {
+                id: 'name',
+                type: 'text',
+                label: 'Name',
+                repeatableGroupId: 'beneficiaries',
+                validation: [],
+              },
+              {
+                id: 'age',
+                type: 'number',
+                label: 'Age',
+                repeatableGroupId: 'beneficiaries',
+                validation: [],
+              },
+              {
+                id: 'isStudent',
+                type: 'checkbox',
+                label: 'Is Student',
+                repeatableGroupId: 'beneficiaries',
+                validation: [],
+              },
+            ],
+          },
+        ],
+        submission: {
+          url: '/api/submit',
+          method: 'POST',
+        },
+      };
+
+      const formData: FormData<typeof descriptor> = {
+        beneficiaries: [
+          { name: 'John Doe', age: 25, isStudent: false },
+          { name: 'Jane Smith', age: 18, isStudent: true },
+        ],
+      };
+
+      expect(formData.beneficiaries).toBeDefined();
+      expect(formData.beneficiaries?.[0].name).toBe('John Doe');
+      expect(formData.beneficiaries?.[0].age).toBe(25);
+      expect(formData.beneficiaries?.[0].isStudent).toBe(false);
+      expect(typeof formData.beneficiaries?.[0].name).toBe('string');
+      expect(typeof formData.beneficiaries?.[0].age).toBe('number');
+      expect(typeof formData.beneficiaries?.[0].isStudent).toBe('boolean');
     });
   });
 });
