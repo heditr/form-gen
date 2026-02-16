@@ -189,8 +189,11 @@ export function groupFieldsByRepeatableGroupId(
 /**
  * Build a complete Zod schema object from form descriptor
  * 
+ * For repeatable blocks, builds array schemas (z.array(z.object({...}))) for each repeatable group.
+ * For non-repeatable fields, builds individual field schemas.
+ * 
  * @param descriptor - Global form descriptor
- * @returns Zod schema object with field IDs as keys and Zod schemas as values
+ * @returns Zod schema object with field IDs or group IDs as keys and Zod schemas as values
  */
 export function buildZodSchemaFromDescriptor(
   descriptor: GlobalFormDescriptor | null
@@ -200,10 +203,46 @@ export function buildZodSchemaFromDescriptor(
   }
 
   const schemaShape: Record<string, z.ZodTypeAny> = {};
+  const processedRepeatableGroups = new Set<string>();
 
   for (const block of descriptor.blocks) {
-    for (const field of block.fields) {
-      schemaShape[field.id] = convertToZodSchema(field.validation, field.type);
+    if (isRepeatableBlock(block)) {
+      // Handle repeatable blocks - group fields by repeatableGroupId
+      const fieldGroups = groupFieldsByRepeatableGroupId(block.fields);
+      
+      for (const [groupId, fields] of Object.entries(fieldGroups)) {
+        // Skip if we've already processed this group (e.g., multiple blocks with same group)
+        if (processedRepeatableGroups.has(groupId)) {
+          continue;
+        }
+        
+      // Build object schema for fields in this repeatable group
+      const objectShape: Record<string, z.ZodTypeAny> = {};
+      for (const field of fields) {
+        // Skip button fields - they don't have values to validate
+        if (field.type === 'button') {
+          continue;
+        }
+        // Type assertion: we've already checked it's not a button
+        const fieldType = field.type as Exclude<typeof field.type, 'button'>;
+        objectShape[field.id] = convertToZodSchema(field.validation, fieldType);
+      }
+        
+        // Create array schema for this repeatable group
+        schemaShape[groupId] = z.array(z.object(objectShape));
+        processedRepeatableGroups.add(groupId);
+      }
+    } else {
+      // Handle non-repeatable blocks - add fields as individual properties
+      for (const field of block.fields) {
+        // Skip fields that belong to a repeatable group (they're handled above)
+        // Skip button fields - they don't have values to validate
+        if (!field.repeatableGroupId && field.type !== 'button') {
+          // Type assertion: we've already checked it's not a button
+          const fieldType = field.type as Exclude<typeof field.type, 'button'>;
+          schemaShape[field.id] = convertToZodSchema(field.validation, fieldType);
+        }
+      }
     }
   }
 
