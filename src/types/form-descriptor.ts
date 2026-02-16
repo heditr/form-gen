@@ -158,6 +158,7 @@ export interface ButtonConfig {
  * @property isDiscriminant - Flag indicating this field triggers re-hydration when changed
  * @property status - Optional status templates for conditional visibility/enabling
  * @property button - Optional button configuration (only for button type fields)
+ * @property repeatableGroupId - Optional identifier to associate this field with a repeatable group
  */
 export interface FieldDescriptor {
   id: string;
@@ -171,6 +172,7 @@ export interface FieldDescriptor {
   isDiscriminant?: boolean;
   status?: StatusTemplates;
   button?: ButtonConfig;
+  repeatableGroupId?: string;
 }
 
 /**
@@ -230,6 +232,10 @@ export interface PopinSubmitConfig {
  * @property popin - If true, block is standalone popin (never renders inline, only via button triggers)
  * @property popinLoad - Optional: Load object data when popin opens (merged into formContext)
  * @property popinSubmit - Optional: Call endpoint when validate button clicked, prevent closing on error
+ * @property repeatable - If true, block contains repeatable field groups that can be added/removed dynamically
+ * @property minInstances - Optional minimum number of instances required for repeatable blocks
+ * @property maxInstances - Optional maximum number of instances allowed for repeatable blocks
+ * @property repeatableBlockRef - Optional ID of another block to reference and make repeatable (avoids duplicating block definitions)
  */
 export interface BlockDescriptor {
   id: string;
@@ -242,6 +248,10 @@ export interface BlockDescriptor {
   popin?: boolean;
   popinLoad?: PopinLoadConfig;
   popinSubmit?: PopinSubmitConfig;
+  repeatable?: boolean;
+  minInstances?: number;
+  maxInstances?: number;
+  repeatableBlockRef?: string;
 }
 
 /**

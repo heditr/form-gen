@@ -113,6 +113,18 @@ describe('form-descriptor types', () => {
       expect(field.isDiscriminant).toBe(true);
     });
 
+    test('given a field in a repeatable group, should support repeatableGroupId', () => {
+      const field: FieldDescriptor = {
+        id: 'street',
+        type: 'text',
+        label: 'Street Address',
+        repeatableGroupId: 'addresses',
+        validation: [],
+      };
+
+      expect(field.repeatableGroupId).toBe('addresses');
+    });
+
     test('given a button field with single variant, should support button type and popinBlockId', () => {
       const field: FieldDescriptor = {
         id: 'openContactButton',
@@ -244,6 +256,61 @@ describe('form-descriptor types', () => {
       };
 
       expect(block.popin).toBe(true);
+    });
+
+    test('given a repeatable block, should support repeatable flag', () => {
+      const block: BlockDescriptor = {
+        id: 'addresses-block',
+        title: 'Addresses',
+        fields: [
+          {
+            id: 'street',
+            type: 'text',
+            label: 'Street',
+            repeatableGroupId: 'addresses',
+            validation: [],
+          },
+        ],
+        repeatable: true,
+      };
+
+      expect(block.repeatable).toBe(true);
+    });
+
+    test('given a repeatable block with instance limits, should support minInstances and maxInstances', () => {
+      const block: BlockDescriptor = {
+        id: 'beneficiaries-block',
+        title: 'Beneficiaries',
+        fields: [
+          {
+            id: 'name',
+            type: 'text',
+            label: 'Name',
+            repeatableGroupId: 'beneficiaries',
+            validation: [],
+          },
+        ],
+        repeatable: true,
+        minInstances: 1,
+        maxInstances: 5,
+      };
+
+      expect(block.repeatable).toBe(true);
+      expect(block.minInstances).toBe(1);
+      expect(block.maxInstances).toBe(5);
+    });
+
+    test('given a repeatable block referencing another block, should support repeatableBlockRef', () => {
+      const block: BlockDescriptor = {
+        id: 'addresses-block',
+        title: 'Addresses',
+        fields: [],
+        repeatable: true,
+        repeatableBlockRef: 'address-block',
+      };
+
+      expect(block.repeatable).toBe(true);
+      expect(block.repeatableBlockRef).toBe('address-block');
     });
 
     test('given a popin block with popinLoad config, should support popinLoad with url and dataSourceId', () => {
