@@ -7,7 +7,7 @@
 
 import type { FieldError } from 'react-hook-form';
 import { z } from 'zod';
-import type { GlobalFormDescriptor, FormData } from '@/types/form-descriptor';
+import type { GlobalFormDescriptor, FormData, BlockDescriptor, FieldDescriptor } from '@/types/form-descriptor';
 import { convertToReactHookFormRules, convertToZodSchema } from './validation-rule-adapter';
 import { evaluateDefaultValue } from './default-value-evaluator';
 import type { FormContext } from './template-evaluator';
@@ -151,6 +151,39 @@ export function identifyDiscriminantFields(descriptor: GlobalFormDescriptor | nu
   }
 
   return discriminantFields;
+}
+
+/**
+ * Check if a block is repeatable
+ * 
+ * @param block - Block descriptor to check
+ * @returns true if block is marked as repeatable, false otherwise
+ */
+export function isRepeatableBlock(block: BlockDescriptor): boolean {
+  return block.repeatable === true;
+}
+
+/**
+ * Group fields by their repeatableGroupId
+ * 
+ * @param fields - Array of field descriptors
+ * @returns Object mapping repeatableGroupId to array of fields in that group
+ */
+export function groupFieldsByRepeatableGroupId(
+  fields: FieldDescriptor[]
+): Record<string, FieldDescriptor[]> {
+  const groups: Record<string, FieldDescriptor[]> = {};
+
+  for (const field of fields) {
+    if (field.repeatableGroupId) {
+      if (!groups[field.repeatableGroupId]) {
+        groups[field.repeatableGroupId] = [];
+      }
+      groups[field.repeatableGroupId].push(field);
+    }
+  }
+
+  return groups;
 }
 
 /**
