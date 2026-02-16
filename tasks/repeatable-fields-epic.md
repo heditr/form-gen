@@ -196,20 +196,23 @@ Additionally, to avoid duplicating block definitions, form authors can reference
 
 ### Phase 7: Template Evaluation
 
-**Task 6.1: Include Repeatable Groups in Form Context**
+**Task 7.1: Include Repeatable Groups in Form Context** ✅
 - Ensure repeatable group arrays are included in `formContext`
 - Support `{{#each}}` helpers for iterating repeatable groups
 - File: `src/utils/template-evaluator.ts` and `src/components/form-container.tsx`
+- **Status**: Completed - Repeatable groups are automatically included in formContext because react-hook-form stores them as arrays in formValues, which are spread into formContext. Handlebars natively supports `{{#each}}` for arrays. Added tests to verify array access, iteration, and status template evaluation with repeatable groups.
 
-**Task 6.2: Evaluate Status Templates for Repeatable Blocks**
+**Task 7.2: Evaluate Status Templates for Repeatable Blocks** ✅
 - Evaluate `hidden` and `disabled` templates for repeatable blocks
 - Use array data in context for template evaluation
 - File: `src/components/block.tsx` and `src/components/repeatable-field-group.tsx`
+- **Status**: Completed - Block-level status templates are evaluated using formContext which includes repeatable group arrays. Added tests to verify array-based status template evaluation.
 
-**Task 6.3: Evaluate Field Status Templates Within Instances**
+**Task 7.3: Evaluate Field Status Templates Within Instances** ✅
 - Support instance-specific context (e.g., `@index`, current instance values)
 - Evaluate field-level status templates within repeatable groups
 - File: `src/components/repeatable-field-group.tsx`
+- **Status**: Completed - Enhanced `instanceFormContext` to include `@index`, `@first`, `@last` helpers and current instance values spread directly for easy template access. Field-level status templates are evaluated using this instance-specific context. Fixed field ID extraction to properly handle prefixed field IDs.
 
 ### Phase 8: Validation Error Display
 

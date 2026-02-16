@@ -5,7 +5,7 @@
  * and useFieldArray integration work correctly.
  */
 
-import { describe, test, expect, vi } from 'vitest';
+import { describe, test, expect, vi, beforeAll } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import React from 'react';
@@ -13,15 +13,25 @@ import { useForm, FormProvider } from 'react-hook-form';
 import type { UseFormReturn, FieldValues } from 'react-hook-form';
 import type { BlockDescriptor, FieldDescriptor } from '@/types/form-descriptor';
 import type { FormContext } from '@/utils/template-evaluator';
+import { registerHandlebarsHelpers } from '@/utils/handlebars-helpers';
 import RepeatableFieldGroup from './repeatable-field-group';
 
 // Mock FieldWrapper to avoid complex dependencies in unit tests
 vi.mock('./field-wrapper', () => ({
-  default: ({ field }: { field: FieldDescriptor }) => {
+  default: ({ field, isHidden, isDisabled }: { field: FieldDescriptor; isHidden?: boolean; isDisabled?: boolean }) => {
+    // Don't render if hidden
+    if (isHidden) {
+      return null;
+    }
+    
     // Extract original field ID from indexed name (e.g., "addresses.0.street" -> "street")
     const originalFieldId = field.id.split('.').pop() || field.id;
     return (
-      <div data-testid={`field-${originalFieldId}`} data-field-id={field.id}>
+      <div 
+        data-testid={`field-${originalFieldId}`} 
+        data-field-id={field.id}
+        data-disabled={String(isDisabled || false)}
+      >
         {field.label}
       </div>
     );
@@ -29,6 +39,9 @@ vi.mock('./field-wrapper', () => ({
 }));
 
 describe('RepeatableFieldGroup', () => {
+  beforeAll(() => {
+    registerHandlebarsHelpers();
+  });
 
   const createMockBlock = (): BlockDescriptor => ({
     id: 'addresses-block',
@@ -519,5 +532,221 @@ describe('RepeatableFieldGroup', () => {
     // The form values should contain the defaults
     // Note: We can't directly check form values in the test, but we can verify the instance exists
     expect(screen.getByTestId('repeatable-instance-addresses-0')).toBeInTheDocument();
+  });
+
+  test('given field with status template using @index, should evaluate correctly for each instance', () => {
+    const block: BlockDescriptor = {
+      id: 'addresses-block',
+      title: 'Addresses',
+      repeatable: true,
+      fields: [
+        {
+          id: 'addresses.street',
+          type: 'text',
+          label: 'Street',
+          repeatableGroupId: 'addresses',
+          validation: [],
+          status: {
+            hidden: '{{eq @index 0}}', // Hide first instance's street field
+          },
+        },
+        {
+          id: 'addresses.city',
+          type: 'text',
+          label: 'City',
+          repeatableGroupId: 'addresses',
+          validation: [],
+        },
+      ],
+    };
+
+    const Wrapper = () => {
+      const form = useForm({
+        defaultValues: {
+          addresses: [
+            { street: '123 Main St', city: 'New York' },
+            { street: '456 Oak Ave', city: 'Los Angeles' },
+          ],
+        },
+      }) as unknown as UseFormReturn<FieldValues>;
+      
+      const formContext: FormContext = {
+        addresses: form.watch('addresses'),
+      };
+      
+      return (
+        <FormProvider {...form}>
+          <RepeatableFieldGroup
+            block={block}
+            groupId="addresses"
+            fields={block.fields}
+            isDisabled={false}
+            isHidden={false}
+            form={form}
+            formContext={formContext}
+            onLoadDataSource={mockOnLoadDataSource}
+            dataSourceCache={mockDataSourceCache}
+          />
+        </FormProvider>
+      );
+    };
+
+    render(<Wrapper />);
+
+    // First instance's street field should be hidden (index 0, template evaluates to true)
+    // Second instance's street field should be visible (index 1, template evaluates to false)
+    // Note: Mock extracts base field ID, so we look for "field-street" not "field-addresses.0.street"
+    const streetFields = screen.queryAllByTestId('field-street');
+    expect(streetFields.length).toBe(1); // Only second instance visible
+    
+    // Verify it's the second instance by checking data-field-id
+    expect(streetFields[0]).toHaveAttribute('data-field-id', 'addresses.1.street');
+  });
+
+  test('given field with status template using current instance values, should evaluate correctly', () => {
+    const block: BlockDescriptor = {
+      id: 'addresses-block',
+      title: 'Addresses',
+      repeatable: true,
+      fields: [
+        {
+          id: 'addresses.street',
+          type: 'text',
+          label: 'Street',
+          repeatableGroupId: 'addresses',
+          validation: [],
+        },
+        {
+          id: 'addresses.city',
+          type: 'text',
+          label: 'City',
+          repeatableGroupId: 'addresses',
+          validation: [],
+          status: {
+            disabled: '{{eq street "123 Main St"}}', // Disable city when street is "123 Main St"
+          },
+        },
+      ],
+    };
+
+    const Wrapper = () => {
+      const form = useForm({
+        defaultValues: {
+          addresses: [
+            { street: '123 Main St', city: 'New York' },
+            { street: '456 Oak Ave', city: 'Los Angeles' },
+          ],
+        },
+      }) as unknown as UseFormReturn<FieldValues>;
+      
+      const formContext: FormContext = {
+        addresses: form.watch('addresses'),
+      };
+      
+      return (
+        <FormProvider {...form}>
+          <RepeatableFieldGroup
+            block={block}
+            groupId="addresses"
+            fields={block.fields}
+            isDisabled={false}
+            isHidden={false}
+            form={form}
+            formContext={formContext}
+            onLoadDataSource={mockOnLoadDataSource}
+            dataSourceCache={mockDataSourceCache}
+          />
+        </FormProvider>
+      );
+    };
+
+    render(<Wrapper />);
+
+    // City field in first instance should be disabled (street is "123 Main St")
+    // City field in second instance should be enabled (street is "456 Oak Ave")
+    // Note: Mock extracts base field ID, so we look for "field-city" not "field-addresses.0.city"
+    const cityFields = screen.getAllByTestId('field-city');
+    // First instance (index 0) should have disabled city
+    expect(cityFields[0]).toHaveAttribute('data-disabled', 'true');
+    // Second instance (index 1) should have enabled city
+    expect(cityFields[1]).toHaveAttribute('data-disabled', 'false');
+  });
+
+  test('given field with status template using @first and @last, should evaluate correctly', () => {
+    const block: BlockDescriptor = {
+      id: 'addresses-block',
+      title: 'Addresses',
+      repeatable: true,
+      fields: [
+        {
+          id: 'addresses.street',
+          type: 'text',
+          label: 'Street',
+          repeatableGroupId: 'addresses',
+          validation: [],
+          status: {
+            hidden: '{{not @first}}', // Hide street field except in first instance
+          },
+        },
+        {
+          id: 'addresses.city',
+          type: 'text',
+          label: 'City',
+          repeatableGroupId: 'addresses',
+          validation: [],
+          status: {
+            disabled: '{{@last}}', // Disable city field in last instance
+          },
+        },
+      ],
+    };
+
+    const Wrapper = () => {
+      const form = useForm({
+        defaultValues: {
+          addresses: [
+            { street: '123 Main St', city: 'New York' },
+            { street: '456 Oak Ave', city: 'Los Angeles' },
+            { street: '789 Pine St', city: 'Chicago' },
+          ],
+        },
+      }) as unknown as UseFormReturn<FieldValues>;
+      
+      const formContext: FormContext = {
+        addresses: form.watch('addresses'),
+      };
+      
+      return (
+        <FormProvider {...form}>
+          <RepeatableFieldGroup
+            block={block}
+            groupId="addresses"
+            fields={block.fields}
+            isDisabled={false}
+            isHidden={false}
+            form={form}
+            formContext={formContext}
+            onLoadDataSource={mockOnLoadDataSource}
+            dataSourceCache={mockDataSourceCache}
+          />
+        </FormProvider>
+      );
+    };
+
+    render(<Wrapper />);
+
+    // Street field should only be visible in first instance
+    // Note: Mock extracts base field ID, so we look for "field-street" not "field-addresses.0.street"
+    const streetFields = screen.queryAllByTestId('field-street');
+    expect(streetFields.length).toBe(1); // Only first instance visible
+    
+    // Verify it's the first instance by checking data-field-id
+    expect(streetFields[0]).toHaveAttribute('data-field-id', 'addresses.0.street');
+
+    // City field in last instance should be disabled
+    const cityFields = screen.getAllByTestId('field-city');
+    expect(cityFields.length).toBe(3); // All 3 instances visible
+    // Last instance (index 2) should be disabled
+    expect(cityFields[2]).toHaveAttribute('data-disabled', 'true'); // Disabled (last)
   });
 });

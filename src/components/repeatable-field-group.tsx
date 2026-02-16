@@ -156,12 +156,23 @@ export default function RepeatableFieldGroup({
         ) : (
           <>
             {fieldArrayFields.map((fieldArrayField, index) => {
+              // Get current instance values from form
+              const groupArray = form.watch(groupId) as unknown[] | undefined;
+              const currentInstance = groupArray?.[index] as Record<string, unknown> | undefined;
+              
               // Build instance-specific form context for template evaluation
-              // This allows templates to reference current instance data
+              // This allows templates to reference current instance data and index
               const instanceFormContext: FormContext = {
                 ...formContext,
                 // Add current instance data to context for template evaluation
-                [groupId]: form.watch(groupId),
+                [groupId]: groupArray,
+                // Add current instance values directly for easy access (e.g., {{street}})
+                ...(currentInstance || {}),
+                // Add @index helper for accessing current index in templates
+                '@index': index,
+                // Add @first and @last helpers for convenience
+                '@first': index === 0,
+                '@last': index === (groupArray?.length ?? 0) - 1,
               };
 
               return (
@@ -187,8 +198,15 @@ export default function RepeatableFieldGroup({
                     </Button>
                   </div>
                   {fields.map((field) => {
-                    // Create indexed field name (e.g., addresses.0.street)
-                    const indexedFieldName = `${groupId}.${index}.${field.id}`;
+                    // Extract original field ID by removing the groupId prefix if present
+                    // Field IDs are prefixed during block resolution (e.g., "addresses.street")
+                    // We need the base field ID (e.g., "street") for the indexed name
+                    const baseFieldId = field.id.startsWith(`${groupId}.`)
+                      ? field.id.slice(groupId.length + 1) // Remove "groupId." prefix
+                      : field.id;
+                    
+                    // Create indexed field name for react-hook-form (e.g., addresses.0.street)
+                    const indexedFieldName = `${groupId}.${index}.${baseFieldId}`;
                     
                     // Create a modified field descriptor with indexed name
                     const indexedField: FieldDescriptor = {

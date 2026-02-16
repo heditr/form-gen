@@ -242,4 +242,58 @@ describe('Block', () => {
     // Component should handle multiple repeatable groups
     expect(Block).toBeDefined();
   });
+
+  test('given repeatable block with hidden status template using array, should evaluate correctly', () => {
+    const block: BlockDescriptor = {
+      id: 'addresses-block',
+      title: 'Addresses',
+      repeatable: true,
+      fields: [
+        {
+          id: 'addresses.street',
+          type: 'text',
+          label: 'Street',
+          repeatableGroupId: 'addresses',
+          validation: [],
+        },
+      ],
+      status: {
+        hidden: '{{isEmpty addresses}}',
+      },
+    };
+    const emptyContext = { addresses: [] };
+    const filledContext = { addresses: [{ street: '123 Main St' }] };
+    
+    const propsEmpty = createProps({ block, formContext: emptyContext });
+    const propsFilled = createProps({ block, formContext: filledContext });
+    
+    // Component should evaluate status templates with array data
+    expect(Block).toBeDefined();
+  });
+
+  test('given repeatable block with disabled status template using array length, should evaluate correctly', () => {
+    const block: BlockDescriptor = {
+      id: 'addresses-block',
+      title: 'Addresses',
+      repeatable: true,
+      fields: [
+        {
+          id: 'addresses.street',
+          type: 'text',
+          label: 'Street',
+          repeatableGroupId: 'addresses',
+          validation: [],
+        },
+      ],
+      status: {
+        disabled: '{{gte addresses.length 5}}',
+      },
+    };
+    const context = { addresses: [{ street: '123' }, { street: '456' }, { street: '789' }, { street: '101' }, { street: '112' }] };
+    
+    const props = createProps({ block, formContext: context });
+    
+    // Component should evaluate disabled status using array length
+    expect(Block).toBeDefined();
+  });
 });

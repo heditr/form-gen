@@ -232,4 +232,118 @@ describe('template evaluator', () => {
       expect(result).toBe(true);
     });
   });
+
+  describe('repeatable groups in form context', () => {
+    test('given repeatable group array in context, should be accessible via direct property access', () => {
+      const template = '{{addresses.length}}';
+      const context = {
+        addresses: [
+          { street: '123 Main St', city: 'New York' },
+          { street: '456 Oak Ave', city: 'Boston' },
+        ],
+      };
+      
+      const result = evaluateTemplate(template, context);
+      
+      expect(result).toBe('2');
+    });
+
+    test('given repeatable group array in context, should support {{#each}} iteration', () => {
+      const template = '{{#each addresses}}{{street}}, {{/each}}';
+      const context = {
+        addresses: [
+          { street: '123 Main St', city: 'New York' },
+          { street: '456 Oak Ave', city: 'Boston' },
+        ],
+      };
+      
+      const result = evaluateTemplate(template, context);
+      
+      expect(result).toBe('123 Main St, 456 Oak Ave, ');
+    });
+
+    test('given repeatable group array in context, should access individual items via index', () => {
+      const template = '{{addresses.0.street}}';
+      const context = {
+        addresses: [
+          { street: '123 Main St', city: 'New York' },
+        ],
+      };
+      
+      const result = evaluateTemplate(template, context);
+      
+      expect(result).toBe('123 Main St');
+    });
+
+    test('given repeatable group array in context, should support isEmpty helper for arrays', () => {
+      const template = '{{#if (isEmpty addresses)}}empty{{else}}not empty{{/if}}';
+      const emptyContext = { addresses: [] };
+      const filledContext = {
+        addresses: [{ street: '123 Main St', city: 'New York' }],
+      };
+      
+      const emptyResult = evaluateTemplate(template, emptyContext);
+      const filledResult = evaluateTemplate(template, filledContext);
+      
+      expect(emptyResult).toBe('empty');
+      expect(filledResult).toBe('not empty');
+    });
+
+    test('given repeatable group in formData nested property, should be accessible', () => {
+      const template = '{{formData.addresses.length}}';
+      const context = {
+        formData: {
+          addresses: [
+            { street: '123 Main St', city: 'New York' },
+          ],
+        },
+      };
+      
+      const result = evaluateTemplate(template, context);
+      
+      expect(result).toBe('1');
+    });
+
+    test('given repeatable group with status template, should evaluate using array data', () => {
+      const block: BlockDescriptor = {
+        id: 'addresses-block',
+        title: 'Addresses',
+        repeatable: true,
+        fields: [],
+        status: {
+          hidden: '{{isEmpty addresses}}',
+        },
+      };
+      const emptyContext = { addresses: [] };
+      const filledContext = {
+        addresses: [{ street: '123 Main St', city: 'New York' }],
+      };
+      
+      const emptyResult = evaluateHiddenStatus(block, emptyContext);
+      const filledResult = evaluateHiddenStatus(block, filledContext);
+      
+      expect(emptyResult).toBe(true); // Hidden when empty
+      expect(filledResult).toBe(false); // Visible when has items
+    });
+
+    test('given repeatable group with length check in status template, should evaluate correctly', () => {
+      const block: BlockDescriptor = {
+        id: 'addresses-block',
+        title: 'Addresses',
+        repeatable: true,
+        fields: [],
+        status: {
+          disabled: '{{gte addresses.length 5}}',
+        },
+      };
+      const context1 = { addresses: [{ street: '123' }, { street: '456' }, { street: '789' }, { street: '101' }, { street: '112' }] };
+      const context2 = { addresses: [{ street: '123' }] };
+      
+      const result1 = evaluateDisabledStatus(block, context1);
+      const result2 = evaluateDisabledStatus(block, context2);
+      
+      expect(result1).toBe(true); // Disabled when >= 5
+      expect(result2).toBe(false); // Enabled when < 5
+    });
+  });
 });
