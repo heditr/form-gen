@@ -155,19 +155,44 @@ function resolveRepeatableBlockRefWithValidation(
       descriptor,
       newResolutionPath
     );
-    // Use the nested referenced block's fields
+    
+    // Derive repeatableGroupId from block ID
+    const repeatableGroupId = block.id.endsWith('-block')
+      ? block.id.slice(0, -6) // Remove "-block" (6 characters)
+      : block.id;
+    
+    // Prefix field IDs and assign repeatableGroupId
+    const mergedFields = nestedReferencedBlock.fields.map(field => ({
+      ...field,
+      id: `${repeatableGroupId}.${field.id}`, // Prefix field ID with groupId
+      repeatableGroupId, // Assign repeatableGroupId to all fields
+    }));
+    
     return {
       ...block,
-      fields: nestedReferencedBlock.fields,
+      fields: mergedFields,
       repeatableBlockRef: undefined, // Clear the reference after resolution
     };
   }
 
+  // Derive repeatableGroupId from block ID
+  // Remove "-block" suffix if present (e.g., "addresses-block" -> "addresses")
+  // Otherwise use the block ID as-is
+  const repeatableGroupId = block.id.endsWith('-block')
+    ? block.id.slice(0, -6) // Remove "-block" (6 characters)
+    : block.id;
+
   // Merge referenced block's fields into the repeatable block
-  // This will be handled in Task 5.2, for now just return the block with fields merged
+  // Prefix field IDs with repeatableGroupId and assign repeatableGroupId to all fields
+  const mergedFields = referencedBlock.fields.map(field => ({
+    ...field,
+    id: `${repeatableGroupId}.${field.id}`, // Prefix field ID with groupId
+    repeatableGroupId, // Assign repeatableGroupId to all fields
+  }));
+
   return {
     ...block,
-    fields: referencedBlock.fields,
+    fields: mergedFields,
     repeatableBlockRef: undefined, // Clear the reference after resolution
   };
 }

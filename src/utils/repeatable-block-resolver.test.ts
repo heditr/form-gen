@@ -281,5 +281,191 @@ describe('repeatable block resolver', () => {
 
       expect(() => resolveAllRepeatableBlockRefs(descriptor)).toThrow(/circular/i);
     });
+
+    test('given resolved block, should assign repeatableGroupId to all fields', () => {
+      const referencedBlock: BlockDescriptor = {
+        id: 'address-block',
+        title: 'Address',
+        fields: [
+          {
+            id: 'street',
+            type: 'text',
+            label: 'Street',
+            validation: [],
+          },
+          {
+            id: 'city',
+            type: 'text',
+            label: 'City',
+            validation: [],
+          },
+        ],
+      };
+
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          referencedBlock,
+          {
+            id: 'addresses-block',
+            title: 'Addresses',
+            repeatable: true,
+            repeatableBlockRef: 'address-block',
+            fields: [], // Fields will come from referenced block
+          },
+        ],
+        submission: {
+          url: '/api/submit',
+          method: 'POST',
+        },
+      };
+
+      const result = resolveAllRepeatableBlockRefs(descriptor);
+
+      const addressesBlock = result.blocks.find(b => b.id === 'addresses-block');
+      expect(addressesBlock?.fields).toBeDefined();
+      expect(addressesBlock?.fields?.length).toBe(2);
+      
+      // All fields should have repeatableGroupId derived from block ID
+      addressesBlock?.fields?.forEach(field => {
+        expect(field.repeatableGroupId).toBe('addresses');
+      });
+    });
+
+    test('given resolved block, should prefix field IDs with repeatableGroupId', () => {
+      const referencedBlock: BlockDescriptor = {
+        id: 'contact-block',
+        title: 'Contact',
+        fields: [
+          {
+            id: 'name',
+            type: 'text',
+            label: 'Name',
+            validation: [],
+          },
+          {
+            id: 'email',
+            type: 'text',
+            label: 'Email',
+            validation: [],
+          },
+        ],
+      };
+
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          referencedBlock,
+          {
+            id: 'contacts-block',
+            title: 'Contacts',
+            repeatable: true,
+            repeatableBlockRef: 'contact-block',
+            fields: [], // Fields will come from referenced block
+          },
+        ],
+        submission: {
+          url: '/api/submit',
+          method: 'POST',
+        },
+      };
+
+      const result = resolveAllRepeatableBlockRefs(descriptor);
+
+      const contactsBlock = result.blocks.find(b => b.id === 'contacts-block');
+      expect(contactsBlock?.fields).toBeDefined();
+      
+      // Field IDs should be prefixed with groupId (contacts)
+      const fieldIds = contactsBlock?.fields?.map(f => f.id) || [];
+      expect(fieldIds).toContain('contacts.name');
+      expect(fieldIds).toContain('contacts.email');
+    });
+
+    test('given block ID without -block suffix, should derive groupId correctly', () => {
+      const referencedBlock: BlockDescriptor = {
+        id: 'address-block',
+        title: 'Address',
+        fields: [
+          {
+            id: 'street',
+            type: 'text',
+            label: 'Street',
+            validation: [],
+          },
+        ],
+      };
+
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          referencedBlock,
+          {
+            id: 'addresses', // No -block suffix
+            title: 'Addresses',
+            repeatable: true,
+            repeatableBlockRef: 'address-block',
+            fields: [], // Fields will come from referenced block
+          },
+        ],
+        submission: {
+          url: '/api/submit',
+          method: 'POST',
+        },
+      };
+
+      const result = resolveAllRepeatableBlockRefs(descriptor);
+
+      const addressesBlock = result.blocks.find(b => b.id === 'addresses');
+      expect(addressesBlock?.fields?.[0]?.repeatableGroupId).toBe('addresses');
+      expect(addressesBlock?.fields?.[0]?.id).toBe('addresses.street');
+    });
+
+    test('given multiple repeatable blocks referencing same block, should prefix correctly', () => {
+      const sharedBlock: BlockDescriptor = {
+        id: 'address-block',
+        title: 'Address',
+        fields: [
+          {
+            id: 'street',
+            type: 'text',
+            label: 'Street',
+            validation: [],
+          },
+        ],
+      };
+
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          sharedBlock,
+          {
+            id: 'addresses-block',
+            title: 'Addresses',
+            repeatable: true,
+            repeatableBlockRef: 'address-block',
+            fields: [],
+          },
+          {
+            id: 'work-addresses-block',
+            title: 'Work Addresses',
+            repeatable: true,
+            repeatableBlockRef: 'address-block',
+            fields: [],
+          },
+        ],
+        submission: {
+          url: '/api/submit',
+          method: 'POST',
+        },
+      };
+
+      const result = resolveAllRepeatableBlockRefs(descriptor);
+
+      const addressesBlock = result.blocks.find(b => b.id === 'addresses-block');
+      const workAddressesBlock = result.blocks.find(b => b.id === 'work-addresses-block');
+
+      // Each should have its own prefixed field IDs
+      expect(addressesBlock?.fields?.[0]?.id).toBe('addresses.street');
+      expect(addressesBlock?.fields?.[0]?.repeatableGroupId).toBe('addresses');
+      
+      expect(workAddressesBlock?.fields?.[0]?.id).toBe('work-addresses.street');
+      expect(workAddressesBlock?.fields?.[0]?.repeatableGroupId).toBe('work-addresses');
+    });
   });
 });
