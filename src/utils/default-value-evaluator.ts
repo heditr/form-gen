@@ -30,6 +30,15 @@ export function evaluateDefaultValue(
   // If not, treat it as a plain string value
   const isTemplate = defaultValue.includes('{{') && defaultValue.includes('}}');
   if (!isTemplate) {
+    // For file fields, convert 'null' string to null even if not a template
+    // This handles cases where defaultValue is explicitly set to the string 'null'
+    if (fieldType === 'file') {
+      const trimmed = defaultValue.trim();
+      if (trimmed === '' || trimmed.toLowerCase() === 'null') {
+        return null;
+      }
+    }
+    // For other field types, return the string as-is (no parsing for non-templates)
     return defaultValue;
   }
 

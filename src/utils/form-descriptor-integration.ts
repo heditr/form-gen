@@ -28,41 +28,118 @@ export function extractDefaultValues(
   }
 
   const defaultValues: Partial<FormData> = {};
+  const processedRepeatableGroups = new Set<string>();
 
   for (const block of descriptor.blocks) {
-    for (const field of block.fields) {
-      // Always set a default value to ensure controlled inputs
-      if (field.defaultValue !== undefined) {
-        // Evaluate defaultValue as Handlebars template if it's a string, otherwise use directly
-        const evaluatedValue = evaluateDefaultValue(
-          field.defaultValue,
-          field.type,
-          context
-        );
-        defaultValues[field.id as keyof FormData] = evaluatedValue as FormData[keyof FormData];
-      } else {
-        // Set type-appropriate default values for uncontrolled -> controlled transition
-        switch (field.type) {
-          case 'text':
-          case 'dropdown':
-          case 'autocomplete':
-          case 'date':
-            defaultValues[field.id as keyof FormData] = '' as FormData[keyof FormData];
-            break;
-          case 'checkbox':
-            defaultValues[field.id as keyof FormData] = false as unknown as FormData[keyof FormData];
-            break;
-          case 'radio':
-            defaultValues[field.id as keyof FormData] = '' as FormData[keyof FormData];
-            break;
-          case 'number':
-            defaultValues[field.id as keyof FormData] = 0 as unknown as FormData[keyof FormData];
-            break;
-          case 'file':
-            defaultValues[field.id as keyof FormData] = null as FormData[keyof FormData];
-            break;
-          default:
-            defaultValues[field.id as keyof FormData] = '' as FormData[keyof FormData];
+    if (isRepeatableBlock(block)) {
+      // Handle repeatable blocks - group fields by repeatableGroupId
+      const fieldGroups = groupFieldsByRepeatableGroupId(block.fields);
+      
+      for (const [groupId, fields] of Object.entries(fieldGroups)) {
+        // Skip if we've already processed this group
+        if (processedRepeatableGroups.has(groupId)) {
+          continue;
+        }
+        
+        // Check if any field in this group has a defaultValue
+        const hasAnyDefault = fields.some(field => field.defaultValue !== undefined);
+        
+        if (hasAnyDefault) {
+          // Build default object for this repeatable group
+          const groupDefault: Record<string, unknown> = {};
+          
+          for (const field of fields) {
+            // Skip button fields - they don't have values
+            if (field.type === 'button') {
+              continue;
+            }
+            
+            if (field.defaultValue !== undefined) {
+              // Evaluate defaultValue as Handlebars template if it's a string, otherwise use directly
+              const evaluatedValue = evaluateDefaultValue(
+                field.defaultValue,
+                field.type,
+                context
+              );
+              groupDefault[field.id] = evaluatedValue;
+            } else {
+              // Set type-appropriate default values for fields without explicit defaultValue
+              switch (field.type) {
+                case 'text':
+                case 'dropdown':
+                case 'autocomplete':
+                case 'date':
+                  groupDefault[field.id] = '';
+                  break;
+                case 'checkbox':
+                  groupDefault[field.id] = false;
+                  break;
+                case 'radio':
+                  groupDefault[field.id] = '';
+                  break;
+                case 'number':
+                  groupDefault[field.id] = 0;
+                  break;
+                case 'file':
+                  groupDefault[field.id] = null;
+                  break;
+                default:
+                  groupDefault[field.id] = '';
+              }
+            }
+          }
+          
+          // Create array with one default instance
+          // Type assertion needed because FormData type inference doesn't handle dynamic groupId
+          (defaultValues as Record<string, unknown>)[groupId] = [groupDefault];
+        } else {
+          // No defaults provided - initialize as empty array
+          (defaultValues as Record<string, unknown>)[groupId] = [];
+        }
+        
+        processedRepeatableGroups.add(groupId);
+      }
+    } else {
+      // Handle non-repeatable blocks - add fields as individual properties
+      for (const field of block.fields) {
+        // Skip fields that belong to a repeatable group (they're handled above)
+        if (field.repeatableGroupId) {
+          continue;
+        }
+        
+        // Always set a default value to ensure controlled inputs
+        if (field.defaultValue !== undefined) {
+          // Evaluate defaultValue as Handlebars template if it's a string, otherwise use directly
+          const evaluatedValue = evaluateDefaultValue(
+            field.defaultValue,
+            field.type,
+            context
+          );
+          defaultValues[field.id as keyof FormData] = evaluatedValue as FormData[keyof FormData];
+        } else {
+          // Set type-appropriate default values for uncontrolled -> controlled transition
+          switch (field.type) {
+            case 'text':
+            case 'dropdown':
+            case 'autocomplete':
+            case 'date':
+              defaultValues[field.id as keyof FormData] = '' as FormData[keyof FormData];
+              break;
+            case 'checkbox':
+              defaultValues[field.id as keyof FormData] = false as unknown as FormData[keyof FormData];
+              break;
+            case 'radio':
+              defaultValues[field.id as keyof FormData] = '' as FormData[keyof FormData];
+              break;
+            case 'number':
+              defaultValues[field.id as keyof FormData] = 0 as unknown as FormData[keyof FormData];
+              break;
+            case 'file':
+              defaultValues[field.id as keyof FormData] = null as FormData[keyof FormData];
+              break;
+            default:
+              defaultValues[field.id as keyof FormData] = '' as FormData[keyof FormData];
+          }
         }
       }
     }

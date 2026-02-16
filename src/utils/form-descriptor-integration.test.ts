@@ -8,7 +8,7 @@
 import { describe, test, expect } from 'vitest';
 import { z } from 'zod';
 import type { BlockDescriptor, GlobalFormDescriptor } from '@/types/form-descriptor';
-import { isRepeatableBlock, groupFieldsByRepeatableGroupId, buildZodSchemaFromDescriptor } from './form-descriptor-integration';
+import { isRepeatableBlock, groupFieldsByRepeatableGroupId, buildZodSchemaFromDescriptor, extractDefaultValues } from './form-descriptor-integration';
 
 describe('form descriptor integration', () => {
   describe('isRepeatableBlock', () => {
@@ -717,6 +717,281 @@ describe('form descriptor integration', () => {
       // One instance should pass
       const one = { addresses: [{ street: '123 Main St' }] };
       expect(schema.safeParse(one).success).toBe(true);
+    });
+  });
+
+  describe('extractDefaultValues with repeatable groups', () => {
+    test('given a repeatable block without default values, should initialize as empty array', () => {
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'addresses-block',
+            title: 'Addresses',
+            repeatable: true,
+            fields: [
+              {
+                id: 'street',
+                type: 'text',
+                label: 'Street',
+                repeatableGroupId: 'addresses',
+                validation: [],
+              },
+              {
+                id: 'city',
+                type: 'text',
+                label: 'City',
+                repeatableGroupId: 'addresses',
+                validation: [],
+              },
+            ],
+          },
+        ],
+        submission: {
+          url: '/api/submit',
+          method: 'POST',
+        },
+      };
+
+      const defaultValues = extractDefaultValues(descriptor);
+
+      expect(defaultValues).toHaveProperty('addresses');
+      expect(defaultValues.addresses).toEqual([]);
+    });
+
+    test('given a repeatable block with default values, should extract as array of objects', () => {
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'addresses-block',
+            title: 'Addresses',
+            repeatable: true,
+            fields: [
+              {
+                id: 'street',
+                type: 'text',
+                label: 'Street',
+                repeatableGroupId: 'addresses',
+                validation: [],
+                defaultValue: '123 Main St',
+              },
+              {
+                id: 'city',
+                type: 'text',
+                label: 'City',
+                repeatableGroupId: 'addresses',
+                validation: [],
+                defaultValue: 'New York',
+              },
+            ],
+          },
+        ],
+        submission: {
+          url: '/api/submit',
+          method: 'POST',
+        },
+      };
+
+      const defaultValues = extractDefaultValues(descriptor);
+
+      expect(defaultValues).toHaveProperty('addresses');
+      expect(defaultValues.addresses).toEqual([
+        {
+          street: '123 Main St',
+          city: 'New York',
+        },
+      ]);
+    });
+
+    test('given repeatable and non-repeatable fields, should handle both', () => {
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'basic-info',
+            title: 'Basic Info',
+            fields: [
+              {
+                id: 'name',
+                type: 'text',
+                label: 'Name',
+                validation: [],
+                defaultValue: 'John Doe',
+              },
+            ],
+          },
+          {
+            id: 'addresses-block',
+            title: 'Addresses',
+            repeatable: true,
+            fields: [
+              {
+                id: 'street',
+                type: 'text',
+                label: 'Street',
+                repeatableGroupId: 'addresses',
+                validation: [],
+              },
+            ],
+          },
+        ],
+        submission: {
+          url: '/api/submit',
+          method: 'POST',
+        },
+      };
+
+      const defaultValues = extractDefaultValues(descriptor);
+
+      // Non-repeatable field
+      expect(defaultValues.name).toBe('John Doe');
+      
+      // Repeatable group
+      expect(defaultValues.addresses).toEqual([]);
+    });
+
+    test('given multiple repeatable groups, should extract each as separate array', () => {
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'contacts-block',
+            title: 'Contacts',
+            repeatable: true,
+            fields: [
+              {
+                id: 'email',
+                type: 'text',
+                label: 'Email',
+                repeatableGroupId: 'emails',
+                validation: [],
+                defaultValue: 'test@example.com',
+              },
+              {
+                id: 'phoneNumber',
+                type: 'text',
+                label: 'Phone',
+                repeatableGroupId: 'phones',
+                validation: [],
+                defaultValue: '555-1234',
+              },
+              {
+                id: 'phoneType',
+                type: 'dropdown',
+                label: 'Phone Type',
+                repeatableGroupId: 'phones',
+                validation: [],
+                defaultValue: 'mobile',
+              },
+            ],
+          },
+        ],
+        submission: {
+          url: '/api/submit',
+          method: 'POST',
+        },
+      };
+
+      const defaultValues = extractDefaultValues(descriptor);
+
+      expect(defaultValues.emails).toEqual([
+        { email: 'test@example.com' },
+      ]);
+      expect(defaultValues.phones).toEqual([
+        { phoneNumber: '555-1234', phoneType: 'mobile' },
+      ]);
+    });
+
+    test('given repeatable group with mixed field types, should extract correctly', () => {
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'beneficiaries-block',
+            title: 'Beneficiaries',
+            repeatable: true,
+            fields: [
+              {
+                id: 'name',
+                type: 'text',
+                label: 'Name',
+                repeatableGroupId: 'beneficiaries',
+                validation: [],
+                defaultValue: 'John Doe',
+              },
+              {
+                id: 'age',
+                type: 'number',
+                label: 'Age',
+                repeatableGroupId: 'beneficiaries',
+                validation: [],
+                defaultValue: 25,
+              },
+              {
+                id: 'isStudent',
+                type: 'checkbox',
+                label: 'Is Student',
+                repeatableGroupId: 'beneficiaries',
+                validation: [],
+                defaultValue: true,
+              },
+            ],
+          },
+        ],
+        submission: {
+          url: '/api/submit',
+          method: 'POST',
+        },
+      };
+
+      const defaultValues = extractDefaultValues(descriptor);
+
+      expect(defaultValues.beneficiaries).toEqual([
+        {
+          name: 'John Doe',
+          age: 25,
+          isStudent: true,
+        },
+      ]);
+    });
+
+    test('given repeatable group with some fields having defaults and others not, should use defaults where provided', () => {
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'addresses-block',
+            title: 'Addresses',
+            repeatable: true,
+            fields: [
+              {
+                id: 'street',
+                type: 'text',
+                label: 'Street',
+                repeatableGroupId: 'addresses',
+                validation: [],
+                defaultValue: '123 Main St',
+              },
+              {
+                id: 'city',
+                type: 'text',
+                label: 'City',
+                repeatableGroupId: 'addresses',
+                validation: [],
+                // No defaultValue - should use type-appropriate default
+              },
+            ],
+          },
+        ],
+        submission: {
+          url: '/api/submit',
+          method: 'POST',
+        },
+      };
+
+      const defaultValues = extractDefaultValues(descriptor);
+
+      expect(defaultValues.addresses).toEqual([
+        {
+          street: '123 Main St',
+          city: '', // Type-appropriate default for text field
+        },
+      ]);
     });
   });
 });
