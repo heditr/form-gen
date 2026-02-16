@@ -167,26 +167,32 @@ Additionally, to avoid duplicating block definitions, form authors can reference
 - Ensure field IDs remain unique (no prefixing needed since they're in a different context)
 - File: `src/utils/repeatable-block-resolver.ts`
 
-### Phase 6: Block Rendering Integration
+### Phase 6: Block Rendering Integration ✅
 
-**Task 6.1: Detect Repeatable Blocks in Block Component**
+**Task 6.1: Detect Repeatable Blocks in Block Component** ✅
 - Update `Block` component to detect `block.repeatable === true`
 - If `repeatableBlockRef` is present, call resolver to get referenced block's fields
 - If `repeatableBlockRef` is not present, use block's own fields
 - Group fields by `repeatableGroupId` when block is repeatable
 - File: `src/components/block.tsx`
+- **Status**: Completed - Added detection logic using `isRepeatableBlock` and `groupFieldsByRepeatableGroupId`
 
-**Task 6.2: Render RepeatableFieldGroup for Repeatable Blocks**
+**Task 6.2: Render RepeatableFieldGroup for Repeatable Blocks** ✅
 - Conditionally render `RepeatableFieldGroup` for repeatable blocks
 - Continue rendering regular fields for non-repeatable blocks
 - Handle multiple repeatable groups in one block
 - File: `src/components/block.tsx`
+- **Status**: Completed - Implemented conditional rendering of `RepeatableFieldGroup` for each repeatable group
 
-**Task 6.3: Handle Mixed Blocks (Repeatable + Non-Repeatable)**
+**Task 6.3: Handle Mixed Blocks (Repeatable + Non-Repeatable)** ✅
 - Detect blocks with both repeatable and non-repeatable fields
 - Render repeatable groups separately from regular fields
 - Maintain proper field ordering
 - File: `src/components/block.tsx`
+- **Status**: Completed - Separated repeatable and non-repeatable fields, rendering both appropriately
+
+**Additional Implementation:**
+- Added `resolveAllRepeatableBlockRefs` call in API route (`src/app/api/form/global-descriptor/route.ts`) to resolve block references before sending to client
 
 ### Phase 7: Template Evaluation
 

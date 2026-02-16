@@ -5,13 +5,15 @@
  * Handles visibility and disabled states with smooth animations.
  */
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useMemo } from 'react';
 import type { BlockDescriptor } from '@/types/form-descriptor';
 import type { UseFormReturn, FieldValues } from 'react-hook-form';
 import type { FormContext } from '@/utils/template-evaluator';
 import { evaluateHiddenStatus, evaluateDisabledStatus } from '@/utils/template-evaluator';
+import { isRepeatableBlock, groupFieldsByRepeatableGroupId } from '@/utils/form-descriptor-integration';
 import { cn } from '@/lib/utils';
 import FieldWrapper from './field-wrapper';
+import RepeatableFieldGroup from './repeatable-field-group';
 
 export interface BlockProps {
   block: BlockDescriptor;
@@ -42,6 +44,24 @@ export default function Block({
   const [shouldRender, setShouldRender] = useState(!isHidden);
   const [isVisible, setIsVisible] = useState(!isHidden);
   const prevIsHiddenRef = useRef(isHidden);
+
+  // Detect if this is a repeatable block (must be before early return)
+  const isRepeatable = isRepeatableBlock(block);
+
+  // Group fields by repeatableGroupId if block is repeatable (must be before early return)
+  const fieldGroups = useMemo(() => {
+    if (!isRepeatable) {
+      return null;
+    }
+    return groupFieldsByRepeatableGroupId(block.fields);
+  }, [block.fields, isRepeatable]);
+
+  const nonRepeatableFields = useMemo(() => {
+    if (!isRepeatable) {
+      return block.fields;
+    }
+    return block.fields.filter(f => !f.repeatableGroupId);
+  }, [block.fields, isRepeatable]);
 
   // Handle smooth enter/exit animations
   useEffect(() => {
@@ -113,7 +133,31 @@ export default function Block({
         </p>
       )}
       <div className="block-fields space-y-4">
-        {block.fields.map((field) => {
+        {isRepeatable && fieldGroups ? (
+          // Render repeatable groups
+          Object.entries(fieldGroups).map(([groupId, fields]) => {
+            // Evaluate block visibility for the group
+            const groupHidden = evaluateHiddenStatus(block, formContext);
+            const groupDisabled = evaluateDisabledStatus(block, formContext) || isDisabled;
+
+            return (
+              <RepeatableFieldGroup
+                key={groupId}
+                block={block}
+                groupId={groupId}
+                fields={fields}
+                isDisabled={groupDisabled}
+                isHidden={groupHidden}
+                form={form}
+                formContext={formContext}
+                onLoadDataSource={onLoadDataSource}
+                dataSourceCache={dataSourceCache}
+              />
+            );
+          })
+        ) : null}
+        {/* Render non-repeatable fields */}
+        {nonRepeatableFields.map((field) => {
           // Evaluate field visibility
           const fieldHidden = evaluateHiddenStatus(field, formContext);
           const fieldDisabled = evaluateDisabledStatus(field, formContext) || isDisabled;

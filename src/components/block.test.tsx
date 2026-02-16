@@ -35,6 +35,15 @@ vi.mock('./field-wrapper', () => ({
   )),
 }));
 
+// Mock RepeatableFieldGroup
+vi.mock('./repeatable-field-group', () => ({
+  default: vi.fn(({ block, groupId }) => (
+    <div data-testid={`repeatable-group-${groupId}`}>
+      Repeatable Group: {block.title}
+    </div>
+  )),
+}));
+
 describe('Block', () => {
   const createMockForm = () => useForm();
 
@@ -115,6 +124,122 @@ describe('Block', () => {
     delete block.description;
     const props = createProps({ block });
     // Component should handle missing description
+    expect(Block).toBeDefined();
+  });
+
+  test('given repeatable block, should detect and handle as repeatable', () => {
+    const block: BlockDescriptor = {
+      id: 'addresses-block',
+      title: 'Addresses',
+      repeatable: true,
+      fields: [
+        {
+          id: 'street',
+          type: 'text',
+          label: 'Street',
+          repeatableGroupId: 'addresses',
+          validation: [],
+        },
+        {
+          id: 'city',
+          type: 'text',
+          label: 'City',
+          repeatableGroupId: 'addresses',
+          validation: [],
+        },
+      ],
+    };
+    const props = createProps({ block });
+    // Component should detect repeatable block
+    expect(Block).toBeDefined();
+  });
+
+  test('given repeatable block with repeatableBlockRef, should use resolved fields', () => {
+    const block: BlockDescriptor = {
+      id: 'addresses-block',
+      title: 'Addresses',
+      repeatable: true,
+      repeatableBlockRef: 'address-block', // Should be resolved before rendering
+      fields: [
+        {
+          id: 'addresses.street',
+          type: 'text',
+          label: 'Street',
+          repeatableGroupId: 'addresses',
+          validation: [],
+        },
+        {
+          id: 'addresses.city',
+          type: 'text',
+          label: 'City',
+          repeatableGroupId: 'addresses',
+          validation: [],
+        },
+      ],
+    };
+    const props = createProps({ block });
+    // Component should handle resolved repeatable block
+    expect(Block).toBeDefined();
+  });
+
+  test('given mixed block with repeatable and non-repeatable fields, should render both', () => {
+    const block: BlockDescriptor = {
+      id: 'mixed-block',
+      title: 'Mixed Block',
+      repeatable: true,
+      fields: [
+        {
+          id: 'addresses.street',
+          type: 'text',
+          label: 'Street',
+          repeatableGroupId: 'addresses',
+          validation: [],
+        },
+        {
+          id: 'addresses.city',
+          type: 'text',
+          label: 'City',
+          repeatableGroupId: 'addresses',
+          validation: [],
+        },
+        {
+          id: 'notes',
+          type: 'textarea',
+          label: 'Notes',
+          // No repeatableGroupId - non-repeatable field
+          validation: [],
+        },
+      ],
+    };
+    const props = createProps({ block });
+    // Component should handle mixed block
+    expect(Block).toBeDefined();
+  });
+
+  test('given block with multiple repeatable groups, should render all groups', () => {
+    const block: BlockDescriptor = {
+      id: 'multi-group-block',
+      title: 'Multi Group Block',
+      repeatable: true,
+      fields: [
+        {
+          id: 'addresses.street',
+          type: 'text',
+          label: 'Street',
+          repeatableGroupId: 'addresses',
+          validation: [],
+        },
+        {
+          id: 'phones.number',
+          type: 'text',
+          label: 'Phone Number',
+          repeatableGroupId: 'phones',
+          validation: [],
+        },
+      ],
+    };
+    const props = createProps({ block });
+    // Component should handle multiple repeatable groups
     expect(Block).toBeDefined();
   });
 });

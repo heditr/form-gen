@@ -224,6 +224,26 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
       }
     }
 
+    // Resolve repeatable block references if any are present
+    try {
+      const { resolveAllRepeatableBlockRefs } = await import('@/utils/repeatable-block-resolver');
+      resolvedDescriptor = resolveAllRepeatableBlockRefs(resolvedDescriptor);
+    } catch (error) {
+      // If repeatable block resolution fails, return error response
+      const errorMessage = error instanceof Error ? error.message : 'Failed to resolve repeatable block references';
+      console.error('Error resolving repeatable block references:', error);
+      
+      return NextResponse.json(
+        { error: errorMessage },
+        {
+          status: 500,
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+    }
+
     return NextResponse.json(resolvedDescriptor, {
       status: 200,
       headers: {
