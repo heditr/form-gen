@@ -448,4 +448,275 @@ describe('form descriptor integration', () => {
       expect(schema.safeParse(invalidData).success).toBe(false);
     });
   });
+
+  describe('buildZodSchemaFromDescriptor with array-level validation', () => {
+    test('given a repeatable block with minInstances, should apply min validation', () => {
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'addresses-block',
+            title: 'Addresses',
+            repeatable: true,
+            minInstances: 2,
+            fields: [
+              {
+                id: 'street',
+                type: 'text',
+                label: 'Street',
+                repeatableGroupId: 'addresses',
+                validation: [],
+              },
+            ],
+          },
+        ],
+        submission: {
+          url: '/api/submit',
+          method: 'POST',
+        },
+      };
+
+      const schema = buildZodSchemaFromDescriptor(descriptor);
+      
+      // Test validation - minInstances = 2 should require at least 2 instances
+      const tooFew = { addresses: [{ street: '123 Main St' }] }; // Only 1 instance, need 2
+      const enough = { addresses: [{ street: '123 Main St' }, { street: '456 Oak Ave' }] }; // 2 instances
+      
+      const tooFewResult = schema.safeParse(tooFew);
+      expect(tooFewResult.success).toBe(false);
+      if (!tooFewResult.success) {
+        expect(tooFewResult.error.issues.length).toBeGreaterThan(0);
+      }
+      
+      expect(schema.safeParse(enough).success).toBe(true);
+    });
+
+    test('given a repeatable block with maxInstances, should apply max validation', () => {
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'contacts-block',
+            title: 'Contacts',
+            repeatable: true,
+            maxInstances: 3,
+            fields: [
+              {
+                id: 'email',
+                type: 'text',
+                label: 'Email',
+                repeatableGroupId: 'contacts',
+                validation: [],
+              },
+            ],
+          },
+        ],
+        submission: {
+          url: '/api/submit',
+          method: 'POST',
+        },
+      };
+
+      const schema = buildZodSchemaFromDescriptor(descriptor);
+      
+      // Test validation - maxInstances = 3 should reject more than 3 instances
+      const tooMany = {
+        contacts: [
+          { email: 'a@example.com' },
+          { email: 'b@example.com' },
+          { email: 'c@example.com' },
+          { email: 'd@example.com' },
+        ],
+      }; // 4 instances, max is 3
+      const withinLimit = {
+        contacts: [
+          { email: 'a@example.com' },
+          { email: 'b@example.com' },
+        ],
+      }; // 2 instances, within limit
+      
+      const tooManyResult = schema.safeParse(tooMany);
+      expect(tooManyResult.success).toBe(false);
+      if (!tooManyResult.success) {
+        expect(tooManyResult.error.issues.length).toBeGreaterThan(0);
+      }
+      
+      expect(schema.safeParse(withinLimit).success).toBe(true);
+    });
+
+    test('given a repeatable block with both minInstances and maxInstances, should apply both', () => {
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'beneficiaries-block',
+            title: 'Beneficiaries',
+            repeatable: true,
+            minInstances: 1,
+            maxInstances: 5,
+            fields: [
+              {
+                id: 'name',
+                type: 'text',
+                label: 'Name',
+                repeatableGroupId: 'beneficiaries',
+                validation: [],
+              },
+            ],
+          },
+        ],
+        submission: {
+          url: '/api/submit',
+          method: 'POST',
+        },
+      };
+
+      const schema = buildZodSchemaFromDescriptor(descriptor);
+      
+      // Test validation - minInstances = 1, maxInstances = 5
+      const empty = { beneficiaries: [] }; // 0 instances, need at least 1
+      const one = { beneficiaries: [{ name: 'John' }] }; // 1 instance, valid
+      const five = {
+        beneficiaries: [
+          { name: 'John' },
+          { name: 'Jane' },
+          { name: 'Bob' },
+          { name: 'Alice' },
+          { name: 'Charlie' },
+        ],
+      }; // 5 instances, valid
+      const six = {
+        beneficiaries: [
+          { name: 'John' },
+          { name: 'Jane' },
+          { name: 'Bob' },
+          { name: 'Alice' },
+          { name: 'Charlie' },
+          { name: 'David' },
+        ],
+      }; // 6 instances, exceeds max
+      
+      const emptyResult = schema.safeParse(empty);
+      expect(emptyResult.success).toBe(false);
+      if (!emptyResult.success) {
+        expect(emptyResult.error.issues.length).toBeGreaterThan(0);
+      }
+      
+      expect(schema.safeParse(one).success).toBe(true);
+      expect(schema.safeParse(five).success).toBe(true);
+      
+      const sixResult = schema.safeParse(six);
+      expect(sixResult.success).toBe(false);
+      if (!sixResult.success) {
+        expect(sixResult.error.issues.length).toBeGreaterThan(0);
+      }
+    });
+
+    test('given a repeatable block without minInstances/maxInstances, should not apply array-level validation', () => {
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'addresses-block',
+            title: 'Addresses',
+            repeatable: true,
+            // No minInstances or maxInstances
+            fields: [
+              {
+                id: 'street',
+                type: 'text',
+                label: 'Street',
+                repeatableGroupId: 'addresses',
+                validation: [],
+              },
+            ],
+          },
+        ],
+        submission: {
+          url: '/api/submit',
+          method: 'POST',
+        },
+      };
+
+      const schema = buildZodSchemaFromDescriptor(descriptor);
+      
+      // Empty array should be valid (no min constraint)
+      const empty = { addresses: [] };
+      expect(schema.safeParse(empty).success).toBe(true);
+      
+      // Multiple instances should also be valid (no max constraint)
+      const many = {
+        addresses: [
+          { street: '123 Main St' },
+          { street: '456 Oak Ave' },
+          { street: '789 Pine Rd' },
+        ],
+      };
+      expect(schema.safeParse(many).success).toBe(true);
+    });
+
+    test('given minInstances of 0, should allow empty array', () => {
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'addresses-block',
+            title: 'Addresses',
+            repeatable: true,
+            minInstances: 0,
+            fields: [
+              {
+                id: 'street',
+                type: 'text',
+                label: 'Street',
+                repeatableGroupId: 'addresses',
+                validation: [],
+              },
+            ],
+          },
+        ],
+        submission: {
+          url: '/api/submit',
+          method: 'POST',
+        },
+      };
+
+      const schema = buildZodSchemaFromDescriptor(descriptor);
+      
+      // Empty array should be valid (minInstances = 0)
+      const empty = { addresses: [] };
+      expect(schema.safeParse(empty).success).toBe(true);
+    });
+
+    test('given minInstances >= 1, should require at least one instance', () => {
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'addresses-block',
+            title: 'Addresses',
+            repeatable: true,
+            minInstances: 1,
+            fields: [
+              {
+                id: 'street',
+                type: 'text',
+                label: 'Street',
+                repeatableGroupId: 'addresses',
+                validation: [{ type: 'required', message: 'Street is required' }],
+              },
+            ],
+          },
+        ],
+        submission: {
+          url: '/api/submit',
+          method: 'POST',
+        },
+      };
+
+      const schema = buildZodSchemaFromDescriptor(descriptor);
+      
+      // Empty array should fail (minInstances = 1)
+      const empty = { addresses: [] };
+      expect(schema.safeParse(empty).success).toBe(false);
+      
+      // One instance should pass
+      const one = { addresses: [{ street: '123 Main St' }] };
+      expect(schema.safeParse(one).success).toBe(true);
+    });
+  });
 });

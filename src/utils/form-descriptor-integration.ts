@@ -216,20 +216,34 @@ export function buildZodSchemaFromDescriptor(
           continue;
         }
         
-      // Build object schema for fields in this repeatable group
-      const objectShape: Record<string, z.ZodTypeAny> = {};
-      for (const field of fields) {
-        // Skip button fields - they don't have values to validate
-        if (field.type === 'button') {
-          continue;
+        // Build object schema for fields in this repeatable group
+        const objectShape: Record<string, z.ZodTypeAny> = {};
+        for (const field of fields) {
+          // Skip button fields - they don't have values to validate
+          if (field.type === 'button') {
+            continue;
+          }
+          // Type assertion: we've already checked it's not a button
+          const fieldType = field.type as Exclude<typeof field.type, 'button'>;
+          objectShape[field.id] = convertToZodSchema(field.validation, fieldType);
         }
-        // Type assertion: we've already checked it's not a button
-        const fieldType = field.type as Exclude<typeof field.type, 'button'>;
-        objectShape[field.id] = convertToZodSchema(field.validation, fieldType);
-      }
         
         // Create array schema for this repeatable group
-        schemaShape[groupId] = z.array(z.object(objectShape));
+        let arraySchema = z.array(z.object(objectShape));
+        
+        // Apply array-level validation (minInstances/maxInstances)
+        if (block.minInstances !== undefined) {
+          arraySchema = arraySchema.min(block.minInstances, {
+            message: `At least ${block.minInstances} instance(s) required`,
+          });
+        }
+        if (block.maxInstances !== undefined) {
+          arraySchema = arraySchema.max(block.maxInstances, {
+            message: `At most ${block.maxInstances} instance(s) allowed`,
+          });
+        }
+        
+        schemaShape[groupId] = arraySchema;
         processedRepeatableGroups.add(groupId);
       }
     } else {
