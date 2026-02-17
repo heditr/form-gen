@@ -45,56 +45,76 @@ export function extractDefaultValues(
         const hasAnyDefault = fields.some(field => field.defaultValue !== undefined);
         
         if (hasAnyDefault) {
-          // Build default object for this repeatable group
+          // Build default object for this repeatable group using base field id (no groupId prefix)
           const groupDefault: Record<string, unknown> = {};
-          
           for (const field of fields) {
-            // Skip button fields - they don't have values
             if (field.type === 'button') {
               continue;
             }
-            
+            const baseFieldId = field.id.startsWith(`${groupId}.`)
+              ? field.id.slice(groupId.length + 1)
+              : field.id;
             if (field.defaultValue !== undefined) {
-              // Evaluate defaultValue as Handlebars template if it's a string, otherwise use directly
               const evaluatedValue = evaluateDefaultValue(
                 field.defaultValue,
                 field.type,
                 context
               );
-              groupDefault[field.id] = evaluatedValue;
+              groupDefault[baseFieldId] = evaluatedValue;
             } else {
-              // Set type-appropriate default values for fields without explicit defaultValue
               switch (field.type) {
                 case 'text':
                 case 'dropdown':
                 case 'autocomplete':
                 case 'date':
-                  groupDefault[field.id] = '';
+                  groupDefault[baseFieldId] = '';
                   break;
                 case 'checkbox':
-                  groupDefault[field.id] = false;
+                  groupDefault[baseFieldId] = false;
                   break;
                 case 'radio':
-                  groupDefault[field.id] = '';
+                  groupDefault[baseFieldId] = '';
                   break;
                 case 'number':
-                  groupDefault[field.id] = 0;
+                  groupDefault[baseFieldId] = 0;
                   break;
                 case 'file':
-                  groupDefault[field.id] = null;
+                  groupDefault[baseFieldId] = null;
                   break;
                 default:
-                  groupDefault[field.id] = '';
+                  groupDefault[baseFieldId] = '';
               }
             }
           }
           
-          // Create array with one default instance
-          // Type assertion needed because FormData type inference doesn't handle dynamic groupId
           (defaultValues as Record<string, unknown>)[groupId] = [groupDefault];
         } else {
-          // No defaults provided - initialize as empty array
-          (defaultValues as Record<string, unknown>)[groupId] = [];
+          // No defaults - build empty instance shape (base field ids) and fill up to minInstances
+          const emptyInstance: Record<string, unknown> = {};
+          for (const field of fields) {
+            if (field.type === 'button') continue;
+            const baseFieldId = field.id.startsWith(`${groupId}.`)
+              ? field.id.slice(groupId.length + 1)
+              : field.id;
+            switch (field.type) {
+              case 'checkbox':
+                emptyInstance[baseFieldId] = false;
+                break;
+              case 'number':
+                emptyInstance[baseFieldId] = 0;
+                break;
+              case 'file':
+                emptyInstance[baseFieldId] = null;
+                break;
+              default:
+                emptyInstance[baseFieldId] = '';
+            }
+          }
+          const min = block.minInstances ?? 0;
+          (defaultValues as Record<string, unknown>)[groupId] = Array.from(
+            { length: min },
+            () => ({ ...emptyInstance })
+          );
         }
         
         processedRepeatableGroups.add(groupId);
@@ -293,16 +313,18 @@ export function buildZodSchemaFromDescriptor(
           continue;
         }
         
-        // Build object schema for fields in this repeatable group
+        // Build object schema for fields in this repeatable group.
+        // Use base field id (no groupId prefix) so schema matches form shape: addresses[0].street not addresses[0]['addresses.street']
         const objectShape: Record<string, z.ZodTypeAny> = {};
         for (const field of fields) {
-          // Skip button fields - they don't have values to validate
           if (field.type === 'button') {
             continue;
           }
-          // Type assertion: we've already checked it's not a button
+          const baseFieldId = field.id.startsWith(`${groupId}.`)
+            ? field.id.slice(groupId.length + 1)
+            : field.id;
           const fieldType = field.type as Exclude<typeof field.type, 'button'>;
-          objectShape[field.id] = convertToZodSchema(field.validation, fieldType);
+          objectShape[baseFieldId] = convertToZodSchema(field.validation, fieldType);
         }
         
         // Create array schema for this repeatable group

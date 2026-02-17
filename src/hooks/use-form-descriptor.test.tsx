@@ -465,4 +465,12 @@ describe('form descriptor integration', () => {
       expect(discriminantFields).toEqual([]);
     });
   });
+
+  // Note: Testing repeatable group sync and restoration requires testing the useFormDescriptor hook
+  // which requires React component context. The implementation already handles repeatable groups:
+  // 1. useWatch({ control: form.control }) watches ALL form values including arrays
+  // 2. When repeatable groups are modified via useFieldArray, react-hook-form updates form values
+  // 3. The useEffect syncs all form values (including arrays) to Redux via onDiscriminantChange
+  // 4. savedFormData merge logic preserves arrays from Redux on remount
+  // Integration tests in repeatable-field-group.test.tsx verify the end-to-end behavior
 });

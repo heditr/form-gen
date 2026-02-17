@@ -7,6 +7,7 @@
 import type { FieldDescriptor } from '@/types/form-descriptor';
 import type { UseFormReturn, FieldValues } from 'react-hook-form';
 import type { FormContext } from '@/utils/template-evaluator';
+import { getErrorByPath } from '@/utils/form-errors';
 import TextField from './text-field';
 import DropdownField from './dropdown-field';
 import AutocompleteField from './autocomplete-field';
@@ -128,9 +129,8 @@ export default function FieldWrapper({
           isDisabled={isDisabled}
         />
       );
-    default:
-      // Fallback for unsupported field types
-      const error = form.formState.errors[field.id];
+    default: {
+      const error = getErrorByPath(form.formState.errors, field.id) ?? form.formState.errors[field.id];
       const errorMessage = error?.message as string | undefined;
       return (
         <div data-testid={`field-${field.id}`} className="field-wrapper">
@@ -152,5 +152,6 @@ export default function FieldWrapper({
           )}
         </div>
       );
+    }
   }
 }

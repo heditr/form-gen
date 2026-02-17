@@ -8,7 +8,7 @@
  */
 
 import { useState, useCallback, useMemo } from 'react';
-import { useDispatch, useSelector, connect } from 'react-redux';
+import { useSelector, connect } from 'react-redux';
 import type { ComponentType } from 'react';
 import SubmitButton from '@/components/submit-button';
 import { useGlobalDescriptor } from '@/hooks/use-form-query';
@@ -21,6 +21,7 @@ import { createSubmissionOrchestrator, evaluatePayloadTemplate, constructSubmiss
 import type { GlobalFormDescriptor, FormData, CaseContext, BlockDescriptor, FieldDescriptor } from '@/types/form-descriptor';
 import { Button } from '@/components/ui/button';
 import FormPresentation from '@/components/form-presentation';
+import { PopinManagerProvider } from '@/components/popin-manager';
 
 interface SubmissionState {
   payload: string | null;
@@ -33,7 +34,6 @@ interface SubmissionState {
 }
 
 export default function DemoWithSubmitPage() {
-  const dispatch = useDispatch<AppDispatch>();
   const formState = useSelector((state: RootState) => getFormState(state));
   const [submissionState, setSubmissionState] = useState<SubmissionState>({
     payload: null,
@@ -268,7 +268,20 @@ function FormContainerWithSubmissionComponent({
   // Initialize useFormDescriptor hook
   const { form } = useFormDescriptor(mergedDescriptor, {
     onDiscriminantChange: handleDiscriminantChange,
+    savedFormData: _formData,
+    caseContext,
+    formData: _formData,
   });
+
+  // Build form context for template evaluation (used by PopinManager)
+  const formContext = useMemo(() => {
+    const formValues = form.watch();
+    return {
+      ...formValues,
+      caseContext,
+      formData: formValues,
+    };
+  }, [form, caseContext]);
 
   // Create submission orchestrator
   const orchestrator = useMemo(() => createSubmissionOrchestrator(), []);
@@ -397,7 +410,14 @@ function FormContainerWithSubmissionComponent({
   );
 
   return (
-    <div>
+    <PopinManagerProvider
+      mergedDescriptor={mergedDescriptor}
+      form={form}
+      formContext={formContext}
+      caseContext={caseContext}
+      onLoadDataSource={loadDataSource}
+      dataSourceCache={dataSourceCache}
+    >
       <FormPresentation {...presentationProps} />
       {mergedDescriptor && (
         <div className="mt-6">
@@ -409,7 +429,7 @@ function FormContainerWithSubmissionComponent({
           />
         </div>
       )}
-    </div>
+    </PopinManagerProvider>
   );
 }
 

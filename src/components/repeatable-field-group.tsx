@@ -51,51 +51,48 @@ export default function RepeatableFieldGroup({
     name: groupId,
   });
 
-  // Build default values for a new instance from field descriptors
+  // Build default values for a new instance using base field id (no groupId prefix)
   const getDefaultInstanceValues = (): Record<string, unknown> => {
     const defaultInstance: Record<string, unknown> = {};
-    
     for (const field of fields) {
-      // Skip button fields - they don't have values
       if (field.type === 'button') {
         continue;
       }
-      
+      const baseFieldId = field.id.startsWith(`${groupId}.`)
+        ? field.id.slice(groupId.length + 1)
+        : field.id;
       if (field.defaultValue !== undefined) {
-        // Evaluate defaultValue as Handlebars template if it's a string, otherwise use directly
         const evaluatedValue = evaluateDefaultValue(
           field.defaultValue,
           field.type,
           formContext
         );
-        defaultInstance[field.id] = evaluatedValue;
+        defaultInstance[baseFieldId] = evaluatedValue;
       } else {
-        // Set type-appropriate default values for fields without explicit defaultValue
         switch (field.type) {
           case 'text':
           case 'dropdown':
           case 'autocomplete':
           case 'date':
-            defaultInstance[field.id] = '';
+            defaultInstance[baseFieldId] = '';
             break;
           case 'checkbox':
-            defaultInstance[field.id] = false;
+            defaultInstance[baseFieldId] = false;
             break;
           case 'radio':
-            defaultInstance[field.id] = '';
+            defaultInstance[baseFieldId] = '';
             break;
           case 'number':
-            defaultInstance[field.id] = 0;
+            defaultInstance[baseFieldId] = 0;
             break;
           case 'file':
-            defaultInstance[field.id] = null;
+            defaultInstance[baseFieldId] = null;
             break;
           default:
-            defaultInstance[field.id] = '';
+            defaultInstance[baseFieldId] = '';
         }
       }
     }
-    
     return defaultInstance;
   };
 

@@ -11,6 +11,7 @@
 import { useMemo, useCallback } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import type { UseFormReturn, FieldValues } from 'react-hook-form';
+import { DevTool } from '@hookform/devtools';
 import type { GlobalFormDescriptor, BlockDescriptor, FieldDescriptor, FormData, CaseContext } from '@/types/form-descriptor';
 import { useFormDescriptor } from '@/hooks/use-form-descriptor';
 import { useDebouncedRehydration } from '@/hooks/use-debounced-rehydration';
@@ -139,6 +140,7 @@ function FormInner({
       dataSourceCache={dataSourceCache}
     >
       <FormPresentation {...presentationProps} />
+      <DevTool control={form.control} />
     </PopinManagerProvider>
   );
 }

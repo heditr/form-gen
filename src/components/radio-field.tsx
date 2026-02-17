@@ -10,6 +10,7 @@ import { Controller } from 'react-hook-form';
 import type { FieldDescriptor, FieldItem } from '@/types/form-descriptor';
 import type { UseFormReturn, FieldValues } from 'react-hook-form';
 import type { FormContext } from '@/utils/template-evaluator';
+import { getErrorByPath } from '@/utils/form-errors';
 import { useDataSource } from '@/hooks/use-form-query';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
@@ -40,8 +41,7 @@ export default function RadioField({
   onLoadDataSource,
   dataSourceCache = {},
 }: RadioFieldProps) {
-  // Get validation error for this field
-  const error = form.formState.errors[field.id];
+  const error = getErrorByPath(form.formState.errors, field.id) ?? form.formState.errors[field.id];
   const errorMessage = error?.message as string | undefined;
 
   // Use useDataSource hook - always call it (React hooks rule), but disable when no dataSource

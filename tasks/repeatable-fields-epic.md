@@ -230,17 +230,19 @@ Additionally, to avoid duplicating block definitions, form authors can reference
 - File: `src/components/repeatable-field-group.tsx`
 - **Status**: Completed - Added array-level error display that checks `form.formState.errors[groupId]` and displays error messages above the repeatable group instances. Array-level errors (from Zod schema validation for minInstances/maxInstances) are automatically captured by react-hook-form and displayed.
 
-### Phase 9: State Management and Redux Sync
+### Phase 9: State Management and Redux Sync ✅
 
-**Task 8.1: Sync Repeatable Groups to Redux**
+**Task 9.1: Sync Repeatable Groups to Redux** ✅
 - Ensure repeatable group arrays sync to Redux when modified
 - Handle add/remove operations in Redux sync
 - File: `src/hooks/use-form-descriptor.ts`
+- **Status**: Completed - Repeatable groups are automatically synced to Redux because `useWatch({ control: form.control })` watches ALL form values including arrays. When repeatable groups are modified via `useFieldArray`, react-hook-form updates form values, and the `useEffect` at line 196 syncs all form values (including arrays) to Redux via `onDiscriminantChange`. The sync happens whenever ANY field changes, including array modifications.
 
-**Task 8.2: Preserve Repeatable Group Data on Remount**
+**Task 9.2: Preserve Repeatable Group Data on Remount** ✅
 - Ensure repeatable group arrays are preserved during form remount
 - Restore repeatable group data from `savedFormData` in Redux
 - File: `src/hooks/use-form-descriptor.ts`
+- **Status**: Completed - Repeatable group arrays are preserved on remount because the `initialValues` merge logic (lines 73-110) merges `savedFormData` with defaults. For non-template fields (which includes repeatable groups), the saved value is always preserved if defined (line 105). Arrays from `savedFormData` overwrite defaults, ensuring user-entered repeatable group data is restored when the form remounts.
 
 ### Phase 10: Testing
 
