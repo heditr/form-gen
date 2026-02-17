@@ -98,6 +98,44 @@ describe('handlebars helpers', () => {
       expect(template({ val: 'hello' })).toBe('not empty');
       expect(template({ val: [1, 2] })).toBe('not empty');
     });
+
+    test('given json helper, should stringify objects to JSON', () => {
+      const template = Handlebars.compile('{{json obj}}');
+      expect(template({ obj: { name: 'John', age: 30 } })).toBe('{"name":"John","age":30}');
+      expect(template({ obj: [1, 2, 3] })).toBe('[1,2,3]');
+      expect(template({ obj: null })).toBe('null');
+      expect(template({ obj: [] })).toBe('[]');
+      expect(template({ obj: {} })).toBe('{}');
+      // JSON.stringify(undefined) returns undefined, but helper normalizes to valid JSON
+      expect(template({ obj: undefined })).toBe('null');
+    });
+
+    test('given json helper with fallback, should use fallback for null/undefined', () => {
+      const template = Handlebars.compile('{{json obj "[]"}}');
+      expect(template({ obj: undefined })).toBe('[]');
+      expect(template({ obj: null })).toBe('[]');
+    });
+
+    test('given json helper with nested arrays, should stringify correctly', () => {
+      const template = Handlebars.compile('{{json contacts}}');
+      const contacts = [
+        { name: 'John', phone: '123-456-7890' },
+        { name: 'Jane', phone: '098-765-4321' },
+      ];
+      const result = template({ contacts });
+      expect(result).toBe('[{"name":"John","phone":"123-456-7890"},{"name":"Jane","phone":"098-765-4321"}]');
+    });
+
+    test('given json helper in JSON template, should work correctly', () => {
+      // Test that json helper works when embedded in a JSON string template
+      // Use whitespace control {{~json ...~}} to prevent parse errors with closing braces
+      const template = Handlebars.compile('{"email":"{{email}}","contacts":{{~json contacts~}}}');
+      const contacts = [
+        { name: 'John', phone: '123-456-7890' },
+      ];
+      const result = template({ email: 'test@example.com', contacts });
+      expect(result).toBe('{"email":"test@example.com","contacts":[{"name":"John","phone":"123-456-7890"}]}');
+    });
   });
 
   describe('nested data access', () => {

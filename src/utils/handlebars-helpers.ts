@@ -84,6 +84,29 @@ export function registerHandlebarsHelpers(): void {
     return false;
   });
 
+  // JSON helper - stringifies objects/arrays to JSON.
+  //
+  // Notes:
+  // - Returns SafeString to prevent HTML escaping (quotes must remain quotes).
+  // - JSON.stringify(undefined) returns undefined (not a string), so we explicitly handle null/undefined.
+  // - Optional second argument lets callers provide a fallback JSON literal string, e.g. {{json value "[]"}}.
+  Handlebars.registerHelper('json', (...args: unknown[]): Handlebars.SafeString => {
+    const value = args[0];
+    const fallback = typeof args[1] === 'string' ? args[1] : undefined;
+
+    if (value === undefined || value === null) {
+      return new Handlebars.SafeString(fallback ?? 'null');
+    }
+
+    try {
+      const jsonString = JSON.stringify(value);
+      return new Handlebars.SafeString(jsonString ?? (fallback ?? 'null'));
+    } catch {
+      const defaultFallback = Array.isArray(value) ? '[]' : '{}';
+      return new Handlebars.SafeString(fallback ?? defaultFallback);
+    }
+  });
+
   // Nested data access is already supported by Handlebars via dot notation
   // No additional helper needed - Handlebars natively supports {{user.name}} syntax
 }
