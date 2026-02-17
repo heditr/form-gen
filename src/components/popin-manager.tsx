@@ -17,6 +17,7 @@ import { loadPopinData } from '@/utils/popin-load-loader';
 import { evaluatePayloadTemplate, type BackendErrorResponse } from '@/utils/submission-orchestrator';
 import type { BackendError } from '@/utils/form-descriptor-integration';
 import { useFormDescriptor } from '@/hooks/use-form-descriptor';
+import { isRepeatableBlock, groupFieldsByRepeatableGroupId } from '@/utils/form-descriptor-integration';
 import {
   Dialog,
   DialogContent,
@@ -135,10 +136,30 @@ export function PopinManagerProvider({
     }
 
     // Extract values for popin block fields from popinLoadData
-    const popinFieldValues: Partial<DescriptorFormData> = {};
+    // Use Record<string, unknown> to allow arrays for repeatable groups
+    const popinFieldValues: Record<string, unknown> = {};
+    
+    // Handle repeatable groups - check if block is repeatable
+    if (isRepeatableBlock(resolvedBlock.block)) {
+      // Extract repeatable group arrays from popinLoadData
+      // popinLoadData should contain arrays at groupId level (e.g., emergencyContacts: [...])
+      const fieldGroups = groupFieldsByRepeatableGroupId(resolvedBlock.block.fields);
+      for (const [groupId] of Object.entries(fieldGroups)) {
+        if (popinLoadData[groupId] !== undefined && Array.isArray(popinLoadData[groupId])) {
+          // Arrays are valid form values for repeatable groups
+          popinFieldValues[groupId] = popinLoadData[groupId];
+        }
+      }
+    }
+    
+    // Handle non-repeatable fields
     for (const field of resolvedBlock.block.fields) {
+      // Skip fields that belong to a repeatable group (handled above)
+      if (field.repeatableGroupId) {
+        continue;
+      }
       if (popinLoadData[field.id] !== undefined) {
-        popinFieldValues[field.id] = popinLoadData[field.id] as DescriptorFormData[keyof DescriptorFormData];
+        popinFieldValues[field.id] = popinLoadData[field.id];
       }
     }
 

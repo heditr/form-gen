@@ -480,12 +480,72 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
             },
           ],
         },
+        // Non-repeatable emergency contact block (referenced by repeatable block)
+        {
+          id: 'emergency-contact-block',
+          title: 'Emergency Contact',
+          description: 'A single emergency contact entry',
+          fields: [
+            {
+              id: 'emergencyName',
+              type: 'text',
+              label: 'Full Name',
+              description: 'Full name of the emergency contact',
+              validation: [
+                {
+                  type: 'required',
+                  message: 'Emergency contact name is required',
+                },
+              ],
+            },
+            {
+              id: 'emergencyRelationship',
+              type: 'dropdown',
+              label: 'Relationship',
+              description: 'Relationship to the contact',
+              items: [
+                { label: 'Spouse', value: 'spouse' },
+                { label: 'Parent', value: 'parent' },
+                { label: 'Sibling', value: 'sibling' },
+                { label: 'Child', value: 'child' },
+                { label: 'Friend', value: 'friend' },
+                { label: 'Colleague', value: 'colleague' },
+                { label: 'Other', value: 'other' },
+              ],
+              validation: [
+                {
+                  type: 'required',
+                  message: 'Relationship is required',
+                },
+              ],
+            },
+            {
+              id: 'emergencyPhone',
+              type: 'text',
+              label: 'Phone Number',
+              description: 'Phone number for emergency contact',
+              validation: [
+                {
+                  type: 'required',
+                  message: 'Emergency contact phone is required',
+                },
+                {
+                  type: 'pattern',
+                  value: /^[\d\s\-\+\(\)]+$/,
+                  message: 'Invalid phone number format',
+                },
+              ],
+            },
+          ],
+        },
         // Popin block - standalone, never renders inline
+        // This popin contains both regular fields and a repeatable group
         {
           id: 'contact-info',
           title: 'Contact Information',
           description: 'Additional contact details (opens in popin dialog)',
           popin: true,
+          repeatable: true, // Enable repeatable groups in this popin
           // Load existing contact details when the popin opens
           popinLoad: {
             url: '/api/popin-demo/contact-load',
@@ -494,10 +554,14 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
           popinSubmit: {
             url: '/api/popin-demo/contact-submit',
             method: 'POST',
-            // Only send the popin contact fields, not the entire form
-            payloadTemplate: '{"contactEmail":"{{formData.contactEmail}}","contactPhone":"{{formData.contactPhone}}","contactAlternateEmail":"{{formData.contactAlternateEmail}}"}',
+            // Include emergency contacts in payload
+            // - Use whitespace control {{~json ...~}} to prevent parse errors with closing braces
+            // - Provide fallback "[]" so payload stays valid JSON when group is empty/undefined
+            // - Use lookup helper to access 'emergency-contacts' (with hyphen) to match the repeatableGroupId
+            payloadTemplate: '{"contactEmail":"{{formData.contactEmail}}","contactPhone":"{{formData.contactPhone}}","contactAlternateEmail":"{{formData.contactAlternateEmail}}","emergencyContacts":{{~json (lookup formData "emergency-contacts") "[]"~}}}',
           },
           fields: [
+            // Regular fields (no repeatableGroupId)
             {
               id: 'contactEmail',
               type: 'text',
@@ -534,7 +598,65 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
               description: 'Optional alternate email address',
               validation: [],
             },
+            // Repeatable group fields (with repeatableGroupId)
+            // These fields will be resolved from emergency-contact-block via repeatableBlockRef
+            // After resolution, they'll have repeatableGroupId: 'emergency-contacts'
+            {
+              id: 'emergency-contacts.emergencyName',
+              type: 'text',
+              label: 'Full Name',
+              description: 'Full name of the emergency contact',
+              repeatableGroupId: 'emergency-contacts',
+              validation: [
+                {
+                  type: 'required',
+                  message: 'Emergency contact name is required',
+                },
+              ],
+            },
+            {
+              id: 'emergency-contacts.emergencyRelationship',
+              type: 'dropdown',
+              label: 'Relationship',
+              description: 'Relationship to the contact',
+              repeatableGroupId: 'emergency-contacts',
+              items: [
+                { label: 'Spouse', value: 'spouse' },
+                { label: 'Parent', value: 'parent' },
+                { label: 'Sibling', value: 'sibling' },
+                { label: 'Child', value: 'child' },
+                { label: 'Friend', value: 'friend' },
+                { label: 'Colleague', value: 'colleague' },
+                { label: 'Other', value: 'other' },
+              ],
+              validation: [
+                {
+                  type: 'required',
+                  message: 'Relationship is required',
+                },
+              ],
+            },
+            {
+              id: 'emergency-contacts.emergencyPhone',
+              type: 'text',
+              label: 'Phone Number',
+              description: 'Phone number for emergency contact',
+              repeatableGroupId: 'emergency-contacts',
+              validation: [
+                {
+                  type: 'required',
+                  message: 'Emergency contact phone is required',
+                },
+                {
+                  type: 'pattern',
+                  value: /^[\d\s\-\+\(\)]+$/,
+                  message: 'Invalid phone number format',
+                },
+              ],
+            },
           ],
+          minInstances: 0, // Minimum emergency contacts (0 = optional)
+          maxInstances: 5, // Maximum emergency contacts
         },
       ],
       submission: {
