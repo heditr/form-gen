@@ -8,12 +8,12 @@
  */
 
 import { useState, useCallback, useMemo } from 'react';
-import { useSelector, connect } from 'react-redux';
-import type { ComponentType } from 'react';
+import { useSelector, useDispatch } from 'react-redux';
 import SubmitButton from '@/components/submit-button';
 import { useGlobalDescriptor } from '@/hooks/use-form-query';
 import { getFormState, getVisibleBlocks, getVisibleFields, syncFormDataToContext, type RootState } from '@/store/form-dux';
-import { rehydrateRulesThunk, fetchDataSourceThunk } from '@/store/form-thunks';
+import { fetchDataSourceThunk } from '@/store/form-thunks';
+import { useDebouncedRehydration } from '@/hooks/use-debounced-rehydration';
 import type { AppDispatch } from '@/store/store';
 import { updateCaseContext, identifyDiscriminantFields, hasContextChanged } from '@/utils/context-extractor';
 import { useFormDescriptor } from '@/hooks/use-form-descriptor';
@@ -121,7 +121,7 @@ export default function DemoWithSubmitPage() {
           <div>
             <div className="bg-white rounded-lg shadow-sm border p-6">
               <h2 className="text-xl font-semibold mb-4">Form</h2>
-              <FormContainerWithSubmission
+              <FormContainerWithSubmissionWithHook
                 onSubmissionStateChange={setSubmissionState}
               />
             </div>
@@ -433,32 +433,63 @@ function FormContainerWithSubmissionComponent({
   );
 }
 
-const mapStateToProps = (state: RootState): StateProps => {
-  const formState = getFormState(state);
-  return {
-    mergedDescriptor: formState.mergedDescriptor,
-    visibleBlocks: getVisibleBlocks(state),
-    visibleFields: getVisibleFields(state),
-    caseContext: formState.caseContext,
-    isRehydrating: formState.isRehydrating,
-    formData: formState.formData,
-    dataSourceCache: formState.dataSourceCache,
-  };
-};
 
-const mapDispatchToProps = (dispatch: AppDispatch): DispatchProps => ({
-  syncFormDataToContext: (formData: Partial<FormData>) => {
-    dispatch(syncFormDataToContext({ formData }));
-  },
-  rehydrateRules: (caseContext: CaseContext) => {
-    dispatch(rehydrateRulesThunk(caseContext));
-  },
-  fetchDataSource: (fieldPath: string, url: string, auth?: { type: 'bearer' | 'apikey'; token?: string; headerName?: string }) => {
-    dispatch(fetchDataSourceThunk({ fieldPath, url, auth }));
-  },
-});
+// Component that uses the debounced rehydration hook
+function FormContainerWithSubmissionWithHook({
+  onSubmissionStateChange,
+}: {
+  onSubmissionStateChange: (state: SubmissionState) => void;
+}) {
+  const dispatch = useDispatch<AppDispatch>();
+  const formState = useSelector((state: RootState) => getFormState(state));
+  const visibleBlocks = useSelector((state: RootState) => getVisibleBlocks(state));
+  const visibleFields = useSelector((state: RootState) => getVisibleFields(state));
+  const { mutate: debouncedRehydrate, isPending: isRehydratingFromHook } = useDebouncedRehydration();
 
-const FormContainerWithSubmission = connect(
-  mapStateToProps,
-  mapDispatchToProps
-)(FormContainerWithSubmissionComponent) as ComponentType<FormContainerWithSubmissionProps>;
+  const {
+    mergedDescriptor,
+    caseContext,
+    isRehydrating: isRehydratingFromRedux,
+    formData,
+    dataSourceCache,
+  } = formState;
+
+  const isRehydrating = isRehydratingFromHook || isRehydratingFromRedux;
+
+  const syncFormData = useCallback(
+    (formData: Partial<FormData>) => {
+      dispatch(syncFormDataToContext({ formData }));
+    },
+    [dispatch]
+  );
+
+  const rehydrate = useCallback(
+    (caseContext: CaseContext) => {
+      debouncedRehydrate(caseContext);
+    },
+    [debouncedRehydrate]
+  );
+
+  const loadDataSource = useCallback(
+    (fieldPath: string, url: string, auth?: { type: 'bearer' | 'apikey'; token?: string; headerName?: string }) => {
+      dispatch(fetchDataSourceThunk({ fieldPath, url, auth }));
+    },
+    [dispatch]
+  );
+
+  return (
+    <FormContainerWithSubmissionComponent
+      mergedDescriptor={mergedDescriptor}
+      visibleBlocks={visibleBlocks}
+      visibleFields={visibleFields}
+      caseContext={caseContext}
+      isRehydrating={isRehydrating}
+      formData={formData}
+      dataSourceCache={dataSourceCache}
+      syncFormDataToContext={syncFormData}
+      rehydrateRules={rehydrate}
+      fetchDataSource={loadDataSource}
+      onSubmissionStateChange={onSubmissionStateChange}
+    />
+  );
+}

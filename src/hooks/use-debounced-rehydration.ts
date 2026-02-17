@@ -9,7 +9,6 @@
 import { useRef, useCallback, useEffect } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { useDispatch } from 'react-redux';
-import debounce from 'lodash.debounce';
 import { createError } from 'error-causes';
 import type { CaseContext, RulesObject } from '@/types/form-descriptor';
 import { triggerRehydration, applyRulesUpdate } from '@/store/form-dux';
@@ -77,58 +76,37 @@ export function useDebouncedRehydration() {
     },
   });
 
+  // Use ref to store the timeout ID so we can cancel it
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
   // Use ref to store the latest context value (so debounced function always uses latest)
   const latestContextRef = useRef<CaseContext | null>(null);
   
   // Use ref to track the last context that was actually sent to prevent duplicates
   const lastSentContextRef = useRef<string | null>(null);
   
-  // Use ref to track pending context (scheduled to be sent) to prevent duplicate scheduling
-  const pendingContextRef = useRef<string | null>(null);
-  
   // Use ref to store the mutate function so it's always up-to-date
   const mutateRef = useRef(mutation.mutate);
+  
+  // Use ref to track if component is mounted (prevent state updates after unmount)
+  const isMountedRef = useRef(true);
   
   // Update ref when mutation changes
   useEffect(() => {
     mutateRef.current = mutation.mutate;
   }, [mutation.mutate]);
-  
-  // Use ref to store the debounced function so we can cancel it
-  const debouncedMutateRef = useRef<ReturnType<typeof debounce> | null>(null);
 
-  // Initialize debounced function once on mount
-  // Use useEffect to avoid accessing refs during render
+  // Cleanup function to cancel pending timeout
   useEffect(() => {
-    // Create debounced function that uses refs for latest values
-    debouncedMutateRef.current = debounce(
-      () => {
-        // Use the latest context and mutate function from refs (always up-to-date)
-        if (latestContextRef.current !== null) {
-          const contextString = JSON.stringify(latestContextRef.current);
-          
-          // Only call if context actually changed (deduplication)
-          if (contextString !== lastSentContextRef.current) {
-            lastSentContextRef.current = contextString;
-            pendingContextRef.current = null; // Clear pending since we're sending now
-            mutateRef.current(latestContextRef.current);
-          } else {
-            // Same context, clear pending flag
-            pendingContextRef.current = null;
-          }
-        }
-      },
-      500 // 500ms debounce delay
-    );
-
-    // Cleanup function - capture the debounced function in a variable
-    const debouncedFn = debouncedMutateRef.current;
+    isMountedRef.current = true;
     return () => {
-      if (debouncedFn) {
-        debouncedFn.cancel();
+      isMountedRef.current = false;
+      if (timeoutRef.current !== null) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
       }
     };
-  }, []); // Empty deps - create once
+  }, []); // Empty deps - cleanup on unmount
 
   // Create debounced mutate function
   const debouncedMutate = useCallback(
@@ -136,28 +114,52 @@ export function useDebouncedRehydration() {
       // Serialize context for comparison
       const contextString = JSON.stringify(caseContext);
       
-      // Skip if this is the same context we already sent or are about to send
-      if (contextString === lastSentContextRef.current || contextString === pendingContextRef.current) {
+      // Skip if this is the same context we already sent
+      if (contextString === lastSentContextRef.current) {
         return;
       }
       
-      // Mark this context as pending
-      pendingContextRef.current = contextString;
-      
-      // Store the latest context in ref
+      // Store the latest context in ref (always use the most recent)
       latestContextRef.current = caseContext;
       
-      // Cancel any pending debounced call
-      if (debouncedMutateRef.current) {
-        debouncedMutateRef.current.cancel();
+      // Cancel any pending timeout first - this is the key to debouncing
+      // Each new call cancels the previous timeout, so only the last call executes
+      if (timeoutRef.current !== null) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
       }
 
-      // Trigger the debounced function (will use latest context from ref)
-      if (debouncedMutateRef.current) {
-        debouncedMutateRef.current();
-      }
+      // Schedule the debounced call using setTimeout
+      const timeoutId = setTimeout(() => {
+        // Verify this timeout is still active (not cancelled)
+        if (timeoutRef.current !== timeoutId) {
+          return; // This timeout was cancelled, ignore it
+        }
+        
+        // Verify component is still mounted
+        if (!isMountedRef.current) {
+          return; // Component unmounted, don't execute
+        }
+        
+        // Clear the timeout ref since we're executing
+        timeoutRef.current = null;
+        
+        // Use the latest context from ref (may have changed since timeout was scheduled)
+        if (latestContextRef.current !== null) {
+          const currentContextString = JSON.stringify(latestContextRef.current);
+          
+          // Only call if context actually changed (deduplication)
+          if (currentContextString !== lastSentContextRef.current) {
+            lastSentContextRef.current = currentContextString;
+            mutateRef.current(latestContextRef.current);
+          }
+        }
+      }, 500); // 500ms debounce delay
+      
+      // Store the timeout ID so we can verify it's still active when it fires
+      timeoutRef.current = timeoutId;
     },
-    [] // No dependencies - debounced function is stable
+    [] // No dependencies - function is stable
   );
 
 
