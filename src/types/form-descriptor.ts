@@ -391,6 +391,7 @@ type FieldValueType<F extends FieldDescriptor> =
 
 /**
  * Extract all fields from a descriptor
+ * This creates a union of all field descriptors across all blocks
  */
 type AllFields<T extends GlobalFormDescriptor> = T['blocks'][number]['fields'][number];
 
@@ -409,6 +410,8 @@ type RepeatableGroupObject<T extends GlobalFormDescriptor, GroupId extends strin
 
 /**
  * Extract all unique repeatable group IDs from a descriptor
+ * Properly distributes over union of fields to extract all group IDs
+ * The key is using `extends infer F` then checking `F extends FieldDescriptor` to enable distribution
  */
 type RepeatableGroupIds<T extends GlobalFormDescriptor> = 
   AllFields<T> extends infer F
@@ -439,6 +442,10 @@ export type FormData<T extends GlobalFormDescriptor = GlobalFormDescriptor> =
     [K in RepeatableGroupIds<T>]?: Array<RepeatableGroupObject<T, K>>;
   } & 
   // Add non-repeatable fields as individual properties
-  {
-    [K in NonRepeatableFields<T>['id']]?: FieldValueType<Extract<NonRepeatableFields<T>, { id: K }>>;
-  };
+  // Use Omit to exclude repeatable group IDs to prevent type conflicts
+  Omit<
+    {
+      [K in NonRepeatableFields<T>['id']]?: FieldValueType<Extract<NonRepeatableFields<T>, { id: K }>>;
+    },
+    RepeatableGroupIds<T>
+  >;

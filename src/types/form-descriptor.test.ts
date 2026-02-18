@@ -736,42 +736,21 @@ describe('form-descriptor types', () => {
     });
 
     test('given a repeatable group with mixed field types, should correctly type each field', () => {
-      const descriptor: GlobalFormDescriptor = {
+      const descriptor = {
         blocks: [
           {
             id: 'beneficiaries-block',
             title: 'Beneficiaries',
             repeatable: true,
             fields: [
-              {
-                id: 'name',
-                type: 'text',
-                label: 'Name',
-                repeatableGroupId: 'beneficiaries',
-                validation: [],
-              },
-              {
-                id: 'age',
-                type: 'number',
-                label: 'Age',
-                repeatableGroupId: 'beneficiaries',
-                validation: [],
-              },
-              {
-                id: 'isStudent',
-                type: 'checkbox',
-                label: 'Is Student',
-                repeatableGroupId: 'beneficiaries',
-                validation: [],
-              },
+              { id: 'name', type: 'text', label: 'Name', repeatableGroupId: 'beneficiaries', validation: [] },
+              { id: 'age', type: 'number', label: 'Age', repeatableGroupId: 'beneficiaries', validation: [] },
+              { id: 'isStudent', type: 'checkbox', label: 'Is Student', repeatableGroupId: 'beneficiaries', validation: [] },
             ],
           },
         ],
-        submission: {
-          url: '/api/submit',
-          method: 'POST',
-        },
-      };
+        submission: { url: '/api/submit', method: 'POST' },
+      } as const satisfies GlobalFormDescriptor;
 
       const formData: FormData<typeof descriptor> = {
         beneficiaries: [
@@ -781,12 +760,13 @@ describe('form-descriptor types', () => {
       };
 
       expect(formData.beneficiaries).toBeDefined();
-      expect(formData.beneficiaries?.[0].name).toBe('John Doe');
-      expect(formData.beneficiaries?.[0].age).toBe(25);
-      expect(formData.beneficiaries?.[0].isStudent).toBe(false);
-      expect(typeof formData.beneficiaries?.[0].name).toBe('string');
-      expect(typeof formData.beneficiaries?.[0].age).toBe('number');
-      expect(typeof formData.beneficiaries?.[0].isStudent).toBe('boolean');
+      const first = formData.beneficiaries?.[0];
+      expect(first?.name).toBe('John Doe');
+      expect(first?.age).toBe(25);
+      expect(first?.isStudent).toBe(false);
+      expect(typeof first?.name).toBe('string');
+      expect(typeof first?.age).toBe('number');
+      expect(typeof first?.isStudent).toBe('boolean');
     });
   });
 });
