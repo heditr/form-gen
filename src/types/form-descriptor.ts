@@ -377,8 +377,9 @@ export interface RulesObject {
 
 /**
  * Helper type to get field value type based on field type
+ * @internal - Exported for testing purposes
  */
-type FieldValueType<F extends FieldDescriptor> = 
+export type FieldValueType<F extends FieldDescriptor> = 
   F['type'] extends 'checkbox'
     ? boolean
     : F['type'] extends 'file'
@@ -392,19 +393,22 @@ type FieldValueType<F extends FieldDescriptor> =
 /**
  * Extract all fields from a descriptor
  * This creates a union of all field descriptors across all blocks
+ * @internal - Exported for testing purposes
  */
-type AllFields<T extends GlobalFormDescriptor> = T['blocks'][number]['fields'][number];
+export type AllFields<T extends GlobalFormDescriptor> = T['blocks'][number]['fields'][number];
 
 /**
  * Extract fields that belong to a specific repeatable group
+ * @internal - Exported for testing purposes
  */
-type FieldsInGroup<T extends GlobalFormDescriptor, GroupId extends string> = 
+export type FieldsInGroup<T extends GlobalFormDescriptor, GroupId extends string> = 
   Extract<AllFields<T>, { repeatableGroupId: GroupId }>;
 
 /**
  * Create object type for a repeatable group (maps field IDs to their value types)
+ * @internal - Exported for testing purposes
  */
-type RepeatableGroupObject<T extends GlobalFormDescriptor, GroupId extends string> = {
+export type RepeatableGroupObject<T extends GlobalFormDescriptor, GroupId extends string> = {
   [K in FieldsInGroup<T, GroupId>['id']]: FieldValueType<Extract<FieldsInGroup<T, GroupId>, { id: K }>>;
 };
 
@@ -412,8 +416,9 @@ type RepeatableGroupObject<T extends GlobalFormDescriptor, GroupId extends strin
  * Extract all unique repeatable group IDs from a descriptor
  * Properly distributes over union of fields to extract all group IDs
  * The key is using `extends infer F` then checking `F extends FieldDescriptor` to enable distribution
+ * @internal - Exported for testing purposes
  */
-type RepeatableGroupIds<T extends GlobalFormDescriptor> = 
+export type RepeatableGroupIds<T extends GlobalFormDescriptor> = 
   AllFields<T> extends infer F
     ? F extends FieldDescriptor
       ? F extends { repeatableGroupId: infer G }
@@ -426,8 +431,9 @@ type RepeatableGroupIds<T extends GlobalFormDescriptor> =
 
 /**
  * Extract fields that don't belong to any repeatable group
+ * @internal - Exported for testing purposes
  */
-type NonRepeatableFields<T extends GlobalFormDescriptor> = 
+export type NonRepeatableFields<T extends GlobalFormDescriptor> = 
   Exclude<AllFields<T>, { repeatableGroupId: string }>;
 
 /**

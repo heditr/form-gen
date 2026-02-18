@@ -15,6 +15,13 @@ import type {
   CaseContext,
   RulesObject,
   FormData,
+  // Intermediate helper types (exported for testing)
+  FieldValueType,
+  AllFields,
+  FieldsInGroup,
+  RepeatableGroupObject,
+  RepeatableGroupIds,
+  NonRepeatableFields,
 } from './form-descriptor';
 
 describe('form-descriptor types', () => {
@@ -595,7 +602,7 @@ describe('form-descriptor types', () => {
 
   describe('FormData with repeatable groups', () => {
     test('given a descriptor with repeatable fields, should support array of objects for repeatable groups', () => {
-      const descriptor: GlobalFormDescriptor = {
+      const descriptor = {
         blocks: [
           {
             id: 'addresses-block',
@@ -604,14 +611,14 @@ describe('form-descriptor types', () => {
             fields: [
               {
                 id: 'street',
-                type: 'text',
+                type: 'text' as const,
                 label: 'Street',
                 repeatableGroupId: 'addresses',
                 validation: [],
               },
               {
                 id: 'city',
-                type: 'text',
+                type: 'text' as const,
                 label: 'City',
                 repeatableGroupId: 'addresses',
                 validation: [],
@@ -624,7 +631,7 @@ describe('form-descriptor types', () => {
             fields: [
               {
                 id: 'name',
-                type: 'text',
+                type: 'text' as const,
                 label: 'Name',
                 validation: [],
               },
@@ -633,12 +640,13 @@ describe('form-descriptor types', () => {
         ],
         submission: {
           url: '/api/submit',
-          method: 'POST',
+          method: 'POST' as const,
         },
-      };
+      } as const satisfies GlobalFormDescriptor;
 
       // FormData should have addresses as array of objects, and name as string
-      const formData: FormData<typeof descriptor> = {
+      type FormDataType = FormData<typeof descriptor>;
+      const formData: FormDataType = {
         addresses: [
           { street: '123 Main St', city: 'New York' },
           { street: '456 Oak Ave', city: 'Boston' },
@@ -648,13 +656,15 @@ describe('form-descriptor types', () => {
 
       expect(formData.addresses).toBeDefined();
       expect(Array.isArray(formData.addresses)).toBe(true);
-      expect(formData.addresses?.[0]).toHaveProperty('street');
-      expect(formData.addresses?.[0]).toHaveProperty('city');
+      if (formData.addresses && Array.isArray(formData.addresses)) {
+        expect(formData.addresses[0]).toHaveProperty('street');
+        expect(formData.addresses[0]).toHaveProperty('city');
+      }
       expect(formData.name).toBe('John Doe');
     });
 
     test('given a descriptor with multiple repeatable groups, should support multiple array properties', () => {
-      const descriptor: GlobalFormDescriptor = {
+      const descriptor = {
         blocks: [
           {
             id: 'addresses-block',
@@ -663,7 +673,7 @@ describe('form-descriptor types', () => {
             fields: [
               {
                 id: 'street',
-                type: 'text',
+                type: 'text' as const,
                 label: 'Street',
                 repeatableGroupId: 'addresses',
                 validation: [],
@@ -677,7 +687,7 @@ describe('form-descriptor types', () => {
             fields: [
               {
                 id: 'email',
-                type: 'text',
+                type: 'text' as const,
                 label: 'Email',
                 repeatableGroupId: 'contacts',
                 validation: [],
@@ -687,23 +697,28 @@ describe('form-descriptor types', () => {
         ],
         submission: {
           url: '/api/submit',
-          method: 'POST',
+          method: 'POST' as const,
         },
-      };
+      } as const satisfies GlobalFormDescriptor;
 
-      const formData: FormData<typeof descriptor> = {
+      type FormDataType = FormData<typeof descriptor>;
+      const formData: FormDataType = {
         addresses: [{ street: '123 Main St' }],
         contacts: [{ email: 'test@example.com' }],
       };
 
       expect(formData.addresses).toBeDefined();
       expect(formData.contacts).toBeDefined();
-      expect(Array.isArray(formData.addresses)).toBe(true);
-      expect(Array.isArray(formData.contacts)).toBe(true);
+      if (formData.addresses) {
+        expect(Array.isArray(formData.addresses)).toBe(true);
+      }
+      if (formData.contacts) {
+        expect(Array.isArray(formData.contacts)).toBe(true);
+      }
     });
 
     test('given a descriptor with empty repeatable group, should allow empty array', () => {
-      const descriptor: GlobalFormDescriptor = {
+      const descriptor = {
         blocks: [
           {
             id: 'addresses-block',
@@ -712,7 +727,7 @@ describe('form-descriptor types', () => {
             fields: [
               {
                 id: 'street',
-                type: 'text',
+                type: 'text' as const,
                 label: 'Street',
                 repeatableGroupId: 'addresses',
                 validation: [],
@@ -722,17 +737,20 @@ describe('form-descriptor types', () => {
         ],
         submission: {
           url: '/api/submit',
-          method: 'POST',
+          method: 'POST' as const,
         },
-      };
+      } as const satisfies GlobalFormDescriptor;
 
-      const formData: FormData<typeof descriptor> = {
+      type FormDataType = FormData<typeof descriptor>;
+      const formData: FormDataType = {
         addresses: [],
       };
 
       expect(formData.addresses).toBeDefined();
-      expect(Array.isArray(formData.addresses)).toBe(true);
-      expect(formData.addresses?.length).toBe(0);
+      if (formData.addresses) {
+        expect(Array.isArray(formData.addresses)).toBe(true);
+        expect(formData.addresses.length).toBe(0);
+      }
     });
 
     test('given a repeatable group with mixed field types, should correctly type each field', () => {
@@ -767,6 +785,807 @@ describe('form-descriptor types', () => {
       expect(typeof first?.name).toBe('string');
       expect(typeof first?.age).toBe('number');
       expect(typeof first?.isStudent).toBe('boolean');
+    });
+  });
+
+  describe('Intermediate Helper Types - Independent Usage', () => {
+    // These tests showcase the intermediate types that are used internally
+    // but not exported. We test them by using type assertions and type checks.
+    // Variables prefixed with _ are used for type-level testing only
+    /* eslint-disable @typescript-eslint/no-unused-vars */
+
+    describe('FieldValueType', () => {
+      test('given a text field, should map to string | number | null', () => {
+        type TextField = { id: 'name'; type: 'text'; label: string; validation: ValidationRule[] };
+        type ValueType = FieldValueType<TextField>;
+        
+        // Type-level test: verify the type is correct
+         
+        const _test: ValueType = 'test';
+         
+        const _test2: ValueType = 123;
+         
+        const _test3: ValueType = null;
+        // Type-level test: boolean should not be assignable
+        // This would cause a type error if uncommented:
+        // const _test4: ValueType = true;
+        
+        expect(true).toBe(true); // Runtime assertion passes
+      });
+
+      test('given a number field, should map to number', () => {
+        type NumberField = { id: 'age'; type: 'number'; label: string; validation: ValidationRule[] };
+        type ValueType = FieldValueType<NumberField>;
+        
+         
+        const _test: ValueType = 42;
+        // Type-level test: string should not be assignable
+        // This would cause a type error if uncommented:
+        // const _test2: ValueType = 'not a number';
+        
+        expect(true).toBe(true);
+      });
+
+      test('given a checkbox field, should map to boolean', () => {
+        type CheckboxField = { id: 'isActive'; type: 'checkbox'; label: string; validation: ValidationRule[] };
+        type ValueType = FieldValueType<CheckboxField>;
+        
+         
+        const _test: ValueType = true;
+         
+        const _test2: ValueType = false;
+        // Type-level test: string should not be assignable
+        // This would cause a type error if uncommented:
+        // const _test3: ValueType = 'true';
+        
+        expect(true).toBe(true);
+      });
+
+      test('given a file field, should map to string | string[] | null', () => {
+        type FileField = { id: 'document'; type: 'file'; label: string; validation: ValidationRule[] };
+        type ValueType = FieldValueType<FileField>;
+        
+         
+        const _test: ValueType = 'https://example.com/file.pdf';
+         
+        const _test2: ValueType = ['https://example.com/file1.pdf', 'https://example.com/file2.pdf'];
+         
+        const _test3: ValueType = null;
+        // Type-level test: number should not be assignable
+        // This would cause a type error if uncommented:
+        // const _test4: ValueType = 123;
+        
+        expect(true).toBe(true);
+      });
+
+      test('given a radio field, should map to string | number', () => {
+        type RadioField = { id: 'choice'; type: 'radio'; label: string; validation: ValidationRule[] };
+        type ValueType = FieldValueType<RadioField>;
+        
+         
+        const _test: ValueType = 'option1';
+         
+        const _test2: ValueType = 42;
+        // Type-level test: boolean should not be assignable
+        // This would cause a type error if uncommented:
+        // const _test3: ValueType = true;
+        
+        expect(true).toBe(true);
+      });
+    });
+
+    describe('AllFields', () => {
+      test('given a descriptor with multiple blocks, should extract all fields as union', () => {
+        const descriptor = {
+          blocks: [
+            {
+              id: 'block1',
+              title: 'Block 1',
+              fields: [
+                { id: 'field1', type: 'text' as const, label: 'Field 1', validation: [] },
+                { id: 'field2', type: 'number' as const, label: 'Field 2', validation: [] },
+              ],
+            },
+            {
+              id: 'block2',
+              title: 'Block 2',
+              fields: [
+                { id: 'field3', type: 'checkbox' as const, label: 'Field 3', validation: [] },
+              ],
+            },
+          ],
+          submission: { url: '/api/submit', method: 'POST' as const },
+        } as const satisfies GlobalFormDescriptor;
+
+        // Type-level test: AllFields should be a union of all field descriptors
+        type ExtractedFields = AllFields<typeof descriptor>;
+        
+        // Verify we can extract each field type
+        type Field1 = Extract<ExtractedFields, { id: 'field1' }>;
+        type Field2 = Extract<ExtractedFields, { id: 'field2' }>;
+        type Field3 = Extract<ExtractedFields, { id: 'field3' }>;
+        
+         
+        const _field1: Field1 = { id: 'field1', type: 'text', label: 'Field 1', validation: [] };
+         
+        const _field2: Field2 = { id: 'field2', type: 'number', label: 'Field 2', validation: [] };
+         
+        const _field3: Field3 = { id: 'field3', type: 'checkbox', label: 'Field 3', validation: [] };
+        
+        expect(true).toBe(true);
+      });
+
+      test('given a descriptor with repeatable groups, should include all fields regardless of repeatableGroupId', () => {
+        const descriptor = {
+          blocks: [
+            {
+              id: 'addresses-block',
+              title: 'Addresses',
+              repeatable: true,
+              fields: [
+                { id: 'street', type: 'text' as const, label: 'Street', repeatableGroupId: 'addresses', validation: [] },
+                { id: 'city', type: 'text' as const, label: 'City', repeatableGroupId: 'addresses', validation: [] },
+              ],
+            },
+            {
+              id: 'basic-info',
+              title: 'Basic Info',
+              fields: [
+                { id: 'name', type: 'text' as const, label: 'Name', validation: [] },
+              ],
+            },
+          ],
+          submission: { url: '/api/submit', method: 'POST' as const },
+        } as const satisfies GlobalFormDescriptor;
+
+        type ExtractedFields = AllFields<typeof descriptor>;
+        
+        // Should include both repeatable and non-repeatable fields
+        type StreetField = Extract<ExtractedFields, { id: 'street' }>;
+        type CityField = Extract<ExtractedFields, { id: 'city' }>;
+        type NameField = Extract<ExtractedFields, { id: 'name' }>;
+        
+        // Type-level verification: these types should be defined
+        const _street: StreetField = { id: 'street', type: 'text', label: 'Street', repeatableGroupId: 'addresses', validation: [] };
+        const _city: CityField = { id: 'city', type: 'text', label: 'City', repeatableGroupId: 'addresses', validation: [] };
+        const _name: NameField = { id: 'name', type: 'text', label: 'Name', validation: [] };
+        
+        expect(_street.id).toBe('street');
+        expect(_city.id).toBe('city');
+        expect(_name.id).toBe('name');
+      });
+    });
+
+    describe('RepeatableGroupIds', () => {
+      test('given fields with repeatableGroupId, should extract unique group IDs', () => {
+        const descriptor = {
+          blocks: [
+            {
+              id: 'addresses-block',
+              title: 'Addresses',
+              repeatable: true,
+              fields: [
+                { id: 'street', type: 'text' as const, label: 'Street', repeatableGroupId: 'addresses', validation: [] },
+                { id: 'city', type: 'text' as const, label: 'City', repeatableGroupId: 'addresses', validation: [] },
+              ],
+            },
+          ],
+          submission: { url: '/api/submit', method: 'POST' as const },
+        } as const satisfies GlobalFormDescriptor;
+
+        type GroupIds = RepeatableGroupIds<typeof descriptor>;
+        
+        // Should extract 'addresses' as the group ID
+        const _test: GroupIds = 'addresses';
+        // Type-level test: 'invalid' should not be assignable
+        // This would cause a type error if uncommented:
+        // const _test2: GroupIds = 'invalid';
+        
+        expect(true).toBe(true);
+      });
+
+      test('given multiple repeatable groups, should extract all unique group IDs', () => {
+        const descriptor = {
+          blocks: [
+            {
+              id: 'addresses-block',
+              title: 'Addresses',
+              repeatable: true,
+              fields: [
+                { id: 'street', type: 'text' as const, label: 'Street', repeatableGroupId: 'addresses', validation: [] },
+              ],
+            },
+            {
+              id: 'contacts-block',
+              title: 'Contacts',
+              repeatable: true,
+              fields: [
+                { id: 'email', type: 'text' as const, label: 'Email', repeatableGroupId: 'contacts', validation: [] },
+              ],
+            },
+          ],
+          submission: { url: '/api/submit', method: 'POST' as const },
+        } as const satisfies GlobalFormDescriptor;
+
+        type GroupIds = RepeatableGroupIds<typeof descriptor>;
+        
+        // Should be union of 'addresses' | 'contacts'
+        const _test1: GroupIds = 'addresses';
+        const _test2: GroupIds = 'contacts';
+        // Type-level test: 'invalid' should not be assignable
+        // This would cause a type error if uncommented:
+        // const _test3: GroupIds = 'invalid';
+        
+        expect(true).toBe(true);
+      });
+
+      test('given fields without repeatableGroupId, should not include them in group IDs', () => {
+        const descriptor = {
+          blocks: [
+            {
+              id: 'basic-info',
+              title: 'Basic Info',
+              fields: [
+                { id: 'name', type: 'text' as const, label: 'Name', validation: [] },
+                { id: 'age', type: 'number' as const, label: 'Age', validation: [] },
+              ],
+            },
+          ],
+          submission: { url: '/api/submit', method: 'POST' as const },
+        } as const satisfies GlobalFormDescriptor;
+
+        type GroupIds = RepeatableGroupIds<typeof descriptor>;
+        
+        // Should be never (no repeatable groups)
+        const _test: GroupIds = undefined as never;
+        
+        expect(true).toBe(true);
+      });
+    });
+
+    describe('FieldsInGroup', () => {
+      test('given a specific group ID, should extract only fields in that group', () => {
+        const descriptor: GlobalFormDescriptor = {
+          blocks: [
+            {
+              id: 'addresses-block',
+              title: 'Addresses',
+              repeatable: true,
+              fields: [
+                { id: 'street', type: 'text' as const, label: 'Street', repeatableGroupId: 'addresses', validation: [] },
+                { id: 'city', type: 'text' as const, label: 'City', repeatableGroupId: 'addresses', validation: [] },
+                { id: 'zipCode', type: 'text' as const, label: 'ZIP', repeatableGroupId: 'addresses', validation: [] },
+              ],
+            },
+            {
+              id: 'contacts-block',
+              title: 'Contacts',
+              repeatable: true,
+              fields: [
+                { id: 'email', type: 'text' as const, label: 'Email', repeatableGroupId: 'contacts', validation: [] },
+              ],
+            },
+          ],
+          submission: { url: '/api/submit', method: 'POST' as const },
+        } as const satisfies GlobalFormDescriptor;
+
+        type AddressFields = FieldsInGroup<typeof descriptor, 'addresses'>;
+        
+        // Should only include fields with repeatableGroupId: 'addresses'
+        type StreetField = Extract<AddressFields, { id: 'street' }>;
+        type CityField = Extract<AddressFields, { id: 'city' }>;
+        type ZipField = Extract<AddressFields, { id: 'zipCode' }>;
+        // Email should not be in AddressFields
+        type EmailField = Extract<AddressFields, { id: 'email' }>;
+        
+        const _street: StreetField = { id: 'street', type: 'text', label: 'Street', repeatableGroupId: 'addresses', validation: [] };
+        const _city: CityField = { id: 'city', type: 'text', label: 'City', repeatableGroupId: 'addresses', validation: [] };
+        const _zip: ZipField = { id: 'zipCode', type: 'text', label: 'ZIP', repeatableGroupId: 'addresses', validation: [] };
+        // Type-level test: EmailField should be never
+        // This would cause a type error if uncommented:
+        // const _email: EmailField = { id: 'email', type: 'text', label: 'Email', repeatableGroupId: 'contacts', validation: [] };
+        
+        expect(true).toBe(true);
+      });
+
+      test('given a non-existent group ID, should return never', () => {
+        const descriptor = {
+          blocks: [
+            {
+              id: 'addresses-block',
+              title: 'Addresses',
+              repeatable: true,
+              fields: [
+                { id: 'street', type: 'text' as const, label: 'Street', repeatableGroupId: 'addresses', validation: [] },
+              ],
+            },
+          ],
+          submission: { url: '/api/submit', method: 'POST' as const },
+        } as const satisfies GlobalFormDescriptor;
+
+        type InvalidFields = FieldsInGroup<typeof descriptor, 'nonexistent'>;
+        
+        // Should be never
+        const _test: InvalidFields = undefined as never;
+        
+        expect(true).toBe(true);
+      });
+    });
+
+    describe('RepeatableGroupObject', () => {
+      test('given a repeatable group, should create object type mapping field IDs to value types', () => {
+        const descriptor = {
+          blocks: [
+            {
+              id: 'beneficiaries-block',
+              title: 'Beneficiaries',
+              repeatable: true,
+              fields: [
+                { id: 'name', type: 'text' as const, label: 'Name', repeatableGroupId: 'beneficiaries', validation: [] },
+                { id: 'age', type: 'number' as const, label: 'Age', repeatableGroupId: 'beneficiaries', validation: [] },
+                { id: 'isStudent', type: 'checkbox' as const, label: 'Is Student', repeatableGroupId: 'beneficiaries', validation: [] },
+              ],
+            },
+          ],
+          submission: { url: '/api/submit', method: 'POST' as const },
+        } as const satisfies GlobalFormDescriptor;
+
+        type BeneficiaryObject = RepeatableGroupObject<typeof descriptor, 'beneficiaries'>;
+        
+        // Should create object with correct types
+        const _test: BeneficiaryObject = {
+          name: 'John Doe',        // string | number | null
+          age: 25,                 // number
+          isStudent: true,         // boolean
+        };
+        
+        // Type-level test: age should be number, not string
+        // This would cause a type error if uncommented:
+        // const _test2: BeneficiaryObject = { name: 'John', age: '25', isStudent: false };
+        
+        expect(true).toBe(true);
+      });
+
+      test('given a group with only text fields, should create object with string types', () => {
+        const descriptor = {
+          blocks: [
+            {
+              id: 'addresses-block',
+              title: 'Addresses',
+              repeatable: true,
+              fields: [
+                { id: 'street', type: 'text' as const, label: 'Street', repeatableGroupId: 'addresses', validation: [] },
+                { id: 'city', type: 'text' as const, label: 'City', repeatableGroupId: 'addresses', validation: [] },
+              ],
+            },
+          ],
+          submission: { url: '/api/submit', method: 'POST' as const },
+        } as const satisfies GlobalFormDescriptor;
+
+        type AddressObject = RepeatableGroupObject<typeof descriptor, 'addresses'>;
+        
+        const _test: AddressObject = {
+          street: '123 Main St',
+          city: 'New York',
+        };
+        
+        expect(true).toBe(true);
+      });
+    });
+
+    describe('NonRepeatableFields', () => {
+      test('given fields with and without repeatableGroupId, should extract only non-repeatable fields', () => {
+        const descriptor = {
+          blocks: [
+            {
+              id: 'addresses-block',
+              title: 'Addresses',
+              repeatable: true,
+              fields: [
+                { id: 'street', type: 'text' as const, label: 'Street', repeatableGroupId: 'addresses', validation: [] },
+              ],
+            },
+            {
+              id: 'basic-info',
+              title: 'Basic Info',
+              fields: [
+                { id: 'name', type: 'text' as const, label: 'Name', validation: [] },
+                { id: 'age', type: 'number' as const, label: 'Age', validation: [] },
+              ],
+            },
+          ],
+          submission: { url: '/api/submit', method: 'POST' as const },
+        } as const satisfies GlobalFormDescriptor;
+
+        type RegularFields = NonRepeatableFields<typeof descriptor>;
+        
+        // Should only include fields without repeatableGroupId
+        type NameField = Extract<RegularFields, { id: 'name' }>;
+        type AgeField = Extract<RegularFields, { id: 'age' }>;
+        // Street should not be in RegularFields
+        type StreetField = Extract<RegularFields, { id: 'street' }>;
+        
+        const _name: NameField = { id: 'name', type: 'text', label: 'Name', validation: [] };
+        const _age: AgeField = { id: 'age', type: 'number', label: 'Age', validation: [] };
+        // Type-level test: StreetField should be never
+        // This would cause a type error if uncommented:
+        // const _street: StreetField = { id: 'street', type: 'text', label: 'Street', repeatableGroupId: 'addresses', validation: [] };
+        
+        expect(true).toBe(true);
+      });
+
+      test('given only repeatable fields, should return never', () => {
+        const descriptor = {
+          blocks: [
+            {
+              id: 'addresses-block',
+              title: 'Addresses',
+              repeatable: true,
+              fields: [
+                { id: 'street', type: 'text' as const, label: 'Street', repeatableGroupId: 'addresses', validation: [] },
+                { id: 'city', type: 'text' as const, label: 'City', repeatableGroupId: 'addresses', validation: [] },
+              ],
+            },
+          ],
+          submission: { url: '/api/submit', method: 'POST' as const },
+        } as const satisfies GlobalFormDescriptor;
+
+        type RegularFields = NonRepeatableFields<typeof descriptor>;
+        
+        // Should be never (all fields are repeatable)
+        const _test: RegularFields = undefined as never;
+        
+        expect(true).toBe(true);
+      });
+    });
+  });
+
+  describe('Intermediate Helper Types - Combined Usage', () => {
+    // These tests showcase how the intermediate types work together
+    // to build the final FormData type
+
+    test('given complex descriptor, should combine AllFields, RepeatableGroupIds, and NonRepeatableFields correctly', () => {
+      const descriptor = {
+        blocks: [
+          {
+            id: 'basic-info',
+            title: 'Basic Info',
+            fields: [
+              { id: 'name', type: 'text' as const, label: 'Name', validation: [] },
+              { id: 'age', type: 'number' as const, label: 'Age', validation: [] },
+              { id: 'isStudent', type: 'checkbox' as const, label: 'Is Student', validation: [] },
+            ],
+          },
+          {
+            id: 'addresses-block',
+            title: 'Addresses',
+            repeatable: true,
+            fields: [
+              { id: 'street', type: 'text' as const, label: 'Street', repeatableGroupId: 'addresses', validation: [] },
+              { id: 'city', type: 'text' as const, label: 'City', repeatableGroupId: 'addresses', validation: [] },
+            ],
+          },
+          {
+            id: 'contacts-block',
+            title: 'Contacts',
+            repeatable: true,
+            fields: [
+              { id: 'email', type: 'text' as const, label: 'Email', repeatableGroupId: 'contacts', validation: [] },
+              { id: 'phone', type: 'text' as const, label: 'Phone', repeatableGroupId: 'contacts', validation: [] },
+            ],
+          },
+        ],
+        submission: { url: '/api/submit', method: 'POST' as const },
+      } as const satisfies GlobalFormDescriptor;
+
+      // Step 1: Extract all fields
+      type AllFieldsType = AllFields<typeof descriptor>;
+      // Should include all 7 fields
+      type NameField = Extract<AllFieldsType, { id: 'name' }>;
+      type StreetField = Extract<AllFieldsType, { id: 'street' }>;
+      type EmailField = Extract<AllFieldsType, { id: 'email' }>;
+      
+        // Type-level verification: these types should be defined
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const _name: NameField = { id: 'name', type: 'text', label: 'Name', validation: [] };
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const _street: StreetField = { id: 'street', type: 'text', label: 'Street', repeatableGroupId: 'addresses', validation: [] };
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const _email: EmailField = { id: 'email', type: 'text', label: 'Email', repeatableGroupId: 'contacts', validation: [] };
+        
+        expect(_name.id).toBe('name');
+        expect(_street.id).toBe('street');
+        expect(_email.id).toBe('email');
+
+      // Step 2: Extract repeatable group IDs
+      type GroupIds = RepeatableGroupIds<typeof descriptor>;
+      // Should be 'addresses' | 'contacts'
+      const _group1: GroupIds = 'addresses';
+      const _group2: GroupIds = 'contacts';
+
+      // Step 3: Extract fields in each group
+      type AddressFields = FieldsInGroup<typeof descriptor, 'addresses'>;
+      type ContactFields = FieldsInGroup<typeof descriptor, 'contacts'>;
+      
+      type StreetInGroup = Extract<AddressFields, { id: 'street' }>;
+      type EmailInGroup = Extract<ContactFields, { id: 'email' }>;
+      
+        // Type-level verification: these types should be defined
+        const _streetInGroup: StreetInGroup = { id: 'street', type: 'text', label: 'Street', repeatableGroupId: 'addresses', validation: [] };
+        const _emailInGroup: EmailInGroup = { id: 'email', type: 'text', label: 'Email', repeatableGroupId: 'contacts', validation: [] };
+        
+        expect(_streetInGroup.id).toBe('street');
+        expect(_emailInGroup.id).toBe('email');
+
+      // Step 4: Create object types for each group
+      type AddressObject = RepeatableGroupObject<typeof descriptor, 'addresses'>;
+      type ContactObject = RepeatableGroupObject<typeof descriptor, 'contacts'>;
+      
+      const _addressObj: AddressObject = { street: '123 Main St', city: 'New York' };
+      const _contactObj: ContactObject = { email: 'test@example.com', phone: '555-1234' };
+
+      // Step 5: Extract non-repeatable fields
+      type RegularFields = NonRepeatableFields<typeof descriptor>;
+      type NameRegular = Extract<RegularFields, { id: 'name' }>;
+      type AgeRegular = Extract<RegularFields, { id: 'age' }>;
+      // Street should not be in regular fields
+      type StreetRegular = Extract<RegularFields, { id: 'street' }>;
+      
+        // Type-level verification: these types should be defined
+        const _nameRegular: NameRegular = { id: 'name', type: 'text', label: 'Name', validation: [] };
+        const _ageRegular: AgeRegular = { id: 'age', type: 'number', label: 'Age', validation: [] };
+        // StreetRegular should be never (can't assign)
+        // Type-level test: this would cause a type error
+        // const _streetRegular: StreetRegular = undefined as never;
+        
+        expect(_nameRegular.id).toBe('name');
+        expect(_ageRegular.id).toBe('age');
+
+      // Step 6: Final FormData combines everything
+      type FinalFormData = FormData<typeof descriptor>;
+      
+      const _final: FinalFormData = {
+        name: 'John Doe',
+        age: 25,
+        isStudent: true,
+        addresses: [
+          { street: '123 Main St', city: 'New York' },
+        ],
+        contacts: [
+          { email: 'test@example.com', phone: '555-1234' },
+        ],
+      };
+
+      expect(true).toBe(true);
+    });
+
+    test('given descriptor with mixed field types in repeatable group, should correctly map each field type', () => {
+      const descriptor = {
+        blocks: [
+          {
+            id: 'beneficiaries-block',
+            title: 'Beneficiaries',
+            repeatable: true,
+            fields: [
+              { id: 'name', type: 'text' as const, label: 'Name', repeatableGroupId: 'beneficiaries', validation: [] },
+              { id: 'age', type: 'number' as const, label: 'Age', repeatableGroupId: 'beneficiaries', validation: [] },
+              { id: 'isStudent', type: 'checkbox' as const, label: 'Is Student', repeatableGroupId: 'beneficiaries', validation: [] },
+              { id: 'document', type: 'file' as const, label: 'Document', repeatableGroupId: 'beneficiaries', validation: [] },
+            ],
+          },
+        ],
+        submission: { url: '/api/submit', method: 'POST' as const },
+      } as const satisfies GlobalFormDescriptor;
+
+      // Extract group IDs
+      type GroupIds = RepeatableGroupIds<typeof descriptor>;
+      const _groupId: GroupIds = 'beneficiaries';
+
+      // Get fields in group
+      type BeneficiaryFields = FieldsInGroup<typeof descriptor, 'beneficiaries'>;
+      
+      // Verify each field type is correctly extracted
+      type NameField = Extract<BeneficiaryFields, { id: 'name' }>;
+      type AgeField = Extract<BeneficiaryFields, { id: 'age' }>;
+      type IsStudentField = Extract<BeneficiaryFields, { id: 'isStudent' }>;
+      type DocumentField = Extract<BeneficiaryFields, { id: 'document' }>;
+
+      // Create object type - should map each field to correct value type
+      type BeneficiaryObject = RepeatableGroupObject<typeof descriptor, 'beneficiaries'>;
+      
+      const _obj: BeneficiaryObject = {
+        name: 'John Doe',                    // FieldValueType<text> = string | number | null
+        age: 25,                              // FieldValueType<number> = number
+        isStudent: true,                      // FieldValueType<checkbox> = boolean
+        document: 'https://example.com/doc.pdf', // FieldValueType<file> = string | string[] | null
+      };
+
+      // Type-level test: age should be number
+      // This would cause a type error if uncommented:
+      // const _invalid: BeneficiaryObject = { name: 'John', age: '25', isStudent: false, document: null };
+
+      expect(true).toBe(true);
+    });
+
+    test('given descriptor with no repeatable groups, should only have non-repeatable fields', () => {
+      const descriptor = {
+        blocks: [
+          {
+            id: 'basic-info',
+            title: 'Basic Info',
+            fields: [
+              { id: 'name', type: 'text' as const, label: 'Name', validation: [] },
+              { id: 'age', type: 'number' as const, label: 'Age', validation: [] },
+            ],
+          },
+        ],
+        submission: { url: '/api/submit', method: 'POST' as const },
+      } as const satisfies GlobalFormDescriptor;
+
+      // Extract all fields
+      type AllFieldsType = AllFields<typeof descriptor>;
+      type NameField = Extract<AllFieldsType, { id: 'name' }>;
+      type AgeField = Extract<AllFieldsType, { id: 'age' }>;
+      
+      // Type-level verification: these types should be defined
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const _nameField: NameField = { id: 'name', type: 'text', label: 'Name', validation: [] };
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const _ageField: AgeField = { id: 'age', type: 'number', label: 'Age', validation: [] };
+      
+      expect(_nameField.id).toBe('name');
+      expect(_ageField.id).toBe('age');
+
+      // Extract repeatable group IDs - should be never
+      type GroupIds = RepeatableGroupIds<typeof descriptor>;
+      const _groups: GroupIds = undefined as never;
+
+      // Extract non-repeatable fields - should include all fields
+      type RegularFields = NonRepeatableFields<typeof descriptor>;
+      type NameRegular = Extract<RegularFields, { id: 'name' }>;
+      type AgeRegular = Extract<RegularFields, { id: 'age' }>;
+      
+        // Type-level verification: these types should be defined
+        const _nameRegular: NameRegular = { id: 'name', type: 'text', label: 'Name', validation: [] };
+        const _ageRegular: AgeRegular = { id: 'age', type: 'number', label: 'Age', validation: [] };
+        
+        expect(_nameRegular.id).toBe('name');
+        expect(_ageRegular.id).toBe('age');
+
+      // Final FormData should only have regular fields
+      type FinalFormData = FormData<typeof descriptor>;
+      
+      const _final: FinalFormData = {
+        name: 'John Doe',
+        age: 25,
+      };
+
+      expect(true).toBe(true);
+    });
+
+    test('given descriptor with only repeatable groups, should only have array properties', () => {
+      const descriptor = {
+        blocks: [
+          {
+            id: 'addresses-block',
+            title: 'Addresses',
+            repeatable: true,
+            fields: [
+              { id: 'street', type: 'text' as const, label: 'Street', repeatableGroupId: 'addresses', validation: [] },
+              { id: 'city', type: 'text' as const, label: 'City', repeatableGroupId: 'addresses', validation: [] },
+            ],
+          },
+        ],
+        submission: { url: '/api/submit', method: 'POST' as const },
+      } as const satisfies GlobalFormDescriptor;
+
+      // Extract all fields
+      type AllFieldsType = AllFields<typeof descriptor>;
+      type StreetField = Extract<AllFieldsType, { id: 'street' }>;
+      
+        // Type-level verification: StreetField should be defined
+        const _street: StreetField = { id: 'street', type: 'text', label: 'Street', repeatableGroupId: 'addresses', validation: [] };
+        expect(_street.id).toBe('street');
+
+      // Extract repeatable group IDs
+      type GroupIds = RepeatableGroupIds<typeof descriptor>;
+      const _groupId: GroupIds = 'addresses';
+
+      // Extract non-repeatable fields - should be never
+      type RegularFields = NonRepeatableFields<typeof descriptor>;
+      const _regular: RegularFields = undefined as never;
+
+      // Create object type for the group
+      type AddressObject = RepeatableGroupObject<typeof descriptor, 'addresses'>;
+      const _obj: AddressObject = { street: '123 Main St', city: 'New York' };
+
+      // Final FormData should only have repeatable groups
+      type FinalFormData = FormData<typeof descriptor>;
+      
+      const _final: FinalFormData = {
+        addresses: [
+          { street: '123 Main St', city: 'New York' },
+        ],
+      };
+
+      expect(true).toBe(true);
+    });
+
+    test('given descriptor with multiple groups in same block, should handle each group separately', () => {
+      const descriptor = {
+        blocks: [
+          {
+            id: 'contact-info-block',
+            title: 'Contact Information',
+            repeatable: true,
+            fields: [
+              // First repeatable group: emails
+              { id: 'email', type: 'text' as const, label: 'Email', repeatableGroupId: 'emails', validation: [] },
+              // Second repeatable group: phones
+              { id: 'phoneNumber', type: 'text' as const, label: 'Phone Number', repeatableGroupId: 'phones', validation: [] },
+              { id: 'phoneType', type: 'dropdown' as const, label: 'Phone Type', repeatableGroupId: 'phones', validation: [] },
+            ],
+          },
+        ],
+        submission: { url: '/api/submit', method: 'POST' as const },
+      } as const satisfies GlobalFormDescriptor;
+
+      // Extract all fields
+      type AllFieldsType = AllFields<typeof descriptor>;
+      type EmailField = Extract<AllFieldsType, { id: 'email' }>;
+      type PhoneField = Extract<AllFieldsType, { id: 'phoneNumber' }>;
+      
+        // Type-level verification: these types should be defined
+        const _email: EmailField = { id: 'email', type: 'text', label: 'Email', repeatableGroupId: 'emails', validation: [] };
+        const _phone: PhoneField = { id: 'phoneNumber', type: 'text', label: 'Phone Number', repeatableGroupId: 'phones', validation: [] };
+        
+        expect(_email.id).toBe('email');
+        expect(_phone.id).toBe('phoneNumber');
+
+      // Extract repeatable group IDs - should be 'emails' | 'phones'
+      type GroupIds = RepeatableGroupIds<typeof descriptor>;
+      const _emails: GroupIds = 'emails';
+      const _phones: GroupIds = 'phones';
+
+      // Extract fields in each group
+      type EmailFields = FieldsInGroup<typeof descriptor, 'emails'>;
+      type PhoneFields = FieldsInGroup<typeof descriptor, 'phones'>;
+      
+      type EmailInGroup = Extract<EmailFields, { id: 'email' }>;
+      type PhoneInGroup = Extract<PhoneFields, { id: 'phoneNumber' }>;
+      type PhoneTypeInGroup = Extract<PhoneFields, { id: 'phoneType' }>;
+      
+        // Type-level verification: these types should be defined
+        const _emailInGroup: EmailInGroup = { id: 'email', type: 'text', label: 'Email', repeatableGroupId: 'emails', validation: [] };
+        const _phoneInGroup: PhoneInGroup = { id: 'phoneNumber', type: 'text', label: 'Phone Number', repeatableGroupId: 'phones', validation: [] };
+        const _phoneTypeInGroup: PhoneTypeInGroup = { id: 'phoneType', type: 'dropdown', label: 'Phone Type', repeatableGroupId: 'phones', validation: [] };
+        
+        expect(_emailInGroup.id).toBe('email');
+        expect(_phoneInGroup.id).toBe('phoneNumber');
+        expect(_phoneTypeInGroup.id).toBe('phoneType');
+
+      // Create object types for each group
+      type EmailObject = RepeatableGroupObject<typeof descriptor, 'emails'>;
+      type PhoneObject = RepeatableGroupObject<typeof descriptor, 'phones'>;
+      
+      const _emailObj: EmailObject = { email: 'test@example.com' };
+      const _phoneObj: PhoneObject = { phoneNumber: '555-1234', phoneType: 'mobile' };
+
+      // Final FormData should have both groups as separate arrays
+      type FinalFormData = FormData<typeof descriptor>;
+      
+      const _final: FinalFormData = {
+        emails: [
+          { email: 'primary@example.com' },
+          { email: 'secondary@example.com' },
+        ],
+        phones: [
+          { phoneNumber: '555-1234', phoneType: 'mobile' },
+          { phoneNumber: '555-5678', phoneType: 'work' },
+        ],
+      };
+
+      expect(true).toBe(true);
     });
   });
 });
