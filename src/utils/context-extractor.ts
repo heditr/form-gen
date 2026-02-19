@@ -28,6 +28,9 @@ export function initializeCaseContext(casePrefill: CasePrefill): CaseContext {
   if (casePrefill.needSignature !== undefined) {
     context.needSignature = casePrefill.needSignature;
   }
+  if (casePrefill.addresses !== undefined && Array.isArray(casePrefill.addresses)) {
+    context.addresses = casePrefill.addresses;
+  }
 
   return context;
 }

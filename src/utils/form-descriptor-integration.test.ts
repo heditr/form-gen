@@ -1047,6 +1047,115 @@ describe('form descriptor integration', () => {
       ]);
     });
 
+    test('given repeatable block with repeatableDefaultSource, should fill group from caseContext at load', () => {
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'addresses-block',
+            title: 'Addresses',
+            repeatable: true,
+            repeatableDefaultSource: 'addresses',
+            fields: [
+              {
+                id: 'street',
+                type: 'text',
+                label: 'Street',
+                repeatableGroupId: 'addresses',
+                validation: [],
+              },
+              {
+                id: 'city',
+                type: 'text',
+                label: 'City',
+                repeatableGroupId: 'addresses',
+                validation: [],
+              },
+              {
+                id: 'zip',
+                type: 'text',
+                label: 'ZIP',
+                repeatableGroupId: 'addresses',
+                validation: [],
+              },
+            ],
+          },
+        ],
+        submission: {
+          url: '/api/submit',
+          method: 'POST',
+        },
+      };
+
+      const context: FormContext = {
+        caseContext: {
+          addresses: [
+            { street: '123 Main St', city: 'New York', zip: '10001' },
+            { street: '456 Oak Ave', city: 'Boston', zip: '02101' },
+          ],
+        },
+      };
+
+      const defaultValues = extractDefaultValues(descriptor, context);
+
+      expect(defaultValues.addresses).toHaveLength(2);
+      expect(defaultValues.addresses).toEqual([
+        { street: '123 Main St', city: 'New York', zip: '10001' },
+        { street: '456 Oak Ave', city: 'Boston', zip: '02101' },
+      ]);
+    });
+
+    test('given repeatable block with repeatableDefaultSource and field defaultValues using @index, should fill each row from context', () => {
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'addresses-block',
+            title: 'Addresses',
+            repeatable: true,
+            repeatableDefaultSource: 'addresses',
+            fields: [
+              {
+                id: 'street',
+                type: 'text',
+                label: 'Street',
+                repeatableGroupId: 'addresses',
+                validation: [],
+                defaultValue: '{{caseContext.addresses.@index.street}}',
+              },
+              {
+                id: 'city',
+                type: 'text',
+                label: 'City',
+                repeatableGroupId: 'addresses',
+                validation: [],
+                defaultValue: '{{caseContext.addresses.@index.city}}',
+              },
+            ],
+          },
+        ],
+        submission: {
+          url: '/api/submit',
+          method: 'POST',
+        },
+      };
+
+      const context: FormContext = {
+        caseContext: {
+          addresses: [
+            { street: '123 Main St', city: 'New York' },
+            { street: '456 Oak Ave', city: 'Boston' },
+          ],
+        },
+      };
+
+      const defaultValues = extractDefaultValues(descriptor, context);
+
+      expect(defaultValues.addresses).toHaveLength(2);
+      expect(defaultValues.addresses).toEqual([
+        { street: '123 Main St', city: 'New York' },
+        { street: '456 Oak Ave', city: 'Boston' },
+      ]);
+    });
+
     test('given repeatable group with template referencing formData, should evaluate with form context', () => {
       const descriptor: GlobalFormDescriptor = {
         blocks: [

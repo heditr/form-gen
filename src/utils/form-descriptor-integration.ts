@@ -10,6 +10,7 @@ import { z } from 'zod';
 import type { GlobalFormDescriptor, FormData, BlockDescriptor, FieldDescriptor } from '@/types/form-descriptor';
 import { convertToReactHookFormRules, convertToZodSchema } from './validation-rule-adapter';
 import { evaluateDefaultValue } from './default-value-evaluator';
+import { evaluateTemplate } from './template-evaluator';
 import type { FormContext } from './template-evaluator';
 
 /**
@@ -39,6 +40,55 @@ export function extractDefaultValues(
         // Skip if we've already processed this group
         if (processedRepeatableGroups.has(groupId)) {
           continue;
+        }
+
+        // Fill repeatable group from caseContext when repeatableDefaultSource is set (Handlebars template → key)
+        const sourceTemplate = block.repeatableDefaultSource;
+        if (sourceTemplate) {
+          const key = sourceTemplate.includes('{{') && sourceTemplate.includes('}}')
+            ? evaluateTemplate(sourceTemplate, context).trim()
+            : sourceTemplate.trim();
+          const caseCtx = context.caseContext as Record<string, unknown> | undefined;
+          const sourceArray = key && caseCtx && caseCtx[key];
+          if (Array.isArray(sourceArray) && sourceArray.length > 0) {
+            const baseFieldId = (f: FieldDescriptor) =>
+              f.id.startsWith(`${groupId}.`) ? f.id.slice(groupId.length + 1) : f.id;
+            const nonButtonFields = fields.filter(f => f.type !== 'button');
+            const hasAtIndex = nonButtonFields.some(
+              f => typeof f.defaultValue === 'string' && f.defaultValue.includes('@index')
+            );
+            if (hasAtIndex) {
+              // Per-row: evaluate each field's defaultValue with @index substituted (e.g. {{caseContext.addresses.@index.street}} → .0.street for i=0)
+              const rows = sourceArray.map((_item: Record<string, unknown>, i: number) => {
+                const row: Record<string, unknown> = {};
+                for (const field of nonButtonFields) {
+                  const bid = baseFieldId(field);
+                  if (field.defaultValue !== undefined && typeof field.defaultValue === 'string' && field.defaultValue.includes('@index')) {
+                    const templateWithIndex = field.defaultValue.replace(/@index/g, String(i));
+                    row[bid] = evaluateDefaultValue(templateWithIndex, field.type, context);
+                  } else {
+                    const item = sourceArray[i] as Record<string, unknown> | undefined;
+                    row[bid] = (item && typeof item === 'object' && bid in item) ? item[bid] : '';
+                  }
+                }
+                return row;
+              });
+              (defaultValues as Record<string, unknown>)[groupId] = rows;
+            } else {
+              // No @index in any defaultValue: use source array as-is (normalized to field ids)
+              const baseFieldIds = new Set(nonButtonFields.map(f => baseFieldId(f)));
+              const normalized = sourceArray.map((item: Record<string, unknown>) => {
+                const out: Record<string, unknown> = {};
+                for (const id of baseFieldIds) {
+                  out[id] = (item && typeof item === 'object' && id in item) ? item[id] : '';
+                }
+                return out;
+              });
+              (defaultValues as Record<string, unknown>)[groupId] = normalized;
+            }
+            processedRepeatableGroups.add(groupId);
+            continue;
+          }
         }
         
         // Check if any field in this group has a defaultValue

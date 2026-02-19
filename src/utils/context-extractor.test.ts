@@ -51,6 +51,24 @@ describe('context extractor', () => {
 
       expect(context).toEqual({});
     });
+
+    test('given CasePrefill with addresses, should copy addresses into context', () => {
+      const casePrefill: import('@/types/form-descriptor').CasePrefill = {
+        incorporationCountry: 'US',
+        addresses: [
+          { street: '123 Main St', city: 'New York', zip: '10001' },
+          { street: '456 Oak Ave', city: 'Boston', zip: '02101' },
+        ],
+      };
+      const context = initializeCaseContext(casePrefill);
+
+      expect(context.incorporationCountry).toBe('US');
+      expect(context.addresses).toHaveLength(2);
+      expect(context.addresses).toEqual([
+        { street: '123 Main St', city: 'New York', zip: '10001' },
+        { street: '456 Oak Ave', city: 'Boston', zip: '02101' },
+      ]);
+    });
   });
 
   describe('identifyDiscriminantFields', () => {

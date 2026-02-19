@@ -234,7 +234,7 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
             },
           ],
         },
-        // Repeatable block that references address-block
+        // Repeatable block that references address-block; filled from caseContext.addresses at load (Handlebars source)
         {
           id: 'addresses-block',
           title: 'Addresses',
@@ -243,6 +243,7 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
           repeatableBlockRef: 'address-block', // Reference to address-block above
           minInstances: 1,
           maxInstances: 5,
+          repeatableDefaultSource: 'addresses', // caseContext key: fill from casePrefill.addresses at initial page load
           fields: [], // Fields will be resolved from address-block
         },
         {

@@ -17,7 +17,7 @@ import type { RootState } from '@/store/form-dux';
 import type { AppDispatch } from '@/store/store';
 import { Button } from '@/components/ui/button';
 import { createSubmissionOrchestrator, evaluatePayloadTemplate } from '@/utils/submission-orchestrator';
-import type { FormData, GlobalFormDescriptor, BlockDescriptor, FieldDescriptor, CaseContext } from '@/types/form-descriptor';
+import type { FormData, GlobalFormDescriptor, BlockDescriptor, FieldDescriptor, CaseContext, CasePrefill } from '@/types/form-descriptor';
 import { useFormDescriptor } from '@/hooks/use-form-descriptor';
 import { updateCaseContext, identifyDiscriminantFields, hasContextChanged } from '@/utils/context-extractor';
 import FormPresentation from '@/components/form-presentation';
@@ -58,20 +58,24 @@ export default function DemoPage() {
   // This automatically syncs to Redux state on success
   const { refetch: refetchDescriptor } = useGlobalDescriptor('/api/form/global-descriptor-demo');
 
-  // Automatically initialize case context with test values on page load
-  // Only initialize if context is empty to avoid overwriting existing values
+  // Load case prefill (including addresses) from backend and set context so repeatable block is filled via Handlebars
   useEffect(() => {
     const hasContext = caseContext && Object.keys(caseContext).length > 0;
     if (!hasContext) {
-      // Set CasePrefill values
-      dispatch(initializeCaseContextFromPrefill({
-        casePrefill: {
-          incorporationCountry: 'US',
-          processType: 'standard',
-          needSignature: true,
-        },
-      }));
-      // Set custom context values for template testing (email, phone, etc.)
+      fetch('/api/demo/prefill')
+        .then((res) => (res.ok ? res.json() : Promise.reject(new Error('Prefill failed'))))
+        .then((body: { casePrefill?: CasePrefill }) => {
+          dispatch(initializeCaseContextFromPrefill({ casePrefill: body.casePrefill ?? {} }));
+        })
+        .catch(() => {
+          dispatch(initializeCaseContextFromPrefill({
+            casePrefill: {
+              incorporationCountry: 'US',
+              processType: 'standard',
+              needSignature: true,
+            },
+          }));
+        });
       dispatch(updateCaseContextValues({
         caseContext: {
           email: 'test@example.com',
@@ -83,7 +87,6 @@ export default function DemoPage() {
       }));
     }
   }, [dispatch, caseContext]);
-
 
   // Reset form handler
   const handleReset = useCallback(() => {
@@ -120,6 +123,16 @@ export default function DemoPage() {
         newsletter: true,
       },
     }));
+  }, [dispatch]);
+
+  // Load case prefill from backend (addresses go to caseContext; repeatable block fills via repeatableDefaultSource)
+  const handleLoadBackendAddresses = useCallback(() => {
+    fetch('/api/demo/prefill')
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error('Prefill failed'))))
+      .then((body: { casePrefill?: CasePrefill }) => {
+        dispatch(initializeCaseContextFromPrefill({ casePrefill: body.casePrefill ?? {} }));
+      })
+      .catch((err) => console.error('Load backend addresses failed:', err));
   }, [dispatch]);
 
   // Get visible blocks count
@@ -159,6 +172,9 @@ export default function DemoPage() {
               </Button>
               <Button variant="outline" onClick={handleInitTestContext}>
                 Init Test Context
+              </Button>
+              <Button variant="outline" onClick={handleLoadBackendAddresses}>
+                Load backend addresses
               </Button>
               <Button variant="outline" onClick={handleReset}>
                 Reset Form

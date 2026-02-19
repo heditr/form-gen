@@ -18,11 +18,16 @@ type TemplateValue = string | number | boolean | null | undefined;
  * 
  * The context typically contains:
  * - formData: Current form field values
- * - caseContext: Discriminant field values
+ * - caseContext: Discriminant field values (may include arrays e.g. addresses for repeatableDefaultSource)
  * - Other dynamic properties for template evaluation
  */
 export type FormContext = {
-  [key: string]: TemplateValue | FormContext | TemplateValue[] | FormContext[];
+  [key: string]:
+    | TemplateValue
+    | FormContext
+    | TemplateValue[]
+    | FormContext[]
+    | Array<Record<string, unknown>>;
 };
 
 /**

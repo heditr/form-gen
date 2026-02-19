@@ -159,6 +159,9 @@ export interface ButtonConfig {
  * @property status - Optional status templates for conditional visibility/enabling
  * @property button - Optional button configuration (only for button type fields)
  * @property repeatableGroupId - Optional identifier to associate this field with a repeatable group
+ * @property defaultValue - Optional default value or Handlebars template (e.g. '{{caseContext.email}}').
+ *   In repeatable groups with repeatableDefaultSource, use '@index' in the template (e.g. '{{caseContext.addresses.@index.street}}');
+ *   @index is replaced with the row index (0, 1, …) when evaluating.
  */
 export interface FieldDescriptor {
   id: string;
@@ -236,6 +239,8 @@ export interface PopinSubmitConfig {
  * @property minInstances - Optional minimum number of instances required for repeatable blocks
  * @property maxInstances - Optional maximum number of instances allowed for repeatable blocks
  * @property repeatableBlockRef - Optional ID of another block to reference and make repeatable (avoids duplicating block definitions)
+ * @property repeatableDefaultSource - Optional Handlebars template that evaluates to a caseContext key (e.g. 'addresses').
+ *   At initial load, the repeatable group is filled from caseContext[key] when it is an array of objects.
  */
 export interface BlockDescriptor {
   id: string;
@@ -252,6 +257,7 @@ export interface BlockDescriptor {
   minInstances?: number;
   maxInstances?: number;
   repeatableBlockRef?: string;
+  repeatableDefaultSource?: string;
 }
 
 /**
@@ -334,12 +340,15 @@ export interface SubFormDescriptor {
  * @property onboardingCountries - Array of countries where onboarding is needed
  * @property processType - Type of onboarding process (e.g., 'standard', 'expedited')
  * @property needSignature - Whether signature is required
+ * @property addresses - Optional array of address objects for repeatable address block (e.g. [{ street, city, zip }]).
+ *   Used with repeatableDefaultSource in the descriptor to fill the repeatable block at initial page load.
  */
 export interface CasePrefill {
   incorporationCountry?: string;
   onboardingCountries?: string[];
   processType?: string;
   needSignature?: boolean;
+  addresses?: Array<Record<string, unknown>>;
 }
 
 /**
@@ -348,10 +357,10 @@ export interface CasePrefill {
  * Contains discriminant field values that determine which rules apply.
  * This is extracted from form data and sent to the backend for rule evaluation.
  * 
- * @property [key: string] - Dynamic properties based on discriminant fields
+ * @property [key: string] - Dynamic properties based on discriminant fields and prefill (e.g. addresses array for repeatable block)
  */
 export interface CaseContext {
-  [key: string]: string | number | boolean | null | undefined | string[];
+  [key: string]: string | number | boolean | null | undefined | string[] | Array<Record<string, unknown>>;
 }
 
 /**
