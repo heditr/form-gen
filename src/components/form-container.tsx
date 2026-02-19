@@ -24,7 +24,7 @@ import {
 } from '@/store/form-dux';
 import { fetchDataSourceThunk } from '@/store/form-thunks';
 import type { AppDispatch } from '@/store/store';
-import { updateCaseContext, identifyDiscriminantFields, hasContextChanged } from '@/utils/context-extractor';
+import { updateCaseContext, identifyDiscriminantFields, haveDiscriminantFieldsChanged } from '@/utils/context-extractor';
 import FormPresentation from './form-presentation';
 import { PopinManagerProvider } from './popin-manager';
 
@@ -82,15 +82,20 @@ function FormInner({
         return;
       }
 
+      // Optimization: Check if any discriminant fields actually changed before doing full context update
+      // This avoids unnecessary work when non-discriminant fields change
+      if (!haveDiscriminantFieldsChanged(caseContext, newFormData, discriminantFields)) {
+        return;
+      }
+
       // Update case context from form data
+      // Note: If haveDiscriminantFieldsChanged returned true, we know a discriminant field changed,
+      // so updateCaseContext will produce a different context. No need to double-check with hasContextChanged.
       const updatedContext = updateCaseContext(caseContext, newFormData, discriminantFields);
 
-      // Check if context changed
-      if (hasContextChanged(caseContext, updatedContext)) {
-        // Trigger re-hydration with updated context
-        // Note: Task 7 will replace this with a debounced TanStack Query mutation hook
-        rehydrate(updatedContext);
-      }
+      // Trigger re-hydration with updated context
+      // Note: Task 7 will replace this with a debounced TanStack Query mutation hook
+      rehydrate(updatedContext);
     },
     [mergedDescriptor, visibleFields, caseContext, syncFormData, rehydrate]
   );

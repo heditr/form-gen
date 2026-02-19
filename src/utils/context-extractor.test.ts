@@ -11,6 +11,7 @@ import {
   identifyDiscriminantFields,
   updateCaseContext,
   hasContextChanged,
+  haveDiscriminantFieldsChanged,
 } from './context-extractor';
 import type { FieldDescriptor, CaseContext, CasePrefill } from '@/types/form-descriptor';
 
@@ -287,6 +288,195 @@ describe('context extractor', () => {
 
     test('given empty contexts, should return false', () => {
       const hasChanged = hasContextChanged({}, {});
+
+      expect(hasChanged).toBe(false);
+    });
+  });
+
+  describe('haveDiscriminantFieldsChanged', () => {
+    test('given discriminant field changed in form data, should return true', () => {
+      const currentContext: CaseContext = {
+        jurisdiction: 'US',
+        entityType: 'individual',
+      };
+
+      const formData = {
+        jurisdiction: 'CA', // Changed
+        entityType: 'individual', // Same
+        email: 'test@example.com', // Not discriminant
+      };
+
+      const discriminantFields: FieldDescriptor[] = [
+        {
+          id: 'jurisdiction',
+          type: 'dropdown',
+          label: 'Jurisdiction',
+          validation: [],
+          isDiscriminant: true,
+        },
+        {
+          id: 'entityType',
+          type: 'dropdown',
+          label: 'Entity Type',
+          validation: [],
+          isDiscriminant: true,
+        },
+      ];
+
+      const hasChanged = haveDiscriminantFieldsChanged(currentContext, formData, discriminantFields);
+
+      expect(hasChanged).toBe(true);
+    });
+
+    test('given no discriminant fields changed, should return false', () => {
+      const currentContext: CaseContext = {
+        jurisdiction: 'US',
+        entityType: 'individual',
+      };
+
+      const formData = {
+        jurisdiction: 'US', // Same
+        entityType: 'individual', // Same
+        email: 'new@example.com', // Changed but not discriminant
+      };
+
+      const discriminantFields: FieldDescriptor[] = [
+        {
+          id: 'jurisdiction',
+          type: 'dropdown',
+          label: 'Jurisdiction',
+          validation: [],
+          isDiscriminant: true,
+        },
+        {
+          id: 'entityType',
+          type: 'dropdown',
+          label: 'Entity Type',
+          validation: [],
+          isDiscriminant: true,
+        },
+      ];
+
+      const hasChanged = haveDiscriminantFieldsChanged(currentContext, formData, discriminantFields);
+
+      expect(hasChanged).toBe(false);
+    });
+
+    test('given discriminant field not in form data, should skip it', () => {
+      const currentContext: CaseContext = {
+        jurisdiction: 'US',
+        entityType: 'individual',
+      };
+
+      const formData = {
+        // jurisdiction missing - field wasn't changed
+        email: 'test@example.com', // Changed but not discriminant
+      };
+
+      const discriminantFields: FieldDescriptor[] = [
+        {
+          id: 'jurisdiction',
+          type: 'dropdown',
+          label: 'Jurisdiction',
+          validation: [],
+          isDiscriminant: true,
+        },
+        {
+          id: 'entityType',
+          type: 'dropdown',
+          label: 'Entity Type',
+          validation: [],
+          isDiscriminant: true,
+        },
+      ];
+
+      const hasChanged = haveDiscriminantFieldsChanged(currentContext, formData, discriminantFields);
+
+      expect(hasChanged).toBe(false);
+    });
+
+    test('given array discriminant field changed, should detect change', () => {
+      const currentContext: CaseContext = {
+        onboardingCountries: ['US', 'CA'],
+      };
+
+      const formData = {
+        onboardingCountries: ['US', 'CA', 'MX'], // Changed
+      };
+
+      const discriminantFields: FieldDescriptor[] = [
+        {
+          id: 'onboardingCountries',
+          type: 'multiselect',
+          label: 'Onboarding Countries',
+          validation: [],
+          isDiscriminant: true,
+        },
+      ];
+
+      const hasChanged = haveDiscriminantFieldsChanged(currentContext, formData, discriminantFields);
+
+      expect(hasChanged).toBe(true);
+    });
+
+    test('given array discriminant field unchanged, should return false', () => {
+      const currentContext: CaseContext = {
+        onboardingCountries: ['US', 'CA'],
+      };
+
+      const formData = {
+        onboardingCountries: ['US', 'CA'], // Same
+      };
+
+      const discriminantFields: FieldDescriptor[] = [
+        {
+          id: 'onboardingCountries',
+          type: 'multiselect',
+          label: 'Onboarding Countries',
+          validation: [],
+          isDiscriminant: true,
+        },
+      ];
+
+      const hasChanged = haveDiscriminantFieldsChanged(currentContext, formData, discriminantFields);
+
+      expect(hasChanged).toBe(false);
+    });
+
+    test('given null to value change, should detect change', () => {
+      const currentContext: CaseContext = {
+        jurisdiction: null,
+      };
+
+      const formData = {
+        jurisdiction: 'US', // Changed from null
+      };
+
+      const discriminantFields: FieldDescriptor[] = [
+        {
+          id: 'jurisdiction',
+          type: 'dropdown',
+          label: 'Jurisdiction',
+          validation: [],
+          isDiscriminant: true,
+        },
+      ];
+
+      const hasChanged = haveDiscriminantFieldsChanged(currentContext, formData, discriminantFields);
+
+      expect(hasChanged).toBe(true);
+    });
+
+    test('given empty discriminant fields array, should return false', () => {
+      const currentContext: CaseContext = {
+        jurisdiction: 'US',
+      };
+
+      const formData = {
+        jurisdiction: 'CA',
+      };
+
+      const hasChanged = haveDiscriminantFieldsChanged(currentContext, formData, []);
 
       expect(hasChanged).toBe(false);
     });

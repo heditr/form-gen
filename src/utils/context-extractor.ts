@@ -112,6 +112,62 @@ export function updateCaseContext(
 }
 
 /**
+ * Compare two values to detect if they have changed
+ * Handles arrays with shallow comparison, uses strict equality for primitives
+ * 
+ * @param oldValue - Previous value
+ * @param newValue - New value
+ * @returns true if values are different, false if identical
+ */
+function valuesHaveChanged(oldValue: unknown, newValue: unknown): boolean {
+  // Handle arrays with shallow comparison
+  if (Array.isArray(oldValue) && Array.isArray(newValue)) {
+    if (oldValue.length !== newValue.length) {
+      return true;
+    }
+    if (oldValue.some((val, index) => val !== newValue[index])) {
+      return true;
+    }
+    return false;
+  }
+  
+  // Use strict equality for primitives (including null/undefined differences)
+  return oldValue !== newValue;
+}
+
+/**
+ * Check if any discriminant fields have changed in the form data
+ * This is an optimization to avoid unnecessary context updates when non-discriminant fields change
+ * 
+ * @param currentContext - Current CaseContext
+ * @param formData - New form data
+ * @param discriminantFields - Array of discriminant field descriptors
+ * @returns true if any discriminant field value has changed, false otherwise
+ */
+export function haveDiscriminantFieldsChanged(
+  currentContext: CaseContext,
+  formData: Partial<FormData>,
+  discriminantFields: FieldDescriptor[]
+): boolean {
+  for (const field of discriminantFields) {
+    const newValue = extractFieldValue(formData, field.id);
+    const currentValue = currentContext[field.id];
+
+    // If value is undefined in formData, skip (field wasn't changed)
+    if (newValue === undefined) {
+      continue;
+    }
+
+    // Compare values using shared comparison logic
+    if (valuesHaveChanged(currentValue, newValue)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
  * Compare two CaseContext objects to detect changes
  * 
  * @param oldContext - Previous CaseContext
@@ -122,21 +178,12 @@ export function hasContextChanged(oldContext: CaseContext, newContext: CaseConte
   // Get all unique keys from both contexts
   const allKeys = new Set([...Object.keys(oldContext), ...Object.keys(newContext)]);
 
-  // Compare each key
+  // Compare each key using shared comparison logic
   for (const key of allKeys) {
     const oldValue = oldContext[key];
     const newValue = newContext[key];
 
-    // Use strict equality to detect changes (including null/undefined differences)
-    // For arrays, do a shallow comparison
-    if (Array.isArray(oldValue) && Array.isArray(newValue)) {
-      if (oldValue.length !== newValue.length) {
-        return true;
-      }
-      if (oldValue.some((val, index) => val !== newValue[index])) {
-        return true;
-      }
-    } else if (oldValue !== newValue) {
+    if (valuesHaveChanged(oldValue, newValue)) {
       return true;
     }
   }
