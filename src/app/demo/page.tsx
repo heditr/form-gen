@@ -21,8 +21,10 @@ import type { FormData, GlobalFormDescriptor, BlockDescriptor, FieldDescriptor, 
 import { useFormDescriptor } from '@/hooks/use-form-descriptor';
 import { updateCaseContext, identifyDiscriminantFields, hasContextChanged } from '@/utils/context-extractor';
 import FormPresentation from '@/components/form-presentation';
+import FormValuesWatcher from '@/components/form-values-watcher';
 import { PopinManagerProvider } from '@/components/popin-manager';
 import SubmitButton from '@/components/submit-button';
+import { ClientOnlyDevTool } from '@/components/client-only-devtool';
 
 interface SubmissionState {
   payload: string | null;
@@ -426,7 +428,6 @@ function FormContainerWithSubmissionComponent({
   );
 
   const { form } = useFormDescriptor(mergedDescriptor, {
-    onDiscriminantChange: handleDiscriminantChange,
     savedFormData,
     caseContext,
     formData: savedFormData,
@@ -533,15 +534,6 @@ function FormContainerWithSubmissionComponent({
     await submitHandler(e);
   }, [form, mergedDescriptor, orchestrator, onSubmissionStateChange]);
 
-  const formContext = useMemo(() => {
-    const formValues = form.watch();
-    return {
-      ...formValues,
-      caseContext,
-      formData: formValues,
-    };
-  }, [form, caseContext]);
-
   const presentationProps = useMemo(
     () => ({
       form,
@@ -556,26 +548,36 @@ function FormContainerWithSubmissionComponent({
   );
 
   return (
-    <PopinManagerProvider
-      mergedDescriptor={mergedDescriptor}
+    <FormValuesWatcher
       form={form}
-      formContext={formContext}
       caseContext={caseContext}
-      onLoadDataSource={loadDataSource}
-      dataSourceCache={dataSourceCache}
+      descriptor={mergedDescriptor}
+      onDiscriminantChange={handleDiscriminantChange}
     >
-      <FormPresentation {...presentationProps} />
-      {mergedDescriptor && (
-        <div className="mt-6">
-          <SubmitButton
-            form={form}
-            descriptor={mergedDescriptor}
-            isRehydrating={isRehydrating}
-            onSubmit={handleSubmitWithTracking}
-          />
-        </div>
+      {(formContext) => (
+        <PopinManagerProvider
+          mergedDescriptor={mergedDescriptor}
+          form={form}
+          formContext={formContext}
+          caseContext={caseContext}
+          onLoadDataSource={loadDataSource}
+          dataSourceCache={dataSourceCache}
+        >
+          <FormPresentation {...presentationProps} formContext={formContext} />
+          {mergedDescriptor && (
+            <div className="mt-6">
+              <SubmitButton
+                form={form}
+                descriptor={mergedDescriptor}
+                isRehydrating={isRehydrating}
+                onSubmit={handleSubmitWithTracking}
+              />
+            </div>
+          )}
+          <ClientOnlyDevTool control={form.control} />
+        </PopinManagerProvider>
       )}
-    </PopinManagerProvider>
+    </FormValuesWatcher>
   );
 }
 

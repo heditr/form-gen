@@ -21,6 +21,7 @@ import { createSubmissionOrchestrator, evaluatePayloadTemplate, constructSubmiss
 import type { GlobalFormDescriptor, FormData, CaseContext, BlockDescriptor, FieldDescriptor } from '@/types/form-descriptor';
 import { Button } from '@/components/ui/button';
 import FormPresentation from '@/components/form-presentation';
+import FormValuesWatcher from '@/components/form-values-watcher';
 import { PopinManagerProvider } from '@/components/popin-manager';
 
 interface SubmissionState {
@@ -267,21 +268,10 @@ function FormContainerWithSubmissionComponent({
 
   // Initialize useFormDescriptor hook
   const { form } = useFormDescriptor(mergedDescriptor, {
-    onDiscriminantChange: handleDiscriminantChange,
     savedFormData: _formData,
     caseContext,
     formData: _formData,
   });
-
-  // Build form context for template evaluation (used by PopinManager)
-  const formContext = useMemo(() => {
-    const formValues = form.watch();
-    return {
-      ...formValues,
-      caseContext,
-      formData: formValues,
-    };
-  }, [form, caseContext]);
 
   // Create submission orchestrator
   const orchestrator = useMemo(() => createSubmissionOrchestrator(), []);
@@ -410,26 +400,35 @@ function FormContainerWithSubmissionComponent({
   );
 
   return (
-    <PopinManagerProvider
-      mergedDescriptor={mergedDescriptor}
+    <FormValuesWatcher
       form={form}
-      formContext={formContext}
       caseContext={caseContext}
-      onLoadDataSource={loadDataSource}
-      dataSourceCache={dataSourceCache}
+      descriptor={mergedDescriptor}
+      onDiscriminantChange={handleDiscriminantChange}
     >
-      <FormPresentation {...presentationProps} />
-      {mergedDescriptor && (
-        <div className="mt-6">
-          <SubmitButton
-            form={form}
-            descriptor={mergedDescriptor}
-            isRehydrating={isRehydrating}
-            onSubmit={handleSubmitWithTracking}
-          />
-        </div>
+      {(formContext) => (
+        <PopinManagerProvider
+          mergedDescriptor={mergedDescriptor}
+          form={form}
+          formContext={formContext}
+          caseContext={caseContext}
+          onLoadDataSource={loadDataSource}
+          dataSourceCache={dataSourceCache}
+        >
+          <FormPresentation {...presentationProps} formContext={formContext} />
+          {mergedDescriptor && (
+            <div className="mt-6">
+              <SubmitButton
+                form={form}
+                descriptor={mergedDescriptor}
+                isRehydrating={isRehydrating}
+                onSubmit={handleSubmitWithTracking}
+              />
+            </div>
+          )}
+        </PopinManagerProvider>
       )}
-    </PopinManagerProvider>
+    </FormValuesWatcher>
   );
 }
 

@@ -262,6 +262,62 @@ describe('PopinManager', () => {
       });
     });
 
+    test('given openPopin with groupId and index options, should open popin in edit mode', async () => {
+      const repeatableBlock = createMockBlock({
+        id: 'emergency-contacts-block',
+        title: 'Emergency Contacts',
+        repeatable: true,
+        fields: [
+          { id: 'emergency-contacts.emergencyName', type: 'text', label: 'Name', repeatableGroupId: 'emergency-contacts', validation: [] },
+          { id: 'emergency-contacts.emergencyPhone', type: 'text', label: 'Phone', repeatableGroupId: 'emergency-contacts', validation: [] },
+        ],
+      });
+      const descriptor = createMockDescriptor([repeatableBlock]);
+      const form = createMockForm();
+      (form.getValues as ReturnType<typeof vi.fn>).mockReturnValue({
+        'emergency-contacts': [
+          { emergencyName: 'Jane Doe', emergencyPhone: '+1-555-1234' },
+        ],
+      });
+      const formContext = createMockFormContext();
+
+      mockResolveBlockById.mockReturnValue({
+        block: repeatableBlock,
+        isHidden: false,
+        isDisabled: false,
+      });
+
+      const TestComponentWithOptions = () => {
+        const { openPopin } = usePopinManager();
+        return (
+          <button onClick={() => openPopin('emergency-contacts-block', { groupId: 'emergency-contacts', index: 0 })} data-testid="trigger-button">
+            Edit Contact
+          </button>
+        );
+      };
+
+      render(
+        <PopinManagerProvider
+          mergedDescriptor={descriptor}
+          form={form}
+          formContext={formContext}
+          caseContext={createMockCaseContext()}
+          onLoadDataSource={vi.fn()}
+          dataSourceCache={{}}
+        >
+          <TestComponentWithOptions />
+        </PopinManagerProvider>
+      );
+
+      const triggerButton = screen.getByTestId('trigger-button');
+      await userEvent.click(triggerButton);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('dialog')).toBeInTheDocument();
+        expect(screen.getByTestId('dialog-title')).toHaveTextContent('Emergency Contacts');
+      });
+    });
+
     test('given block not found, should handle error gracefully without opening popin', async () => {
       const descriptor = createMockDescriptor([]);
       const form = createMockForm();

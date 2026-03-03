@@ -1,11 +1,11 @@
 /**
  * DropdownField Component
- * 
+ *
  * Renders a dropdown/select field using react-hook-form with Shadcn UI Select component.
  * Supports static items and dynamic data sources with loading states.
  */
 
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { Controller } from 'react-hook-form';
 import type { FieldDescriptor, FieldItem } from '@/types/form-descriptor';
 import type { UseFormReturn, FieldValues } from 'react-hook-form';
@@ -57,7 +57,7 @@ export default function DropdownField({
     }
   );
 
-  // Derive items from field.items or data source query result
+  // Derive items from field.items or data source query result (pure)
   const items = useMemo<FieldItem[]>(() => {
     // If field has static items, use them
     if (field.items) {
@@ -70,22 +70,32 @@ export default function DropdownField({
       if (data && Array.isArray(data)) {
         return data as FieldItem[];
       }
-      // Fallback to callback pattern if hook hasn't loaded yet (backward compatibility)
-      if (!data && onLoadDataSource && field.dataSource.auth) {
-        // Only call callback if auth is compatible (bearer or apikey, not basic)
-        const auth = field.dataSource.auth;
-        if (auth.type === 'bearer' || auth.type === 'apikey') {
-          onLoadDataSource(field.id, field.dataSource.url, {
-            type: auth.type,
-            token: auth.token,
-            headerName: auth.headerName,
-          });
-        }
-      }
     }
 
     return [];
-  }, [field.items, field.dataSource, field.id, dataSourceQuery.data, dataSourceCache, onLoadDataSource]);
+  }, [field.items, field.dataSource, field.id, dataSourceQuery.data, dataSourceCache]);
+
+  // Backward-compatible callback-based loading, moved to effect to avoid setState during render
+  useEffect(() => {
+    if (!field.dataSource || !onLoadDataSource || !field.dataSource.auth) {
+      return;
+    }
+
+    const data = dataSourceQuery.data || dataSourceCache[field.id];
+    if (data && Array.isArray(data)) {
+      // Already have data, no need to call callback
+      return;
+    }
+
+    const auth = field.dataSource.auth;
+    if (auth.type === 'bearer' || auth.type === 'apikey') {
+      onLoadDataSource(field.id, field.dataSource.url, {
+        type: auth.type,
+        token: auth.token,
+        headerName: auth.headerName,
+      });
+    }
+  }, [field.dataSource, field.id, dataSourceQuery.data, dataSourceCache, onLoadDataSource]);
 
   // Derive loading state from hook or cache
   const isLoading = useMemo(() => {

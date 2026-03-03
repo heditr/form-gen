@@ -9,7 +9,7 @@ import { describe, test, expect } from 'vitest';
 import { z } from 'zod';
 import type { BlockDescriptor, GlobalFormDescriptor } from '@/types/form-descriptor';
 import type { FormContext } from '@/utils/template-evaluator';
-import { isRepeatableBlock, groupFieldsByRepeatableGroupId, buildZodSchemaFromDescriptor, extractDefaultValues } from './form-descriptor-integration';
+import { isRepeatableBlock, isRepeatablePopinBlock, groupFieldsByRepeatableGroupId, buildZodSchemaFromDescriptor, extractDefaultValues } from './form-descriptor-integration';
 
 describe('form descriptor integration', () => {
   describe('isRepeatableBlock', () => {
@@ -55,6 +55,38 @@ describe('form descriptor integration', () => {
       };
 
       expect(isRepeatableBlock(block)).toBe(true);
+    });
+  });
+
+  describe('isRepeatablePopinBlock', () => {
+    test('given a block with repeatable and repeatablePopin true, should return true', () => {
+      const block: BlockDescriptor = {
+        id: 'emergency-contacts-block',
+        title: 'Emergency Contacts',
+        repeatable: true,
+        repeatablePopin: true,
+        fields: [],
+      };
+      expect(isRepeatablePopinBlock(block)).toBe(true);
+    });
+
+    test('given a block with repeatable but not repeatablePopin, should return false', () => {
+      const block: BlockDescriptor = {
+        id: 'addresses-block',
+        title: 'Addresses',
+        repeatable: true,
+        fields: [],
+      };
+      expect(isRepeatablePopinBlock(block)).toBe(false);
+    });
+
+    test('given a block without repeatable, should return false', () => {
+      const block: BlockDescriptor = {
+        id: 'basic-info',
+        title: 'Basic Info',
+        fields: [],
+      };
+      expect(isRepeatablePopinBlock(block)).toBe(false);
     });
   });
 

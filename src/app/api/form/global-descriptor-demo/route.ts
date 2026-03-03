@@ -238,8 +238,10 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
         {
           id: 'addresses-block',
           title: 'Addresses',
-          description: 'Add multiple addresses (repeatable field group)',
+          description: 'Add multiple addresses. Click a summary to edit.',
           repeatable: true,
+          repeatablePopin: true,
+          repeatableSummaryTemplate: '{{#if street}}{{street}}{{#if city}}, {{city}}{{/if}}{{else}}New address{{/if}}',
           repeatableBlockRef: 'address-block', // Reference to address-block above
           minInstances: 1,
           maxInstances: 5,

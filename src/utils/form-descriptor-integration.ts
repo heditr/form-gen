@@ -311,6 +311,13 @@ export function isRepeatableBlock(block: BlockDescriptor): boolean {
 }
 
 /**
+ * Check if a block is a repeatable popin block (summary + edit in popin)
+ */
+export function isRepeatablePopinBlock(block: BlockDescriptor): boolean {
+  return block.repeatable === true && block.repeatablePopin === true;
+}
+
+/**
  * Group fields by their repeatableGroupId
  * 
  * @param fields - Array of field descriptors

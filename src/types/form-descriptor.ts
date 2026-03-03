@@ -241,6 +241,8 @@ export interface PopinSubmitConfig {
  * @property repeatableBlockRef - Optional ID of another block to reference and make repeatable (avoids duplicating block definitions)
  * @property repeatableDefaultSource - Optional Handlebars template that evaluates to a caseContext key (e.g. 'addresses').
  *   At initial load, the repeatable group is filled from caseContext[key] when it is an array of objects.
+ * @property repeatablePopin - If true with repeatable, each instance is edited via popin; summaries shown inline, click to edit
+ * @property repeatableSummaryTemplate - Optional Handlebars template for summary text per instance (e.g. "{{name}} ({{role}})")
  */
 export interface BlockDescriptor {
   id: string;
@@ -258,6 +260,8 @@ export interface BlockDescriptor {
   maxInstances?: number;
   repeatableBlockRef?: string;
   repeatableDefaultSource?: string;
+  repeatablePopin?: boolean;
+  repeatableSummaryTemplate?: string;
 }
 
 /**

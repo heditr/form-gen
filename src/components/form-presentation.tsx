@@ -5,9 +5,7 @@
  * Receives form methods and state as props from container.
  */
 
-import { useMemo } from 'react';
 import type { FormPresentationProps } from './form-container';
-import type { FormContext } from '@/utils/template-evaluator';
 import { evaluateHiddenStatus, evaluateDisabledStatus } from '@/utils/template-evaluator';
 import Block from './block';
 
@@ -19,6 +17,7 @@ import Block from './block';
  */
 export default function FormPresentation({
   form,
+  formContext,
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   visibleBlocks: _visibleBlocks, // Used by container for selector, but we evaluate status here
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -29,19 +28,6 @@ export default function FormPresentation({
   onLoadDataSource,
   dataSourceCache,
 }: FormPresentationProps) {
-  // Get current form values for template evaluation
-  const formValues = form.watch();
-
-  // Build form context for template evaluation
-  // Context includes form data (spread for direct access) and nested formData property
-  // Note: caseContext is not available here, but discriminant fields are included in formValues
-  const formContext: FormContext = useMemo(
-    () => ({
-      ...formValues,
-      formData: formValues, // Nested property for template access
-    }),
-    [formValues]
-  );
 
   // If no descriptor, render empty form
   if (!mergedDescriptor) {
@@ -81,6 +67,7 @@ export default function FormPresentation({
             formContext={formContext}
             onLoadDataSource={onLoadDataSource}
             dataSourceCache={dataSourceCache}
+            renderRepeatablesAsSummary
           />
         );
       })}

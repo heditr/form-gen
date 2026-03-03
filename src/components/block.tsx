@@ -10,10 +10,11 @@ import type { BlockDescriptor } from '@/types/form-descriptor';
 import type { UseFormReturn, FieldValues } from 'react-hook-form';
 import type { FormContext } from '@/utils/template-evaluator';
 import { evaluateHiddenStatus, evaluateDisabledStatus } from '@/utils/template-evaluator';
-import { isRepeatableBlock, groupFieldsByRepeatableGroupId } from '@/utils/form-descriptor-integration';
+import { isRepeatableBlock, isRepeatablePopinBlock, groupFieldsByRepeatableGroupId } from '@/utils/form-descriptor-integration';
 import { cn } from '@/lib/utils';
 import FieldWrapper from './field-wrapper';
 import RepeatableFieldGroup from './repeatable-field-group';
+import RepeatablePopinSummary from './repeatable-popin-summary';
 
 export interface BlockProps {
   block: BlockDescriptor;
@@ -23,6 +24,11 @@ export interface BlockProps {
   formContext: FormContext;
   onLoadDataSource: (fieldPath: string, url: string, auth?: { type: 'bearer' | 'apikey'; token?: string; headerName?: string }) => void;
   dataSourceCache: Record<string, unknown>;
+  /**
+   * When true, repeatable popin blocks render summaries instead of inline fields.
+   * Use this on the main form; popin dialogs should always render inline fields.
+   */
+  renderRepeatablesAsSummary?: boolean;
 }
 
 /**
@@ -39,6 +45,7 @@ export default function Block({
   formContext,
   onLoadDataSource,
   dataSourceCache,
+  renderRepeatablesAsSummary,
 }: BlockProps) {
   // Track visibility state for smooth animations
   const [shouldRender, setShouldRender] = useState(!isHidden);
@@ -134,11 +141,25 @@ export default function Block({
       )}
       <div className="block-fields space-y-4">
         {isRepeatable && fieldGroups ? (
-          // Render repeatable groups
+          // Render repeatable groups: popin mode (summaries) or inline mode
           Object.entries(fieldGroups).map(([groupId, fields]) => {
-            // Evaluate block visibility for the group
             const groupHidden = evaluateHiddenStatus(block, formContext);
             const groupDisabled = evaluateDisabledStatus(block, formContext) || isDisabled;
+
+            if (renderRepeatablesAsSummary && isRepeatablePopinBlock(block)) {
+              return (
+                <RepeatablePopinSummary
+                  key={groupId}
+                  block={block}
+                  groupId={groupId}
+                  fields={fields}
+                  isDisabled={groupDisabled}
+                  isHidden={groupHidden}
+                  form={form}
+                  formContext={formContext}
+                />
+              );
+            }
 
             return (
               <RepeatableFieldGroup

@@ -44,6 +44,15 @@ vi.mock('./repeatable-field-group', () => ({
   )),
 }));
 
+// Mock RepeatablePopinSummary (requires PopinManagerProvider; we mock to avoid provider)
+vi.mock('./repeatable-popin-summary', () => ({
+  default: vi.fn(({ block, groupId }) => (
+    <div data-testid={`repeatable-popin-summary-${groupId}`}>
+      Repeatable Popin Summary: {block.title}
+    </div>
+  )),
+}));
+
 describe('Block', () => {
   const createMockForm = () => useForm();
 

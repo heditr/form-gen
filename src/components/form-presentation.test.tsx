@@ -90,11 +90,13 @@ describe('FormPresentation', () => {
     const descriptor = createMockDescriptor();
     return {
       form: createMockForm() as any,
+      formContext: {},
       visibleBlocks: descriptor.blocks,
       visibleFields: descriptor.blocks.flatMap((b) => b.fields),
       isRehydrating: false,
       mergedDescriptor: descriptor,
       onLoadDataSource: vi.fn(),
+      dataSourceCache: {},
       ...overrides,
     };
   };
@@ -117,7 +119,7 @@ describe('FormPresentation', () => {
   });
 
   test('given form data, should pass current values to field components', () => {
-    // Component should use form.watch() to get current values
+    // Component receives formContext from container (built from useWatch)
     expect(FormPresentation).toBeDefined();
   });
 

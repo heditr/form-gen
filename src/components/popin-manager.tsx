@@ -28,11 +28,17 @@ import {
 import { Button } from '@/components/ui/button';
 import Block from './block';
 
+/** Options for opening popin in repeatable instance edit mode */
+export interface OpenPopinOptions {
+  groupId?: string;
+  index?: number;
+}
+
 /**
  * Popin Manager Context
  */
 interface PopinManagerContextValue {
-  openPopin: (blockId: string) => void;
+  openPopin: (blockId: string, options?: OpenPopinOptions) => void;
 }
 
 const PopinManagerContext = createContext<PopinManagerContextValue | null>(null);
@@ -78,6 +84,7 @@ export function PopinManagerProvider({
 }: PopinManagerProviderProps) {
   const queryClient = useQueryClient();
   const [openBlockId, setOpenBlockId] = useState<string | null>(null);
+  const [popinEditContext, setPopinEditContext] = useState<{ groupId: string; index: number } | null>(null);
   const [popinLoadData, setPopinLoadData] = useState<Record<string, unknown> | null>(null);
   const [isLoadingPopinData, setIsLoadingPopinData] = useState(false);
   const [isSubmittingPopin, setIsSubmittingPopin] = useState(false);
@@ -108,17 +115,45 @@ export function PopinManagerProvider({
     return resolveBlockById(openBlockId, mergedDescriptor, formContext);
   }, [openBlockId, mergedDescriptor, formContext]);
 
-  // Create a minimal descriptor containing only the popin block for isolated form instance
+  // For repeatable popin edit: build instance block (flat fields for one row) and seed from main form
   const popinDescriptor = useMemo(() => {
     if (!resolvedBlock || !mergedDescriptor) {
       return null;
     }
+    const block = resolvedBlock.block;
+
+    // Repeatable popin edit mode: derive single-instance block from repeatable group fields
+    if (popinEditContext && isRepeatableBlock(block)) {
+      const { groupId } = popinEditContext;
+      const fieldGroups = groupFieldsByRepeatableGroupId(block.fields);
+      const groupFields = fieldGroups[groupId];
+      if (!groupFields?.length) {
+        return null;
+      }
+      const instanceFields = groupFields
+        .filter(f => f.type !== 'button')
+        .map(f => {
+          const baseId = f.id.startsWith(`${groupId}.`) ? f.id.slice(groupId.length + 1) : f.id;
+          return { ...f, id: baseId, repeatableGroupId: undefined };
+        });
+      const instanceBlock = {
+        id: `${block.id}-instance`,
+        title: block.title,
+        fields: instanceFields,
+      };
+      return {
+        version: mergedDescriptor.version,
+        blocks: [instanceBlock],
+        submission: mergedDescriptor.submission,
+      } as GlobalFormDescriptor;
+    }
+
     return {
       version: mergedDescriptor.version,
-      blocks: [resolvedBlock.block],
+      blocks: [block],
       submission: mergedDescriptor.submission,
     } as GlobalFormDescriptor;
-  }, [resolvedBlock, mergedDescriptor]);
+  }, [resolvedBlock, mergedDescriptor, popinEditContext]);
 
   // Create isolated form instance for popin using useFormDescriptor
   // This form only contains fields from the popin block
@@ -129,50 +164,58 @@ export function PopinManagerProvider({
     // No onDiscriminantChange - popin form values should not sync to Redux
   });
 
-  // Reset popin form with popinLoadData when it's loaded
+  // Seed popin form from main form when in repeatable edit mode
   useEffect(() => {
-    if (!popinLoadData || !resolvedBlock) {
+    if (popinEditContext && resolvedBlock) {
+      const mainValues = mainForm.getValues() as Record<string, unknown>;
+      const groupArray = mainValues[popinEditContext.groupId] as unknown[] | undefined;
+      const instanceData = Array.isArray(groupArray) ? groupArray[popinEditContext.index] : undefined;
+      if (instanceData && typeof instanceData === 'object') {
+        popinForm.reset(instanceData as Record<string, unknown>);
+      }
+    }
+  }, [popinEditContext, resolvedBlock, mainForm, popinForm]);
+
+  // Reset popin form with popinLoadData when it's loaded (standalone popin, not edit mode)
+  useEffect(() => {
+    if (popinEditContext || !popinLoadData || !resolvedBlock) {
       return;
     }
 
     // Extract values for popin block fields from popinLoadData
-    // Use Record<string, unknown> to allow arrays for repeatable groups
     const popinFieldValues: Record<string, unknown> = {};
     
-    // Handle repeatable groups - check if block is repeatable
     if (isRepeatableBlock(resolvedBlock.block)) {
-      // Extract repeatable group arrays from popinLoadData
-      // popinLoadData should contain arrays at groupId level (e.g., emergencyContacts: [...])
       const fieldGroups = groupFieldsByRepeatableGroupId(resolvedBlock.block.fields);
       for (const [groupId] of Object.entries(fieldGroups)) {
         if (popinLoadData[groupId] !== undefined && Array.isArray(popinLoadData[groupId])) {
-          // Arrays are valid form values for repeatable groups
           popinFieldValues[groupId] = popinLoadData[groupId];
         }
       }
     }
     
-    // Handle non-repeatable fields
     for (const field of resolvedBlock.block.fields) {
-      // Skip fields that belong to a repeatable group (handled above)
-      if (field.repeatableGroupId) {
-        continue;
-      }
+      if (field.repeatableGroupId) continue;
       if (popinLoadData[field.id] !== undefined) {
         popinFieldValues[field.id] = popinLoadData[field.id];
       }
     }
 
-    // Reset form with popinLoadData values
     if (Object.keys(popinFieldValues).length > 0) {
       popinForm.reset(popinFieldValues);
     }
-  }, [popinLoadData, resolvedBlock, popinForm]);
+  }, [popinLoadData, resolvedBlock, popinForm, popinEditContext]);
 
-  // Load popin data when popin opens (if popinLoad config exists)
+  // Load popin data when popin opens (if popinLoad config exists; skip in edit mode)
   useEffect(() => {
-    if (!resolvedBlock || !resolvedBlock.block.popinLoad) {
-      // Clear popinLoad data when popin closes or has no popinLoad config
+    if (!resolvedBlock || popinEditContext) {
+      if (!resolvedBlock) {
+        setPopinLoadData(null);
+        setIsLoadingPopinData(false);
+      }
+      return;
+    }
+    if (!resolvedBlock.block.popinLoad) {
       setPopinLoadData(null);
       setIsLoadingPopinData(false);
       return;
@@ -211,52 +254,59 @@ export function PopinManagerProvider({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resolvedBlock?.block.id, resolvedBlock?.block.popinLoad]);
 
-  // Open popin by block ID
-  const openPopin = useCallback((blockId: string) => {
+  // Open popin by block ID, optionally for a specific repeatable instance (groupId, index)
+  const openPopin = useCallback((blockId: string, options?: OpenPopinOptions) => {
     if (!mergedDescriptor) {
       console.error('Cannot open popin: mergedDescriptor is not available');
       return;
     }
 
-    // Resolve block to check if it exists and is visible
     const resolved = resolveBlockById(blockId, mergedDescriptor, formContext);
-    if (!resolved) {
-      // Error already logged in resolveBlockById
-      return;
-    }
-
-    // Check if block is hidden - don't open if hidden
+    if (!resolved) return;
     if (resolved.isHidden) {
       console.warn(`Cannot open popin: Block "${blockId}" is hidden`);
       return;
     }
 
-    // Close any currently open popin and open the new one
     setOpenBlockId(blockId);
+    if (options?.groupId !== undefined && options?.index !== undefined) {
+      setPopinEditContext({ groupId: options.groupId, index: options.index });
+    } else {
+      setPopinEditContext(null);
+    }
   }, [mergedDescriptor, formContext]);
 
   // Close popin (acts as cancel - discards changes)
   const closePopin = useCallback(() => {
-    // Clear errors for fields in the popin block before closing
     if (resolvedBlock && resolvedBlock.block.fields) {
-      resolvedBlock.block.fields.forEach((field) => {
+      const blockToClear = popinDescriptor?.blocks[0] ?? resolvedBlock.block;
+      blockToClear.fields.forEach((field) => {
         popinForm.clearErrors(field.id);
       });
     }
-    // Reset popin form to clear values
     popinForm.reset();
     setOpenBlockId(null);
-  }, [resolvedBlock, popinForm]);
+    setPopinEditContext(null);
+  }, [resolvedBlock, popinForm, popinDescriptor]);
 
   // Handle validate button click
   const handleValidate = useCallback(async () => {
-    if (!resolvedBlock) {
-      return;
-    }
+    if (!resolvedBlock) return;
 
     const block = resolvedBlock.block;
 
-    // If no popinSubmit config, just close
+    // Repeatable popin edit mode: merge popin values back and close
+    if (popinEditContext) {
+      const values = popinForm.getValues() as Record<string, unknown>;
+      const targetForm = block.popin ? popinForm : mainForm;
+      (targetForm as UseFormReturn<FieldValues>).setValue(
+        `${popinEditContext.groupId}.${popinEditContext.index}` as never,
+        values as never
+      );
+      closePopin();
+      return;
+    }
+
     if (!block.popinSubmit) {
       closePopin();
       return;
@@ -363,7 +413,7 @@ export function PopinManagerProvider({
       } finally {
         setIsSubmittingPopin(false);
       }
-    }, [resolvedBlock, popinForm, mainForm, closePopin, queryClient]);
+    }, [resolvedBlock, popinForm, mainForm, closePopin, queryClient, popinEditContext]);
 
   // Context value
   const contextValue = useMemo(() => ({
@@ -393,13 +443,15 @@ export function PopinManagerProvider({
                 </div>
               ) : (
                 <Block
-                  block={resolvedBlock.block}
+                  block={popinDescriptor?.blocks[0] ?? resolvedBlock.block}
                   isDisabled={resolvedBlock.isDisabled}
                   isHidden={false}
                   form={popinForm}
                   formContext={formContext}
                   onLoadDataSource={onLoadDataSource}
                   dataSourceCache={dataSourceCache}
+                  // In popin we always want inline fields, never summary rows
+                  renderRepeatablesAsSummary={false}
                 />
               )}
             </div>

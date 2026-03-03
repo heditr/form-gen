@@ -321,6 +321,35 @@ describe('form-descriptor types', () => {
       expect(block.repeatableBlockRef).toBe('address-block');
     });
 
+    test('given a repeatable popin block, should support repeatablePopin flag', () => {
+      const block: BlockDescriptor = {
+        id: 'emergency-contacts-block',
+        title: 'Emergency Contacts',
+        fields: [],
+        repeatable: true,
+        repeatablePopin: true,
+        repeatableBlockRef: 'emergency-contact-block',
+      };
+
+      expect(block.repeatable).toBe(true);
+      expect(block.repeatablePopin).toBe(true);
+    });
+
+    test('given a repeatable popin block with summary template, should support repeatableSummaryTemplate', () => {
+      const block: BlockDescriptor = {
+        id: 'emergency-contacts-block',
+        title: 'Emergency Contacts',
+        fields: [],
+        repeatable: true,
+        repeatablePopin: true,
+        repeatableSummaryTemplate: '{{#if emergencyName}}{{emergencyName}} ({{emergencyRelationship}}){{else}}New contact{{/if}}',
+      };
+
+      expect(block.repeatableSummaryTemplate).toBe(
+        '{{#if emergencyName}}{{emergencyName}} ({{emergencyRelationship}}){{else}}New contact{{/if}}'
+      );
+    });
+
     test('given a popin block with popinLoad config, should support popinLoad with url and dataSourceId', () => {
       const block: BlockDescriptor = {
         id: 'contact-info',

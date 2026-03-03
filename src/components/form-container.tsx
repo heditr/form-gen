@@ -11,7 +11,7 @@
 import { useMemo, useCallback } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import type { UseFormReturn, FieldValues } from 'react-hook-form';
-import { DevTool } from '@hookform/devtools';
+import { ClientOnlyDevTool } from '@/components/client-only-devtool';
 import type { GlobalFormDescriptor, BlockDescriptor, FieldDescriptor, FormData, CaseContext } from '@/types/form-descriptor';
 import { useFormDescriptor } from '@/hooks/use-form-descriptor';
 import { useDebouncedRehydration } from '@/hooks/use-debounced-rehydration';
@@ -25,7 +25,9 @@ import {
 import { fetchDataSourceThunk } from '@/store/form-thunks';
 import type { AppDispatch } from '@/store/store';
 import { updateCaseContext, identifyDiscriminantFields, haveDiscriminantFieldsChanged } from '@/utils/context-extractor';
+import type { FormContext } from '@/utils/template-evaluator';
 import FormPresentation from './form-presentation';
+import FormValuesWatcher from './form-values-watcher';
 import { PopinManagerProvider } from './popin-manager';
 
 /**
@@ -33,6 +35,7 @@ import { PopinManagerProvider } from './popin-manager';
  */
 export interface FormPresentationProps {
   form: UseFormReturn<FieldValues>;
+  formContext: FormContext;
   visibleBlocks: BlockDescriptor[];
   visibleFields: FieldDescriptor[];
   isRehydrating: boolean;
@@ -105,24 +108,13 @@ function FormInner({
   // Pass savedFormData to restore form values from Redux
   // Pass caseContext and formData for template evaluation in default values
   const { form } = useFormDescriptor(mergedDescriptor, {
-    onDiscriminantChange: handleDiscriminantChange,
     savedFormData, // Restore form values from Redux when form remounts
     caseContext, // Case context for template evaluation
     formData: savedFormData, // Current form data for template evaluation
   });
 
-  // Build form context for template evaluation (used by PopinManager)
-  const formContext = useMemo(() => {
-    const formValues = form.watch();
-    return {
-      ...formValues,
-      caseContext,
-      formData: formValues,
-    };
-  }, [form, caseContext]);
-
-  // Prepare props for presentation component
-  const presentationProps: FormPresentationProps = useMemo(
+  // Prepare static props for presentation (formContext comes from FormValuesWatcher)
+  const presentationProps = useMemo(
     () => ({
       form,
       visibleBlocks,
@@ -135,18 +127,30 @@ function FormInner({
     [form, visibleBlocks, visibleFields, isRehydrating, mergedDescriptor, loadDataSource, dataSourceCache]
   );
 
+  // useWatch isolated in FormValuesWatcher - when form values change, only
+  // FormValuesWatcher re-renders, not FormInner (avoids "Cannot update component
+  // while rendering Controller")
   return (
-    <PopinManagerProvider
-      mergedDescriptor={mergedDescriptor}
+    <FormValuesWatcher
       form={form}
-      formContext={formContext}
       caseContext={caseContext}
-      onLoadDataSource={loadDataSource}
-      dataSourceCache={dataSourceCache}
+      descriptor={mergedDescriptor}
+      onDiscriminantChange={handleDiscriminantChange}
     >
-      <FormPresentation {...presentationProps} />
-      <DevTool control={form.control} />
-    </PopinManagerProvider>
+      {(formContext) => (
+        <PopinManagerProvider
+          mergedDescriptor={mergedDescriptor}
+          form={form}
+          formContext={formContext}
+          caseContext={caseContext}
+          onLoadDataSource={loadDataSource}
+          dataSourceCache={dataSourceCache}
+        >
+          <FormPresentation {...presentationProps} formContext={formContext} />
+          <ClientOnlyDevTool control={form.control} />
+        </PopinManagerProvider>
+      )}
+    </FormValuesWatcher>
   );
 }
 
