@@ -13,6 +13,7 @@
 - [Popin Block Component Epic](tasks/popin-block-component-epic.md) - 📋 PLANNED
 - [Popin Isolation Epic](tasks/popin-isolation-epic.md) - 📋 PLANNED
 - [Repeatable Fields Epic](tasks/repeatable-fields-epic.md) - 📋 PLANNED
+- [Repeatable Popin Epic](tasks/repeatable-popin-epic.md) - 📋 PLANNED
 
 ## Completed Epics
 
