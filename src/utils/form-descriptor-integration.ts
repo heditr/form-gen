@@ -48,6 +48,35 @@ function setNestedValue(
 }
 
 /**
+ * Helper to get a nested value from an object using dot-notation path
+ * (e.g. "businessAddress.line1" ← obj.businessAddress.line1).
+ */
+function getNestedValue(
+  source: Record<string, unknown> | undefined,
+  path: string
+): unknown {
+  if (!source || !path) {
+    return undefined;
+  }
+
+  const parts = path.split('.');
+  let current: unknown = source;
+
+  for (const part of parts) {
+    if (
+      !current ||
+      typeof current !== 'object' ||
+      Array.isArray(current)
+    ) {
+      return undefined;
+    }
+    current = (current as Record<string, unknown>)[part];
+  }
+
+  return current;
+}
+
+/**
  * Extract default values from form descriptor fields
  * 
  * @param descriptor - Global form descriptor
@@ -103,10 +132,8 @@ export function extractDefaultValues(
                     setNestedValue(row, bid, value);
                   } else {
                     const item = sourceArray[i] as Record<string, unknown> | undefined;
-                    const value =
-                      item && typeof item === 'object' && bid in item
-                        ? (item as Record<string, unknown>)[bid]
-                        : '';
+                    const rawValue = getNestedValue(item, bid);
+                    const value = rawValue !== undefined ? rawValue : '';
                     setNestedValue(row, bid, value);
                   }
                 }
@@ -119,10 +146,8 @@ export function extractDefaultValues(
               const normalized = sourceArray.map((item: Record<string, unknown>) => {
                 const out: Record<string, unknown> = {};
                 for (const id of baseFieldIds) {
-                  const value =
-                    item && typeof item === 'object' && id in item
-                      ? (item as Record<string, unknown>)[id]
-                      : '';
+                  const rawValue = getNestedValue(item, id);
+                  const value = rawValue !== undefined ? rawValue : '';
                   setNestedValue(out, id, value);
                 }
                 return out;

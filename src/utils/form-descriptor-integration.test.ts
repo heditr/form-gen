@@ -1616,5 +1616,67 @@ describe('form descriptor integration', () => {
         },
       ]);
     });
+
+    test('given repeatable block with repeatableDefaultSource and nested field ids, should map nested values from caseContext array', () => {
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'parent-companies-block',
+            title: 'Parent Companies',
+            repeatable: true,
+            repeatableDefaultSource: 'parentCompanies',
+            fields: [
+              {
+                id: 'companyName',
+                type: 'text',
+                label: 'Company name',
+                repeatableGroupId: 'parentCompanies',
+                validation: [],
+              },
+              {
+                id: 'headquarters.city',
+                type: 'text',
+                label: 'Headquarters city',
+                repeatableGroupId: 'parentCompanies',
+                validation: [],
+              },
+            ],
+          },
+        ],
+        submission: {
+          url: '/api/submit',
+          method: 'POST',
+        },
+      };
+
+      const context: FormContext = {
+        caseContext: {
+          parentCompanies: [
+            {
+              companyName: 'ACME Corp',
+              headquarters: { city: 'London' },
+            },
+            {
+              companyName: 'Globex Inc',
+              headquarters: { city: 'Paris' },
+            },
+          ],
+        },
+      };
+
+      const defaultValues = extractDefaultValues(descriptor, context);
+
+      expect(defaultValues).toHaveProperty('parentCompanies');
+      expect(defaultValues.parentCompanies).toEqual([
+        {
+          companyName: 'ACME Corp',
+          headquarters: { city: 'London' },
+        },
+        {
+          companyName: 'Globex Inc',
+          headquarters: { city: 'Paris' },
+        },
+      ]);
+    });
   });
 });
