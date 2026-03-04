@@ -14,6 +14,40 @@ import { evaluateTemplate } from './template-evaluator';
 import type { FormContext } from './template-evaluator';
 
 /**
+ * Helper to set a nested value on an object using dot-notation path
+ * (e.g. "businessAddress.line1" → obj.businessAddress.line1).
+ */
+function setNestedValue(
+  target: Record<string, unknown>,
+  path: string,
+  value: unknown
+): void {
+  if (!path) {
+    return;
+  }
+  const parts = path.split('.');
+  let current: Record<string, unknown> = target;
+
+  for (let i = 0; i < parts.length - 1; i += 1) {
+    const key = parts[i];
+    const existing = current[key];
+
+    if (
+      !existing ||
+      typeof existing !== 'object' ||
+      Array.isArray(existing)
+    ) {
+      current[key] = {};
+    }
+
+    current = current[key] as Record<string, unknown>;
+  }
+
+  const lastKey = parts[parts.length - 1];
+  current[lastKey] = value;
+}
+
+/**
  * Extract default values from form descriptor fields
  * 
  * @param descriptor - Global form descriptor
@@ -65,10 +99,15 @@ export function extractDefaultValues(
                   const bid = baseFieldId(field);
                   if (field.defaultValue !== undefined && typeof field.defaultValue === 'string' && field.defaultValue.includes('@index')) {
                     const templateWithIndex = field.defaultValue.replace(/@index/g, String(i));
-                    row[bid] = evaluateDefaultValue(templateWithIndex, field.type, context);
+                    const value = evaluateDefaultValue(templateWithIndex, field.type, context);
+                    setNestedValue(row, bid, value);
                   } else {
                     const item = sourceArray[i] as Record<string, unknown> | undefined;
-                    row[bid] = (item && typeof item === 'object' && bid in item) ? item[bid] : '';
+                    const value =
+                      item && typeof item === 'object' && bid in item
+                        ? (item as Record<string, unknown>)[bid]
+                        : '';
+                    setNestedValue(row, bid, value);
                   }
                 }
                 return row;
@@ -80,7 +119,11 @@ export function extractDefaultValues(
               const normalized = sourceArray.map((item: Record<string, unknown>) => {
                 const out: Record<string, unknown> = {};
                 for (const id of baseFieldIds) {
-                  out[id] = (item && typeof item === 'object' && id in item) ? item[id] : '';
+                  const value =
+                    item && typeof item === 'object' && id in item
+                      ? (item as Record<string, unknown>)[id]
+                      : '';
+                  setNestedValue(out, id, value);
                 }
                 return out;
               });
@@ -110,29 +153,29 @@ export function extractDefaultValues(
                 field.type,
                 context
               );
-              groupDefault[baseFieldId] = evaluatedValue;
+              setNestedValue(groupDefault, baseFieldId, evaluatedValue);
             } else {
               switch (field.type) {
                 case 'text':
                 case 'dropdown':
                 case 'autocomplete':
                 case 'date':
-                  groupDefault[baseFieldId] = '';
+                  setNestedValue(groupDefault, baseFieldId, '');
                   break;
                 case 'checkbox':
-                  groupDefault[baseFieldId] = false;
+                  setNestedValue(groupDefault, baseFieldId, false);
                   break;
                 case 'radio':
-                  groupDefault[baseFieldId] = '';
+                  setNestedValue(groupDefault, baseFieldId, '');
                   break;
                 case 'number':
-                  groupDefault[baseFieldId] = 0;
+                  setNestedValue(groupDefault, baseFieldId, 0);
                   break;
                 case 'file':
-                  groupDefault[baseFieldId] = null;
+                  setNestedValue(groupDefault, baseFieldId, null);
                   break;
                 default:
-                  groupDefault[baseFieldId] = '';
+                  setNestedValue(groupDefault, baseFieldId, '');
               }
             }
           }
@@ -148,16 +191,16 @@ export function extractDefaultValues(
               : field.id;
             switch (field.type) {
               case 'checkbox':
-                emptyInstance[baseFieldId] = false;
+                setNestedValue(emptyInstance, baseFieldId, false);
                 break;
               case 'number':
-                emptyInstance[baseFieldId] = 0;
+                setNestedValue(emptyInstance, baseFieldId, 0);
                 break;
               case 'file':
-                emptyInstance[baseFieldId] = null;
+                setNestedValue(emptyInstance, baseFieldId, null);
                 break;
               default:
-                emptyInstance[baseFieldId] = '';
+                setNestedValue(emptyInstance, baseFieldId, '');
             }
           }
           const min = block.minInstances ?? 0;
@@ -178,6 +221,8 @@ export function extractDefaultValues(
         }
         
         // Always set a default value to ensure controlled inputs
+        const target = defaultValues as Record<string, unknown>;
+
         if (field.defaultValue !== undefined) {
           // Evaluate defaultValue as Handlebars template if it's a string, otherwise use directly
           const evaluatedValue = evaluateDefaultValue(
@@ -185,31 +230,33 @@ export function extractDefaultValues(
             field.type,
             context
           );
-          defaultValues[field.id as keyof FormData] = evaluatedValue as FormData[keyof FormData];
+          setNestedValue(target, field.id, evaluatedValue);
         } else {
           // Set type-appropriate default values for uncontrolled -> controlled transition
+          let typeDefault: unknown;
           switch (field.type) {
             case 'text':
             case 'dropdown':
             case 'autocomplete':
             case 'date':
-              defaultValues[field.id as keyof FormData] = '' as FormData[keyof FormData];
+              typeDefault = '';
               break;
             case 'checkbox':
-              defaultValues[field.id as keyof FormData] = false as unknown as FormData[keyof FormData];
+              typeDefault = false;
               break;
             case 'radio':
-              defaultValues[field.id as keyof FormData] = '' as FormData[keyof FormData];
+              typeDefault = '';
               break;
             case 'number':
-              defaultValues[field.id as keyof FormData] = 0 as unknown as FormData[keyof FormData];
+              typeDefault = 0;
               break;
             case 'file':
-              defaultValues[field.id as keyof FormData] = null as FormData[keyof FormData];
+              typeDefault = null;
               break;
             default:
-              defaultValues[field.id as keyof FormData] = '' as FormData[keyof FormData];
+              typeDefault = '';
           }
+          setNestedValue(target, field.id, typeDefault);
         }
       }
     }
@@ -356,8 +403,62 @@ export function buildZodSchemaFromDescriptor(
     return z.object({});
   }
 
+  /**
+   * Tree node type for building nested Zod schemas from dot-notation ids.
+   * Leaf nodes are Zod schemas; intermediate nodes are plain objects of children.
+   * Using an interface avoids direct circular type aliasing.
+   */
+  interface SchemaTreeObject {
+    [key: string]: SchemaTreeNode;
+  }
+
+  type SchemaTreeNode = z.ZodTypeAny | SchemaTreeObject;
+
   const schemaShape: Record<string, z.ZodTypeAny> = {};
   const processedRepeatableGroups = new Set<string>();
+  const nonRepeatableTree: SchemaTreeObject = {};
+
+  const addSchemaToTree = (
+    tree: SchemaTreeObject,
+    path: string,
+    schema: z.ZodTypeAny
+  ): void => {
+    const parts = path.split('.');
+    let current: SchemaTreeObject = tree;
+
+    for (let i = 0; i < parts.length - 1; i += 1) {
+      const key = parts[i];
+      const existing = current[key];
+
+      if (
+        !existing ||
+        typeof existing !== 'object' ||
+        Array.isArray(existing)
+      ) {
+        current[key] = {};
+      }
+
+      current = current[key] as SchemaTreeObject;
+    }
+
+    const lastKey = parts[parts.length - 1];
+    current[lastKey] = schema;
+  };
+
+  const schemaTreeToZod = (node: SchemaTreeNode): z.ZodTypeAny => {
+    if (node && typeof node === 'object' && '_def' in (node as object)) {
+      return node as z.ZodTypeAny;
+    }
+
+    const shape: Record<string, z.ZodTypeAny> = {};
+    const objectNode = node as SchemaTreeObject;
+
+    for (const [key, child] of Object.entries(objectNode)) {
+      shape[key] = schemaTreeToZod(child);
+    }
+
+    return z.object(shape);
+  };
 
   for (const block of descriptor.blocks) {
     if (isRepeatableBlock(block)) {
@@ -371,8 +472,9 @@ export function buildZodSchemaFromDescriptor(
         }
         
         // Build object schema for fields in this repeatable group.
-        // Use base field id (no groupId prefix) so schema matches form shape: addresses[0].street not addresses[0]['addresses.street']
-        const objectShape: Record<string, z.ZodTypeAny> = {};
+        // Use base field id (no groupId prefix) and support nested paths so schema
+        // matches form shape: addresses[0].street or addresses[0].location.street
+        const groupTree: Record<string, SchemaTreeNode> = {};
         for (const field of fields) {
           if (field.type === 'button') {
             continue;
@@ -381,11 +483,18 @@ export function buildZodSchemaFromDescriptor(
             ? field.id.slice(groupId.length + 1)
             : field.id;
           const fieldType = field.type as Exclude<typeof field.type, 'button'>;
-          objectShape[baseFieldId] = convertToZodSchema(field.validation, fieldType);
+          const fieldSchema = convertToZodSchema(field.validation, fieldType);
+
+          if (baseFieldId.includes('.')) {
+            addSchemaToTree(groupTree, baseFieldId, fieldSchema);
+          } else {
+            groupTree[baseFieldId] = fieldSchema;
+          }
         }
         
         // Create array schema for this repeatable group
-        let arraySchema = z.array(z.object(objectShape));
+        const rowSchema = schemaTreeToZod(groupTree);
+        let arraySchema = z.array(rowSchema);
         
         // Apply array-level validation (minInstances/maxInstances)
         if (block.minInstances !== undefined) {
@@ -410,10 +519,21 @@ export function buildZodSchemaFromDescriptor(
         if (!field.repeatableGroupId && field.type !== 'button') {
           // Type assertion: we've already checked it's not a button
           const fieldType = field.type as Exclude<typeof field.type, 'button'>;
-          schemaShape[field.id] = convertToZodSchema(field.validation, fieldType);
+          const fieldSchema = convertToZodSchema(field.validation, fieldType);
+
+          if (field.id.includes('.')) {
+            addSchemaToTree(nonRepeatableTree, field.id, fieldSchema);
+          } else {
+            schemaShape[field.id] = fieldSchema;
+          }
         }
       }
     }
+  }
+
+  // Convert non-repeatable nested tree into Zod object schemas at the top level
+  for (const [key, node] of Object.entries(nonRepeatableTree)) {
+    schemaShape[key] = schemaTreeToZod(node);
   }
 
   return z.object(schemaShape);

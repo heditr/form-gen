@@ -753,6 +753,101 @@ describe('form descriptor integration', () => {
     });
   });
 
+  describe('buildZodSchemaFromDescriptor with nested field ids', () => {
+    test('given non-repeatable field with dot path id, should build nested object schema', () => {
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'business-address-block',
+            title: 'Business Address',
+            fields: [
+              {
+                id: 'businessAddress.line1',
+                type: 'text',
+                label: 'Address line 1',
+                validation: [{ type: 'required', message: 'Line 1 is required' }],
+              },
+            ],
+          },
+        ],
+        submission: {
+          url: '/api/submit',
+          method: 'POST',
+        },
+      };
+
+      const schema = buildZodSchemaFromDescriptor(descriptor);
+
+      // Top-level key should be businessAddress with nested line1 field
+      expect(schema.shape).toHaveProperty('businessAddress');
+      const businessAddressSchema = schema.shape.businessAddress as z.ZodObject<Record<string, z.ZodTypeAny>>;
+      expect(businessAddressSchema).toBeInstanceOf(z.ZodObject);
+      expect(businessAddressSchema.shape).toHaveProperty('line1');
+
+      const validData = {
+        businessAddress: {
+          line1: '123 Main St',
+        },
+      };
+      const invalidData = {
+        businessAddress: {},
+      };
+
+      expect(schema.safeParse(validData).success).toBe(true);
+      expect(schema.safeParse(invalidData).success).toBe(false);
+    });
+
+    test('given deeply nested field id, should build multi-level nested schema', () => {
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'entity-block',
+            title: 'Legal Entity',
+            fields: [
+              {
+                id: 'legalEntity.businessAddress.line1',
+                type: 'text',
+                label: 'Entity address line 1',
+                validation: [{ type: 'required', message: 'Line 1 is required' }],
+              },
+            ],
+          },
+        ],
+        submission: {
+          url: '/api/submit',
+          method: 'POST',
+        },
+      };
+
+      const schema = buildZodSchemaFromDescriptor(descriptor);
+
+      expect(schema.shape).toHaveProperty('legalEntity');
+      const legalEntitySchema = schema.shape.legalEntity as z.ZodObject<Record<string, z.ZodTypeAny>>;
+      expect(legalEntitySchema).toBeInstanceOf(z.ZodObject);
+      expect(legalEntitySchema.shape).toHaveProperty('businessAddress');
+
+      const businessAddressSchema = legalEntitySchema.shape.businessAddress as z.ZodObject<Record<string, z.ZodTypeAny>>;
+      expect(businessAddressSchema).toBeInstanceOf(z.ZodObject);
+      expect(businessAddressSchema.shape).toHaveProperty('line1');
+
+      const validData = {
+        legalEntity: {
+          businessAddress: {
+            line1: '123 Main St',
+          },
+        },
+      };
+      const invalidData = {
+        legalEntity: {
+          businessAddress: {},
+        },
+      };
+
+      expect(schema.safeParse(validData).success).toBe(true);
+      expect(schema.safeParse(invalidData).success).toBe(false);
+    });
+  });
+
   describe('extractDefaultValues with repeatable groups', () => {
     test('given a repeatable block without default values, should initialize as empty array', () => {
       const descriptor: GlobalFormDescriptor = {
@@ -1392,6 +1487,132 @@ describe('form descriptor integration', () => {
         {
           name: 'Jane Smith',
           isStudent: true, // Parsed from string template
+        },
+      ]);
+    });
+  });
+
+  describe('extractDefaultValues with nested field ids', () => {
+    test('given non-repeatable field with dot path id, should produce nested default value', () => {
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'business-address-block',
+            title: 'Business Address',
+            fields: [
+              {
+                id: 'businessAddress.line1',
+                type: 'text',
+                label: 'Address line 1',
+                defaultValue: '123 Main St',
+                validation: [],
+              },
+              {
+                id: 'businessAddress.line2',
+                type: 'text',
+                label: 'Address line 2',
+                defaultValue: 'Unit 4B',
+                validation: [],
+              },
+            ],
+          },
+        ],
+        submission: {
+          url: '/api/submit',
+          method: 'POST',
+        },
+      };
+
+      const defaultValues = extractDefaultValues(descriptor);
+
+      expect(defaultValues).toHaveProperty('businessAddress');
+      expect(defaultValues.businessAddress).toEqual({
+        line1: '123 Main St',
+        line2: 'Unit 4B',
+      });
+    });
+
+    test('given nested field ids without defaults, should use type-appropriate defaults in nested object', () => {
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'entity-block',
+            title: 'Legal Entity',
+            fields: [
+              {
+                id: 'legalEntity.businessAddress.line1',
+                type: 'text',
+                label: 'Address line 1',
+                validation: [],
+              },
+              {
+                id: 'legalEntity.businessAddress.isPrimary',
+                type: 'checkbox',
+                label: 'Primary address',
+                validation: [],
+              },
+            ],
+          },
+        ],
+        submission: {
+          url: '/api/submit',
+          method: 'POST',
+        },
+      };
+
+      const defaultValues = extractDefaultValues(descriptor);
+
+      expect(defaultValues).toHaveProperty('legalEntity');
+      expect(defaultValues.legalEntity).toEqual({
+        businessAddress: {
+          line1: '',
+          isPrimary: false,
+        },
+      });
+    });
+
+    test('given repeatable group with nested field ids, should nest defaults inside each row object', () => {
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'addresses-block',
+            title: 'Addresses',
+            repeatable: true,
+            fields: [
+              {
+                id: 'location.street',
+                type: 'text',
+                label: 'Street',
+                repeatableGroupId: 'addresses',
+                validation: [],
+                defaultValue: '123 Main St',
+              },
+              {
+                id: 'location.city',
+                type: 'text',
+                label: 'City',
+                repeatableGroupId: 'addresses',
+                validation: [],
+                defaultValue: 'New York',
+              },
+            ],
+          },
+        ],
+        submission: {
+          url: '/api/submit',
+          method: 'POST',
+        },
+      };
+
+      const defaultValues = extractDefaultValues(descriptor);
+
+      expect(defaultValues).toHaveProperty('addresses');
+      expect(defaultValues.addresses).toEqual([
+        {
+          location: {
+            street: '123 Main St',
+            city: 'New York',
+          },
         },
       ]);
     });
