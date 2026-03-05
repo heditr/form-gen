@@ -18,6 +18,7 @@ import { evaluatePayloadTemplate, type BackendErrorResponse } from '@/utils/subm
 import type { BackendError } from '@/utils/form-descriptor-integration';
 import { useFormDescriptor } from '@/hooks/use-form-descriptor';
 import { isRepeatableBlock, groupFieldsByRepeatableGroupId } from '@/utils/form-descriptor-integration';
+import { evaluateDefaultValue } from '@/utils/default-value-evaluator';
 import {
   Dialog,
   DialogContent,
@@ -164,17 +165,70 @@ export function PopinManagerProvider({
     // No onDiscriminantChange - popin form values should not sync to Redux
   });
 
-  // Seed popin form from main form when in repeatable edit mode
+  // Seed popin form when in repeatable edit/create mode
   useEffect(() => {
-    if (popinEditContext && resolvedBlock) {
+    if (!popinEditContext || !resolvedBlock || !isRepeatableBlock(resolvedBlock.block)) {
+      return;
+    }
+
+    const { groupId, index } = popinEditContext;
+    const fieldGroups = groupFieldsByRepeatableGroupId(resolvedBlock.block.fields);
+    const groupFields = fieldGroups[groupId];
+    if (!groupFields?.length) {
+      return;
+    }
+
+    // Edit existing instance: seed from main form array
+    if (typeof index === 'number' && index >= 0) {
       const mainValues = mainForm.getValues() as Record<string, unknown>;
-      const groupArray = mainValues[popinEditContext.groupId] as unknown[] | undefined;
-      const instanceData = Array.isArray(groupArray) ? groupArray[popinEditContext.index] : undefined;
+      const groupArray = mainValues[groupId] as unknown[] | undefined;
+      const instanceData = Array.isArray(groupArray) ? groupArray[index] : undefined;
       if (instanceData && typeof instanceData === 'object') {
         popinForm.reset(instanceData as Record<string, unknown>);
       }
+      return;
     }
-  }, [popinEditContext, resolvedBlock, mainForm, popinForm]);
+
+    // Create mode: reset to clean defaults for this instance
+    const defaultInstance: Record<string, unknown> = {};
+    for (const field of groupFields) {
+      if (field.type === 'button') continue;
+      const baseFieldId = field.id.startsWith(`${groupId}.`)
+        ? field.id.slice(groupId.length + 1)
+        : field.id;
+
+      if (field.defaultValue !== undefined) {
+        defaultInstance[baseFieldId] = evaluateDefaultValue(
+          field.defaultValue,
+          field.type,
+          formContext
+        );
+      } else {
+        switch (field.type) {
+          case 'text':
+          case 'dropdown':
+          case 'autocomplete':
+          case 'date':
+          case 'radio':
+            defaultInstance[baseFieldId] = '';
+            break;
+          case 'checkbox':
+            defaultInstance[baseFieldId] = false;
+            break;
+          case 'number':
+            defaultInstance[baseFieldId] = 0;
+            break;
+          case 'file':
+            defaultInstance[baseFieldId] = null;
+            break;
+          default:
+            defaultInstance[baseFieldId] = '';
+        }
+      }
+    }
+
+    popinForm.reset(defaultInstance);
+  }, [popinEditContext, resolvedBlock, mainForm, popinForm, formContext]);
 
   // Reset popin form with popinLoadData when it's loaded (standalone popin, not edit mode)
   useEffect(() => {
