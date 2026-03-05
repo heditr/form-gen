@@ -120,6 +120,32 @@ export interface StatusTemplates {
 }
 
 /**
+ * Auto-fill mapping configuration for selection-based fields
+ * 
+ * @property from - Dot-notation path in the selected payload object (e.g. "address.city")
+ * @property to - Target field id or dot-notation path in the form data (e.g. "company.headquartersCity")
+ */
+export interface AutoFillMapping {
+  from: string;
+  to: string;
+}
+
+/**
+ * Auto-fill configuration for a selection field
+ * 
+ * @property mappings - Array of property mappings from selected payload → form fields
+ * @property overwrite - If false, preserves existing non-empty values on target fields
+ * @property respectHidden - If true (default), skips hidden target fields
+ * @property respectDisabled - If true (default), skips disabled target fields
+ */
+export interface AutoFillConfig {
+  mappings: AutoFillMapping[];
+  overwrite?: boolean;
+  respectHidden?: boolean;
+  respectDisabled?: boolean;
+}
+
+/**
  * Button menu item configuration
  * 
  * @property label - Display label for the menu item
@@ -176,6 +202,7 @@ export interface FieldDescriptor {
   status?: StatusTemplates;
   button?: ButtonConfig;
   repeatableGroupId?: string;
+  autoFill?: AutoFillConfig;
 }
 
 /**

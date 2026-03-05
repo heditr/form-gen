@@ -7,9 +7,9 @@
 
 import { describe, test, expect } from 'vitest';
 import { z } from 'zod';
-import type { BlockDescriptor, GlobalFormDescriptor } from '@/types/form-descriptor';
+import type { BlockDescriptor, GlobalFormDescriptor, FormData } from '@/types/form-descriptor';
 import type { FormContext } from '@/utils/template-evaluator';
-import { isRepeatableBlock, isRepeatablePopinBlock, groupFieldsByRepeatableGroupId, buildZodSchemaFromDescriptor, extractDefaultValues } from './form-descriptor-integration';
+import { isRepeatableBlock, isRepeatablePopinBlock, groupFieldsByRepeatableGroupId, buildZodSchemaFromDescriptor, extractDefaultValues, buildAutoFillPatchFromSelection } from './form-descriptor-integration';
 
 describe('form descriptor integration', () => {
   describe('isRepeatableBlock', () => {
@@ -1677,6 +1677,264 @@ describe('form descriptor integration', () => {
           headquarters: { city: 'Paris' },
         },
       ]);
+    });
+  });
+
+  describe('buildAutoFillPatchFromSelection', () => {
+    test('given selection field with autoFill mappings and simple payload, should map values to target fields', () => {
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'company-block',
+            title: 'Company',
+            fields: [
+              {
+                id: 'companySelector',
+                type: 'autocomplete',
+                label: 'Parent company',
+                validation: [],
+                // Auto-fill from selection payload into nested company fields
+                autoFill: {
+                  mappings: [
+                    { from: 'name', to: 'company.name' },
+                    { from: 'registrationNumber', to: 'company.registrationNumber' },
+                  ],
+                },
+              },
+              {
+                id: 'company.name',
+                type: 'text',
+                label: 'Company name',
+                validation: [],
+              },
+              {
+                id: 'company.registrationNumber',
+                type: 'text',
+                label: 'Registration number',
+                validation: [],
+              },
+            ],
+          },
+        ],
+        submission: {
+          url: '/api/submit',
+          method: 'POST',
+        },
+      };
+
+      const selectedPayload = {
+        name: 'ACME Corp',
+        registrationNumber: '123456789',
+      };
+
+      const patch = buildAutoFillPatchFromSelection({
+        descriptor,
+        selectionFieldId: 'companySelector',
+        selectedPayload,
+      });
+
+      expect(patch).toEqual({
+        company: {
+          name: 'ACME Corp',
+          registrationNumber: '123456789',
+        },
+      });
+    });
+
+    test('given mapping with nested source path, should read nested value from selection payload', () => {
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'company-block',
+            title: 'Company',
+            fields: [
+              {
+                id: 'companySelector',
+                type: 'dropdown',
+                label: 'Parent company',
+                validation: [],
+                autoFill: {
+                  mappings: [
+                    { from: 'address.city', to: 'company.headquartersCity' },
+                  ],
+                },
+              },
+              {
+                id: 'company.headquartersCity',
+                type: 'text',
+                label: 'Headquarters city',
+                validation: [],
+              },
+            ],
+          },
+        ],
+        submission: {
+          url: '/api/submit',
+          method: 'POST',
+        },
+      };
+
+      const selectedPayload = {
+        address: {
+          city: 'London',
+        },
+      };
+
+      const patch = buildAutoFillPatchFromSelection({
+        descriptor,
+        selectionFieldId: 'companySelector',
+        selectedPayload,
+      });
+
+      expect(patch).toEqual({
+        company: {
+          headquartersCity: 'London',
+        },
+      });
+    });
+
+    test('given hidden target field and default status-respecting config, should skip updates for that field', () => {
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'company-block',
+            title: 'Company',
+            fields: [
+              {
+                id: 'companySelector',
+                type: 'autocomplete',
+                label: 'Parent company',
+                validation: [],
+                autoFill: {
+                  mappings: [
+                    { from: 'name', to: 'company.name' },
+                  ],
+                  // respectHidden defaults to true when omitted
+                },
+              },
+              {
+                id: 'company.name',
+                type: 'text',
+                label: 'Company name',
+                validation: [],
+              },
+            ],
+          },
+        ],
+        submission: {
+          url: '/api/submit',
+          method: 'POST',
+        },
+      };
+
+      const selectedPayload = { name: 'Hidden Corp' };
+
+      const patch = buildAutoFillPatchFromSelection({
+        descriptor,
+        selectionFieldId: 'companySelector',
+        selectedPayload,
+        hiddenFieldIds: ['company.name'],
+      });
+
+      expect(patch).toEqual({});
+    });
+
+    test('given overwrite=false and existing non-empty value, should preserve existing value and not overwrite', () => {
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'company-block',
+            title: 'Company',
+            fields: [
+              {
+                id: 'companySelector',
+                type: 'autocomplete',
+                label: 'Parent company',
+                validation: [],
+                autoFill: {
+                  mappings: [
+                    { from: 'name', to: 'company.name' },
+                    { from: 'registrationNumber', to: 'company.registrationNumber' },
+                  ],
+                  overwrite: false,
+                },
+              },
+              {
+                id: 'company.name',
+                type: 'text',
+                label: 'Company name',
+                validation: [],
+              },
+              {
+                id: 'company.registrationNumber',
+                type: 'text',
+                label: 'Registration number',
+                validation: [],
+              },
+            ],
+          },
+        ],
+        submission: {
+          url: '/api/submit',
+          method: 'POST',
+        },
+      };
+
+      const selectedPayload = {
+        name: 'New Corp',
+        registrationNumber: '999',
+      };
+
+      const currentValues = {
+        company: {
+          name: 'Existing Corp',
+        },
+      } as unknown as Partial<FormData>;
+
+      const patch = buildAutoFillPatchFromSelection({
+        descriptor,
+        selectionFieldId: 'companySelector',
+        selectedPayload,
+        currentValues,
+      });
+
+      // Should not overwrite existing company.name, but should set registrationNumber
+      expect(patch).toEqual({
+        company: {
+          registrationNumber: '999',
+        },
+      });
+    });
+
+    test('given no autoFill config on selection field, should return empty patch', () => {
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'company-block',
+            title: 'Company',
+            fields: [
+              {
+                id: 'companySelector',
+                type: 'autocomplete',
+                label: 'Parent company',
+                validation: [],
+              },
+            ],
+          },
+        ],
+        submission: {
+          url: '/api/submit',
+          method: 'POST',
+        },
+      };
+
+      const patch = buildAutoFillPatchFromSelection({
+        descriptor,
+        selectionFieldId: 'companySelector',
+        selectedPayload: { name: 'ACME' },
+      });
+
+      expect(patch).toEqual({});
     });
   });
 });

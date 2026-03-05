@@ -77,6 +77,102 @@ function getNestedValue(
 }
 
 /**
+ * Parameters for building an auto-fill patch from a selection payload.
+ * 
+ * Used when a selection field (dropdown/autocomplete) is configured with
+ * descriptor-driven autoFill mappings that copy properties from the selected
+ * payload object into other fields in the form.
+ */
+export interface AutoFillSelectionParams {
+  descriptor: GlobalFormDescriptor | null;
+  selectionFieldId: string;
+  selectedPayload: Record<string, unknown> | null | undefined;
+  currentValues?: Partial<FormData>;
+  hiddenFieldIds?: string[];
+  disabledFieldIds?: string[];
+}
+
+/**
+ * Build a form value patch based on autoFill mappings defined on the selection field.
+ * 
+ * This function is pure: it does not mutate descriptor or form values. It returns
+ * a partial FormData object that callers can apply via react-hook-form setValue().
+ */
+export function buildAutoFillPatchFromSelection({
+  descriptor,
+  selectionFieldId,
+  selectedPayload,
+  currentValues,
+  hiddenFieldIds = [],
+  disabledFieldIds = [],
+}: AutoFillSelectionParams): Partial<FormData> {
+  if (!descriptor || !selectedPayload || typeof selectedPayload !== 'object' || Array.isArray(selectedPayload)) {
+    return {};
+  }
+
+  // Find the selection field in the descriptor
+  let selectionField: FieldDescriptor | undefined;
+  for (const block of descriptor.blocks) {
+    const found = block.fields.find((field) => field.id === selectionFieldId);
+    if (found) {
+      selectionField = found;
+      break;
+    }
+  }
+
+  const autoFill = selectionField?.autoFill;
+
+  if (!autoFill || !autoFill.mappings || autoFill.mappings.length === 0) {
+    return {};
+  }
+
+  const {
+    mappings,
+    overwrite = true,
+    respectHidden = true,
+    respectDisabled = true,
+  } = autoFill;
+
+  const hiddenSet = new Set(respectHidden ? hiddenFieldIds : []);
+  const disabledSet = new Set(respectDisabled ? disabledFieldIds : []);
+
+  const patch: Record<string, unknown> = {};
+  const selected = selectedPayload as Record<string, unknown>;
+  const current = (currentValues || {}) as Record<string, unknown>;
+
+  for (const mapping of mappings) {
+    const targetId = mapping.to;
+    const sourcePath = mapping.from;
+
+    if (!targetId || !sourcePath) {
+      continue;
+    }
+
+    // Respect hidden/disabled status when configured
+    if (hiddenSet.has(targetId) || disabledSet.has(targetId)) {
+      continue;
+    }
+
+    const newValue = getNestedValue(selected, sourcePath);
+    if (newValue === undefined) {
+      continue;
+    }
+
+    if (!overwrite) {
+      const existingValue = getNestedValue(current, targetId);
+      if (existingValue !== undefined && existingValue !== null && existingValue !== '') {
+        // Preserve existing non-empty value when overwrite is disabled
+        continue;
+      }
+    }
+
+    setNestedValue(patch, targetId, newValue);
+  }
+
+  return patch as Partial<FormData>;
+}
+
+/**
  * Extract default values from form descriptor fields
  * 
  * @param descriptor - Global form descriptor
