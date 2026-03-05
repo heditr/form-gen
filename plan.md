@@ -5,6 +5,7 @@
 - [Backend Validation Epic](tasks/backend-validation-epic.md) - 📋 PLANNED
 - [DefaultValue Handlebars Evaluation Epic](tasks/defaultvalue-handlebars-epic.md) - 📋 PLANNED
 - [Demo Page Epic](tasks/demo-page-epic.md) - 📋 PLANNED
+- [Selection-Based Auto-Fill Epic](tasks/selection-based-auto-fill-epic.md) - 📋 PLANNED
 - [KYC Form Engine v3.1 Epic](tasks/kyc-form-engine-epic.md) - 📋 PLANNED
 - [React Query Integration Epic](tasks/react-query-integration-epic.md) - 📋 PLANNED
 - [Redux Saga to Redux Thunk + TanStack Query Migration Epic](tasks/redux-thunk-tanstack-query-migration-epic.md) - 📋 PLANNED
