@@ -269,8 +269,14 @@ export function PopinManagerProvider({
     }
 
     setOpenBlockId(blockId);
-    if (options?.groupId !== undefined && options?.index !== undefined) {
-      setPopinEditContext({ groupId: options.groupId, index: options.index });
+    if (options?.groupId !== undefined) {
+      // When index is omitted, treat this as "create" mode for the repeatable group.
+      // We use index -1 as a sentinel to indicate a new instance that does not yet
+      // exist in the main form array.
+      setPopinEditContext({
+        groupId: options.groupId,
+        index: options.index ?? -1,
+      });
     } else {
       setPopinEditContext(null);
     }
@@ -295,14 +301,29 @@ export function PopinManagerProvider({
 
     const block = resolvedBlock.block;
 
-    // Repeatable popin edit mode: merge popin values back and close
-    if (popinEditContext) {
+    // Repeatable popin edit/create mode: merge popin values back into the main form array
+    if (popinEditContext && isRepeatableBlock(block)) {
       const values = popinForm.getValues() as Record<string, unknown>;
-      const targetForm = block.popin ? popinForm : mainForm;
-      (targetForm as UseFormReturn<FieldValues>).setValue(
-        `${popinEditContext.groupId}.${popinEditContext.index}` as never,
-        values as never
-      );
+      const { groupId, index } = popinEditContext;
+
+      const currentArrayRaw = mainForm.getValues(groupId as never) as unknown;
+      const currentArray = Array.isArray(currentArrayRaw) ? currentArrayRaw : [];
+
+      let nextArray: unknown[];
+      if (typeof index === 'number' && index >= 0 && index < currentArray.length) {
+        // Edit existing instance
+        nextArray = currentArray.map((item, i) => (i === index ? values : item));
+      } else {
+        // Create new instance (only happens after user validates)
+        nextArray = [...currentArray, values];
+      }
+
+      mainForm.setValue(groupId as never, nextArray as never, {
+        shouldDirty: true,
+        shouldTouch: true,
+        shouldValidate: true,
+      });
+
       closePopin();
       return;
     }

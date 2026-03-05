@@ -39,7 +39,7 @@ export default function RepeatablePopinSummary({
   formContext,
 }: RepeatablePopinSummaryProps) {
   const { openPopin } = usePopinManager();
-  const { fields: fieldArrayFields, append, remove } = useFieldArray({
+  const { fields: fieldArrayFields, remove } = useFieldArray({
     control: form.control,
     name: groupId,
   });
@@ -80,11 +80,10 @@ export default function RepeatablePopinSummary({
   };
 
   const handleAdd = () => {
-    // Append new instance and immediately open popin to edit it
-    append(getDefaultInstanceValues());
-    const groupArray = form.getValues()[groupId] as unknown[] | undefined;
-    const newIndex = groupArray && groupArray.length > 0 ? groupArray.length - 1 : 0;
-    openPopin(block.id, { groupId, index: newIndex });
+    if (isDisabled) return;
+    // Open popin in "create" mode; the instance will only be
+    // added to the main form array if the user validates.
+    openPopin(block.id, { groupId });
   };
 
   const handleRemove = (index: number) => {
