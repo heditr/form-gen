@@ -26,6 +26,7 @@ export interface FieldWrapperProps {
   formContext: FormContext;
   onLoadDataSource: (fieldPath: string, url: string, auth?: { type: 'bearer' | 'apikey'; token?: string; headerName?: string }) => void;
   dataSourceCache: Record<string, unknown>;
+  onAutoFillSelection?: (fieldId: string, selectedPayload: Record<string, unknown>) => void;
 }
 
 /**
@@ -41,6 +42,7 @@ export default function FieldWrapper({
   formContext,
   onLoadDataSource,
   dataSourceCache,
+  onAutoFillSelection,
 }: FieldWrapperProps) {
   // Don't render if hidden
   if (isHidden) {
@@ -66,6 +68,7 @@ export default function FieldWrapper({
           isDisabled={isDisabled}
           onLoadDataSource={onLoadDataSource}
           dataSourceCache={dataSourceCache}
+          onAutoFillSelection={onAutoFillSelection}
         />
       );
     case 'autocomplete':
@@ -77,6 +80,7 @@ export default function FieldWrapper({
           isDisabled={isDisabled}
           onLoadDataSource={onLoadDataSource}
           dataSourceCache={dataSourceCache}
+          onAutoFillSelection={onAutoFillSelection}
         />
       );
     case 'checkbox':

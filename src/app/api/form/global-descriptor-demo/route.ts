@@ -301,6 +301,73 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
           ],
         },
         {
+          id: 'parent-company-auto-fill',
+          title: 'Parent Company (Auto-Fill Demo)',
+          description: 'Select an existing parent company to automatically fill the details below.',
+          // Only relevant for corporations
+          status: {
+            hidden: '{{not (eq entityType "corporation")}}',
+          },
+          fields: [
+            {
+              id: 'parentCompanySelector',
+              type: 'autocomplete',
+              label: 'Existing Parent Company',
+              description: 'Choose a parent company to auto-fill its details.',
+              dataSource: {
+                url: '/api/data-sources/parent-companies',
+                itemsTemplate: '{"label":"{{item.name}} ({{item.registrationNumber}})","value":"{{item.id}}"}',
+              },
+              validation: [],
+              autoFill: {
+                mappings: [
+                  { from: 'name', to: 'parentCompany.name' },
+                  { from: 'registrationNumber', to: 'parentCompany.registrationNumber' },
+                  { from: 'address.line1', to: 'parentCompany.address.line1' },
+                  { from: 'address.city', to: 'parentCompany.address.city' },
+                  { from: 'address.country', to: 'parentCompany.address.country' },
+                ],
+                overwrite: true,
+              },
+            },
+            {
+              id: 'parentCompany.name',
+              type: 'text',
+              label: 'Parent Company Name',
+              description: 'Name of the selected parent company (you can edit after auto-fill).',
+              validation: [],
+            },
+            {
+              id: 'parentCompany.registrationNumber',
+              type: 'text',
+              label: 'Parent Company Registration Number',
+              description: 'Registration number of the selected parent company.',
+              validation: [],
+            },
+            {
+              id: 'parentCompany.address.line1',
+              type: 'text',
+              label: 'Parent Company Address Line 1',
+              description: 'Street address of the parent company.',
+              validation: [],
+            },
+            {
+              id: 'parentCompany.address.city',
+              type: 'text',
+              label: 'Parent Company City',
+              description: 'City of the parent company.',
+              validation: [],
+            },
+            {
+              id: 'parentCompany.address.country',
+              type: 'text',
+              label: 'Parent Company Country',
+              description: 'Country of the parent company.',
+              validation: [],
+            },
+          ],
+        },
+        {
           id: 'individual-details',
           title: 'Individual Details',
           description: 'Additional information for individuals',

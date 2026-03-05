@@ -6,11 +6,11 @@
  */
 
 import { useEffect, useState, useRef, useMemo } from 'react';
-import type { BlockDescriptor } from '@/types/form-descriptor';
+import type { BlockDescriptor, GlobalFormDescriptor, FormData } from '@/types/form-descriptor';
 import type { UseFormReturn, FieldValues } from 'react-hook-form';
 import type { FormContext } from '@/utils/template-evaluator';
 import { evaluateHiddenStatus, evaluateDisabledStatus } from '@/utils/template-evaluator';
-import { isRepeatableBlock, isRepeatablePopinBlock, groupFieldsByRepeatableGroupId } from '@/utils/form-descriptor-integration';
+import { isRepeatableBlock, isRepeatablePopinBlock, groupFieldsByRepeatableGroupId, buildAutoFillPatchFromSelection } from '@/utils/form-descriptor-integration';
 import { cn } from '@/lib/utils';
 import FieldWrapper from './field-wrapper';
 import RepeatableFieldGroup from './repeatable-field-group';
@@ -114,6 +114,56 @@ export default function Block({
     return null;
   }
 
+  const handleAutoFillSelection = (
+    selectionFieldId: string,
+    selectedPayload: Record<string, unknown>
+  ) => {
+    if (!selectedPayload) {
+      return;
+    }
+
+    const descriptorForBlock: GlobalFormDescriptor = {
+      blocks: [block],
+      submission: {
+        url: '',
+        method: 'POST',
+      },
+    };
+
+    const hiddenFieldIds: string[] = [];
+    const disabledFieldIds: string[] = [];
+
+    for (const field of nonRepeatableFields) {
+      const fieldHidden = evaluateHiddenStatus(field, formContext);
+      const fieldDisabled = evaluateDisabledStatus(field, formContext) || isDisabled;
+      if (fieldHidden) {
+        hiddenFieldIds.push(field.id);
+      }
+      if (fieldDisabled) {
+        disabledFieldIds.push(field.id);
+      }
+    }
+
+    const currentValues = form.getValues() as Partial<FormData>;
+
+    const patch = buildAutoFillPatchFromSelection({
+      descriptor: descriptorForBlock,
+      selectionFieldId,
+      selectedPayload,
+      currentValues,
+      hiddenFieldIds,
+      disabledFieldIds,
+    });
+
+    for (const [key, value] of Object.entries(patch)) {
+      form.setValue(key, value, {
+        shouldDirty: true,
+        shouldTouch: true,
+        shouldValidate: true,
+      });
+    }
+  };
+
   return (
     <div
       data-testid={`block-${block.id}`}
@@ -193,6 +243,7 @@ export default function Block({
               formContext={formContext}
               onLoadDataSource={onLoadDataSource}
               dataSourceCache={dataSourceCache}
+              onAutoFillSelection={handleAutoFillSelection}
             />
           );
         })}

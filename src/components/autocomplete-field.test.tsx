@@ -232,6 +232,31 @@ describe('AutocompleteField', () => {
     expect(input.value).toBe('Option 1');
   });
 
+  test('given selection, should call onAutoFillSelection with payload', async () => {
+    const user = userEvent.setup();
+    const items = [
+      { label: 'Option 1', value: 'opt1', raw: { id: '1', name: 'Option 1' } },
+      { label: 'Option 2', value: 'opt2', raw: { id: '2', name: 'Option 2' } },
+    ];
+    const field = createMockField({ items });
+    const form = createMockForm();
+    const onAutoFillSelection = vi.fn();
+    const props = createProps({ field, form, onAutoFillSelection });
+
+    render(<AutocompleteField {...props} />);
+
+    const input = screen.getByRole('textbox') as HTMLInputElement;
+    await user.type(input, 'Option 1');
+
+    const option = screen.getByText('Option 1');
+    await user.click(option);
+
+    expect(onAutoFillSelection).toHaveBeenCalledWith('test-field', {
+      id: '1',
+      name: 'Option 1',
+    });
+  });
+
   test('given loading state, should show loading indicator', async () => {
     const onLoadDataSource = vi.fn();
     const field = createMockField({

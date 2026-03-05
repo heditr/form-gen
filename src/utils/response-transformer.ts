@@ -166,7 +166,11 @@ export function transformItem(
     try {
       const parsed = JSON.parse(result);
       if (parsed.label && parsed.value !== undefined) {
-        return { label: String(parsed.label), value: parsed.value };
+        return {
+          label: String(parsed.label),
+          value: parsed.value,
+          raw: typeof item === 'object' && item !== null ? (item as Record<string, unknown>) : undefined,
+        };
       }
     } catch {
       // Not JSON, continue with string parsing
@@ -175,9 +179,11 @@ export function transformItem(
     // If template returns a simple string, use it as label and try to extract value from item
     if (typeof item === 'object' && item !== null) {
       const itemObj = item as Record<string, unknown>;
+      const value = itemObj.value !== undefined ? itemObj.value as string | number | boolean : result;
       return {
         label: result || String(itemObj.label || itemObj.name || ''),
-        value: itemObj.value !== undefined ? itemObj.value as string | number | boolean : result,
+        value,
+        raw: itemObj,
       };
     }
 
@@ -185,6 +191,7 @@ export function transformItem(
     return {
       label: result || String(item),
       value: String(item),
+      raw: typeof item === 'object' && item !== null ? item as Record<string, unknown> : undefined,
     };
   } catch (error) {
     console.error('Error transforming item:', error, 'Item:', item, 'Template:', itemsTemplate);
@@ -192,6 +199,7 @@ export function transformItem(
     return {
       label: String(item || ''),
       value: String(item || ''),
+      raw: typeof item === 'object' && item !== null ? item as Record<string, unknown> : undefined,
     };
   }
 }

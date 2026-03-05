@@ -23,6 +23,7 @@ export interface DropdownFieldProps {
   isDisabled: boolean;
   onLoadDataSource?: (fieldPath: string, url: string, auth?: { type: 'bearer' | 'apikey'; token?: string; headerName?: string }) => void;
   dataSourceCache?: Record<string, unknown>;
+  onAutoFillSelection?: (fieldId: string, selectedPayload: Record<string, unknown>) => void;
 }
 
 /**
@@ -39,6 +40,7 @@ export default function DropdownField({
   isDisabled,
   onLoadDataSource,
   dataSourceCache = {},
+  onAutoFillSelection,
 }: DropdownFieldProps) {
   const error = getErrorByPath(form.formState.errors, field.id) ?? form.formState.errors[field.id];
   const errorMessage = error?.message as string | undefined;
@@ -128,6 +130,27 @@ export default function DropdownField({
           <Select
             id={field.id}
             {...controllerField}
+            value={controllerField.value ?? ''}
+            onChange={(e) => {
+              controllerField.onChange(e);
+
+              if (onAutoFillSelection) {
+                const selectedValue = e.target.value;
+                const selectedItem = items.find(
+                  (item) => String(item.value) === selectedValue
+                );
+                if (selectedItem) {
+                  const payload =
+                    selectedItem.raw && typeof selectedItem.raw === 'object' && !Array.isArray(selectedItem.raw)
+                      ? (selectedItem.raw as Record<string, unknown>)
+                      : {
+                          label: selectedItem.label,
+                          value: selectedItem.value as string | number | boolean,
+                        };
+                  onAutoFillSelection(field.id, payload);
+                }
+              }
+            }}
             disabled={isDisabled || isLoading}
             className={cn(
               errorMessage && 'border-destructive focus:ring-destructive'

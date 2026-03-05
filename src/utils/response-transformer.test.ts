@@ -36,6 +36,7 @@ describe('Response Transformer', () => {
       expect(result).toEqual({
         label: 'Test Label',
         value: 'test-value',
+        raw: item,
       });
     });
 
@@ -52,6 +53,7 @@ describe('Response Transformer', () => {
       expect(result).toEqual({
         label: 'Item Name',
         value: '123', // Handlebars converts numbers to strings in templates
+        raw: item,
       });
       expect(result.label).toBe('Item Name');
       expect(result.value).toBe('123');

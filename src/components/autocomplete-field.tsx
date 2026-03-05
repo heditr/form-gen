@@ -23,6 +23,7 @@ export interface AutocompleteFieldProps {
   isDisabled: boolean;
   onLoadDataSource?: (fieldPath: string, url: string, auth?: { type: 'bearer' | 'apikey'; token?: string; headerName?: string }) => void;
   dataSourceCache?: Record<string, unknown>;
+  onAutoFillSelection?: (fieldId: string, selectedPayload: Record<string, unknown>) => void;
 }
 
 /**
@@ -39,6 +40,7 @@ export default function AutocompleteField({
   isDisabled,
   onLoadDataSource,
   dataSourceCache = {},
+  onAutoFillSelection,
 }: AutocompleteFieldProps) {
   const error = getErrorByPath(form.formState.errors, field.id) ?? form.formState.errors[field.id];
   const errorMessage = error?.message as string | undefined;
@@ -160,6 +162,14 @@ export default function AutocompleteField({
     setIsFocused(false);
     setFocusedIndex(-1);
     onChange(item.value as string);
+
+    if (onAutoFillSelection) {
+      const payload =
+        item.raw && typeof item.raw === 'object' && !Array.isArray(item.raw)
+          ? (item.raw as Record<string, unknown>)
+          : { label: item.label, value: item.value as string | number | boolean };
+      onAutoFillSelection(field.id, payload);
+    }
   };
 
   // Handle keyboard navigation

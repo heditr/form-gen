@@ -61,10 +61,16 @@ export type FieldType =
 
 /**
  * Static item for dropdown, radio, or autocomplete fields
+ * 
+ * @property label - Display label for the option
+ * @property value - Primitive value stored in form data for the field itself
+ * @property raw - Optional raw payload object for the selected item (e.g. full API record)
+ *   used for descriptor-driven auto-fill of related fields
  */
 export interface FieldItem {
   label: string;
   value: string | number | boolean;
+  raw?: Record<string, unknown>;
 }
 
 /**

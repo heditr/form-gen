@@ -289,6 +289,29 @@ describe('DropdownField', () => {
     expect(select.value).toBe('opt1');
   });
 
+  test('given option selection, should call onAutoFillSelection with payload', async () => {
+    const user = userEvent.setup();
+    const field = createMockField({
+      items: [
+        { label: 'Option 1', value: 'opt1', raw: { id: '1', name: 'Option 1' } },
+        { label: 'Option 2', value: 'opt2', raw: { id: '2', name: 'Option 2' } },
+      ],
+    });
+    const form = createMockForm();
+    const onAutoFillSelection = vi.fn();
+    const props = createProps({ field, form, onAutoFillSelection });
+
+    render(<DropdownField {...props} />);
+
+    const select = screen.getByRole('combobox') as HTMLSelectElement;
+    await user.selectOptions(select, 'opt1');
+
+    expect(onAutoFillSelection).toHaveBeenCalledWith('test-field', {
+      id: '1',
+      name: 'Option 1',
+    });
+  });
+
   test('given validation error, should display error from formState.errors', () => {
     const field = createMockField();
     const defaultFormState: FormState<FieldValues> = {
