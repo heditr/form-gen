@@ -17,25 +17,28 @@ import { registerHandlebarsHelpers } from '@/utils/handlebars-helpers';
 import RepeatableFieldGroup from './repeatable-field-group';
 
 // Mock FieldWrapper to avoid complex dependencies in unit tests
-vi.mock('./field-wrapper', () => ({
-  default: ({ field, isHidden, isDisabled }: { field: FieldDescriptor; isHidden?: boolean; isDisabled?: boolean }) => {
-    // Don't render if hidden
+const fieldWrapperMock = vi.fn(
+  ({ field, isHidden, isDisabled }: { field: FieldDescriptor; isHidden?: boolean; isDisabled?: boolean }) => {
     if (isHidden) {
       return null;
     }
-    
-    // Extract original field ID from indexed name (e.g., "addresses.0.street" -> "street")
+
     const originalFieldId = field.id.split('.').pop() || field.id;
     return (
-      <div 
-        data-testid={`field-${originalFieldId}`} 
+      <div
+        data-testid={`field-${originalFieldId}`}
         data-field-id={field.id}
         data-disabled={String(isDisabled || false)}
       >
         {field.label}
       </div>
     );
-  },
+  }
+);
+
+vi.mock('./field-wrapper', () => ({
+  default: (props: { field: FieldDescriptor; isHidden?: boolean; isDisabled?: boolean }) =>
+    fieldWrapperMock(props),
 }));
 
 describe('RepeatableFieldGroup', () => {

@@ -6,12 +6,13 @@
  */
 
 import { useFieldArray } from 'react-hook-form';
-import type { BlockDescriptor, FieldDescriptor } from '@/types/form-descriptor';
+import type { BlockDescriptor, FieldDescriptor, GlobalFormDescriptor, FormData } from '@/types/form-descriptor';
 import type { UseFormReturn, FieldValues } from 'react-hook-form';
 import type { FormContext } from '@/utils/template-evaluator';
 import FieldWrapper from './field-wrapper';
 import { evaluateHiddenStatus, evaluateDisabledStatus } from '@/utils/template-evaluator';
 import { evaluateDefaultValue } from '@/utils/default-value-evaluator';
+import { buildAutoFillPatchFromSelection } from '@/utils/form-descriptor-integration';
 import { Button } from '@/components/ui/button';
 import { Plus, Trash2 } from 'lucide-react';
 
@@ -189,6 +190,81 @@ export default function RepeatableFieldGroup({
                 '@last': index === (groupArray?.length ?? 0) - 1,
               };
 
+              const handleInstanceAutoFillSelection = (
+                selectionFieldId: string,
+                selectedPayload: Record<string, unknown>
+              ) => {
+                if (!selectedPayload) {
+                  return;
+                }
+
+                const basePrefix = `${groupId}.${index}.`;
+                const selectionBaseId = selectionFieldId.startsWith(basePrefix)
+                  ? selectionFieldId.slice(basePrefix.length)
+                  : selectionFieldId;
+
+                const groupFieldsWithBaseIds: FieldDescriptor[] = fields.map((f) => {
+                  const baseId = f.id.startsWith(`${groupId}.`)
+                    ? f.id.slice(groupId.length + 1)
+                    : f.id;
+                  return {
+                    ...f,
+                    id: baseId,
+                  };
+                });
+
+                const descriptorForGroup: GlobalFormDescriptor = {
+                  version: 'auto-fill-group',
+                  blocks: [
+                    {
+                      ...block,
+                      fields: groupFieldsWithBaseIds,
+                    },
+                  ],
+                  submission: {
+                    url: '',
+                    method: 'POST',
+                  },
+                };
+
+                const hiddenFieldIds: string[] = [];
+                const disabledFieldIds: string[] = [];
+
+                for (const field of fields) {
+                  const baseFieldId = field.id.startsWith(`${groupId}.`)
+                    ? field.id.slice(groupId.length + 1)
+                    : field.id;
+                  const fieldHidden = evaluateHiddenStatus(field, instanceFormContext);
+                  const fieldDisabled = evaluateDisabledStatus(field, instanceFormContext) || isDisabled;
+                  if (fieldHidden) {
+                    hiddenFieldIds.push(baseFieldId);
+                  }
+                  if (fieldDisabled) {
+                    disabledFieldIds.push(baseFieldId);
+                  }
+                }
+
+                const currentValuesForInstance = (currentInstance || {}) as Partial<FormData>;
+
+                const patch = buildAutoFillPatchFromSelection({
+                  descriptor: descriptorForGroup,
+                  selectionFieldId: selectionBaseId,
+                  selectedPayload,
+                  currentValues: currentValuesForInstance,
+                  hiddenFieldIds,
+                  disabledFieldIds,
+                });
+
+                for (const [key, value] of Object.entries(patch)) {
+                  const targetPath = `${groupId}.${index}.${key}`;
+                  form.setValue(targetPath, value, {
+                    shouldDirty: true,
+                    shouldTouch: true,
+                    shouldValidate: true,
+                  });
+                }
+              };
+
               return (
                 <div
                   key={fieldArrayField.id}
@@ -242,6 +318,7 @@ export default function RepeatableFieldGroup({
                         formContext={instanceFormContext}
                         onLoadDataSource={onLoadDataSource}
                         dataSourceCache={dataSourceCache}
+                        onAutoFillSelection={handleInstanceAutoFillSelection}
                       />
                     );
                   })}
