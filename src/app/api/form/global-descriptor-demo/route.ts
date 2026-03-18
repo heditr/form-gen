@@ -383,6 +383,11 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
           status: {
             hidden: '{{not (eq entityType "individual")}}',
           },
+          layout: {
+            mode: 'grid',
+            columns: 2,
+            gap: 'md',
+          },
           fields: [
             {
               id: 'dateOfBirth',
@@ -395,6 +400,9 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
                   message: 'Date of birth is required',
                 },
               ],
+              layout: {
+                width: 'half',
+              },
             },
             {
               id: 'ssn',
@@ -416,6 +424,9 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
               status: {
                 hidden: '{{not (eq country "US")}}',
               },
+              layout: {
+                width: 'half',
+              },
             },
             {
               id: 'passportNumber',
@@ -431,6 +442,23 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
               // Field is hidden if country is US
               status: {
                 hidden: '{{eq country "US"}}',
+              },
+              layout: {
+                width: 'half',
+                groupId: 'idDocuments',
+                groupRole: 'leftStack',
+              },
+            },
+            {
+              id: 'passportIssuingCountry',
+              type: 'text',
+              label: 'Passport Issuing Country',
+              description: 'Country that issued the passport',
+              validation: [],
+              layout: {
+                width: 'half',
+                groupId: 'idDocuments',
+                groupRole: 'right',
               },
             },
           ],
@@ -509,6 +537,11 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
           id: 'additional-info',
           title: 'Additional Information',
           description: 'Optional additional details',
+          layout: {
+            mode: 'grid',
+            columns: 2,
+            gap: 'md',
+          },
           fields: [
             {
               id: 'newsletter',
@@ -517,6 +550,9 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
               description: 'Receive updates via email (default from caseContext if available)',
               defaultValue: '{{#if caseContext.newsletter}}true{{else}}false{{/if}}',
               validation: [],
+              layout: {
+                width: 'half',
+              },
             },
             {
               id: 'comments',
@@ -530,9 +566,11 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
                   message: 'Comments must not exceed 500 characters',
                 },
               ],
-              // Field is disabled if newsletter is not checked
               status: {
                 disabled: '{{not newsletter}}',
+              },
+              layout: {
+                width: 'half',
               },
             },
             {
@@ -542,6 +580,10 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
               description: 'Upload any supporting documents (default URL from caseContext if available)',
               defaultValue: '{{caseContext.documentUrl}}',
               validation: [],
+              layout: {
+                width: 'half',
+                groupId: 'attachmentsRow',
+              },
             },
             {
               id: 'priority',
@@ -555,6 +597,10 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
                   message: 'Priority is required',
                 },
               ],
+              layout: {
+                width: 'half',
+                groupId: 'attachmentsRow',
+              },
             },
           ],
         },

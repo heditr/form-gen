@@ -152,6 +152,19 @@ export interface AutoFillConfig {
 }
 
 /**
+ * Layout configuration for an individual field
+ *
+ * @property width - Semantic width hint for the field in a grid row
+ * @property groupId - Optional identifier to group fields that should share visual rows
+ * @property groupRole - Optional role within the group (e.g. left/right or stacked)
+ */
+export interface FieldLayoutConfig {
+  width?: 'full' | 'half' | 'third';
+  groupId?: string;
+  groupRole?: 'left' | 'right' | 'leftStack' | 'rightStack';
+}
+
+/**
  * Button menu item configuration
  * 
  * @property label - Display label for the menu item
@@ -209,6 +222,7 @@ export interface FieldDescriptor {
   button?: ButtonConfig;
   repeatableGroupId?: string;
   autoFill?: AutoFillConfig;
+  layout?: FieldLayoutConfig;
 }
 
 /**
@@ -295,6 +309,11 @@ export interface BlockDescriptor {
   repeatableDefaultSource?: string;
   repeatablePopin?: boolean;
   repeatableSummaryTemplate?: string;
+  layout?: {
+    mode?: 'default' | 'grid';
+    columns?: 1 | 2 | 3;
+    gap?: 'sm' | 'md' | 'lg';
+  };
 }
 
 /**

@@ -11,6 +11,7 @@ import type { UseFormReturn, FieldValues } from 'react-hook-form';
 import type { FormContext } from '@/utils/template-evaluator';
 import { evaluateHiddenStatus, evaluateDisabledStatus } from '@/utils/template-evaluator';
 import { isRepeatableBlock, isRepeatablePopinBlock, groupFieldsByRepeatableGroupId, buildAutoFillPatchFromSelection } from '@/utils/form-descriptor-integration';
+import { buildBlockLayoutRows } from '@/utils/block-layout';
 import { cn } from '@/lib/utils';
 import FieldWrapper from './field-wrapper';
 import RepeatableFieldGroup from './repeatable-field-group';
@@ -228,25 +229,79 @@ export default function Block({
           })
         ) : null}
         {/* Render non-repeatable fields */}
-        {nonRepeatableFields.map((field) => {
-          // Evaluate field visibility
-          const fieldHidden = evaluateHiddenStatus(field, formContext);
-          const fieldDisabled = evaluateDisabledStatus(field, formContext) || isDisabled;
+        {(() => {
+          const layoutMode = block.layout?.mode ?? 'default';
 
-          return (
-            <FieldWrapper
-              key={field.id}
-              field={field}
-              isDisabled={fieldDisabled}
-              isHidden={fieldHidden}
-              form={form}
-              formContext={formContext}
-              onLoadDataSource={onLoadDataSource}
-              dataSourceCache={dataSourceCache}
-              onAutoFillSelection={handleAutoFillSelection}
-            />
-          );
-        })}
+          if (layoutMode !== 'grid') {
+            return nonRepeatableFields.map((field) => {
+              const fieldHidden = evaluateHiddenStatus(field, formContext);
+              const fieldDisabled = evaluateDisabledStatus(field, formContext) || isDisabled;
+
+              return (
+                <FieldWrapper
+                  key={field.id}
+                  field={field}
+                  isDisabled={fieldDisabled}
+                  isHidden={fieldHidden}
+                  form={form}
+                  formContext={formContext}
+                  onLoadDataSource={onLoadDataSource}
+                  dataSourceCache={dataSourceCache}
+                  onAutoFillSelection={handleAutoFillSelection}
+                />
+              );
+            });
+          }
+
+          const rows = buildBlockLayoutRows(block, nonRepeatableFields);
+          const columns = block.layout?.columns ?? 1;
+          const gap = block.layout?.gap ?? 'md';
+          const gapYClass =
+            gap === 'sm' ? 'gap-y-2' : gap === 'lg' ? 'gap-y-6' : 'gap-y-4';
+
+          const gridColsClass =
+            columns === 1
+              ? 'md:grid-cols-1'
+              : columns === 2
+              ? 'md:grid-cols-2'
+              : 'md:grid-cols-3';
+
+          return rows.map((row, rowIndex) => (
+            <div
+              key={`row-${rowIndex}`}
+              className={cn(
+                'grid grid-cols-1',
+                gridColsClass,
+                'gap-x-4',
+                gapYClass
+              )}
+            >
+              {row.slots.map((slot, slotIndex) => (
+                <div key={`slot-${slotIndex}`}>
+                  {slot.fields.map((field) => {
+                    const fieldHidden = evaluateHiddenStatus(field, formContext);
+                    const fieldDisabled =
+                      evaluateDisabledStatus(field, formContext) || isDisabled;
+
+                    return (
+                      <FieldWrapper
+                        key={field.id}
+                        field={field}
+                        isDisabled={fieldDisabled}
+                        isHidden={fieldHidden}
+                        form={form}
+                        formContext={formContext}
+                        onLoadDataSource={onLoadDataSource}
+                        dataSourceCache={dataSourceCache}
+                        onAutoFillSelection={handleAutoFillSelection}
+                      />
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+          ));
+        })()}
       </div>
     </div>
   );
