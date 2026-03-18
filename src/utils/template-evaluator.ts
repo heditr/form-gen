@@ -6,6 +6,7 @@
 
 import Handlebars from 'handlebars';
 import type { BlockDescriptor, FieldDescriptor } from '@/types/form-descriptor';
+import { ensureHandlebarsHelpersRegistered } from './handlebars-helpers';
 
 /**
  * Type for values that can be used in Handlebars templates
@@ -43,6 +44,7 @@ export function evaluateTemplate(template: string | undefined, context: FormCont
   }
 
   try {
+    ensureHandlebarsHelpersRegistered();
     const compiled = Handlebars.compile(template);
     const result = compiled(context);
     return result;

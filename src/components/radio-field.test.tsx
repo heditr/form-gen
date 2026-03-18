@@ -14,6 +14,12 @@ import type { FieldDescriptor } from '@/types/form-descriptor';
 import type { UseFormReturn, FieldValues, FormState } from 'react-hook-form';
 import React from 'react';
 
+const useDataSourceMock = vi.fn(() => ({ data: undefined, isLoading: undefined }));
+
+vi.mock('@/hooks/use-form-query', () => ({
+  useDataSource: (...args: unknown[]) => useDataSourceMock(...args),
+}));
+
 // Mock react-hook-form Controller to actually render
 vi.mock('react-hook-form', async () => {
   const actual = await vi.importActual('react-hook-form');
@@ -40,6 +46,10 @@ vi.mock('react-hook-form', async () => {
 });
 
 describe('RadioField', () => {
+  beforeEach(() => {
+    useDataSourceMock.mockReturnValue({ data: undefined, isLoading: undefined });
+  });
+
   const createMockField = (overrides?: Partial<FieldDescriptor>): FieldDescriptor => ({
     id: 'test-field',
     type: 'radio',

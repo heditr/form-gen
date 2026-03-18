@@ -6,6 +6,8 @@
 
 import Handlebars from 'handlebars';
 
+let registered = false;
+
 /**
  * Type for comparable values in comparison operations
  */
@@ -20,6 +22,11 @@ type TruthyValue = unknown;
  * Register all custom Handlebars helpers
  */
 export function registerHandlebarsHelpers(): void {
+  if (registered) {
+    return;
+  }
+  registered = true;
+
   // Comparison helpers
   // When used as subexpressions like (eq a b), Handlebars passes args directly without context
   Handlebars.registerHelper('eq', (a: Comparable, b: Comparable): boolean => a === b);
@@ -109,4 +116,14 @@ export function registerHandlebarsHelpers(): void {
 
   // Nested data access is already supported by Handlebars via dot notation
   // No additional helper needed - Handlebars natively supports {{user.name}} syntax
+}
+
+/**
+ * Ensure helpers are registered for any Handlebars evaluation path.
+ *
+ * This is safe to call in both SSR and client runtimes and prevents hydration
+ * mismatches when templates are evaluated before `useEffect` runs.
+ */
+export function ensureHandlebarsHelpersRegistered(): void {
+  registerHandlebarsHelpers();
 }

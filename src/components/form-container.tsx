@@ -26,6 +26,7 @@ import { fetchDataSourceThunk } from '@/store/form-thunks';
 import type { AppDispatch } from '@/store/store';
 import { updateCaseContext, identifyDiscriminantFields, haveDiscriminantFieldsChanged } from '@/utils/context-extractor';
 import type { FormContext } from '@/utils/template-evaluator';
+import { evaluateValidationArrayTemplate } from '@/utils/array-template-evaluator';
 import FormPresentation from './form-presentation';
 import FormValuesWatcher from './form-values-watcher';
 import { PopinManagerProvider } from './popin-manager';
@@ -221,7 +222,8 @@ export default function FormContainer() {
     const validationHash = mergedDescriptor.blocks
       .flatMap((block) => block.fields)
       .map((field) => {
-        const ruleTypes = field.validation?.map((r) => {
+        const evaluatedRules = evaluateValidationArrayTemplate(field.validation, { caseContext });
+        const ruleTypes = evaluatedRules.map((r) => {
           if (r.type === 'pattern') {
             // Include pattern value in hash to detect pattern changes
             const patternValue = typeof r.value === 'string' ? r.value : r.value.toString();

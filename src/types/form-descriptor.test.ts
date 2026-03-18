@@ -597,7 +597,7 @@ describe('form-descriptor types', () => {
         id: 'documents',
         type: 'file',
         label: 'Documents',
-        defaultValue: 'https://example.com/file1.pdf',
+        defaultValue: ['https://example.com/file1.pdf', 'https://example.com/file2.pdf'],
         validation: [],
       };
 

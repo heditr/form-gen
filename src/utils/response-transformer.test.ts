@@ -71,6 +71,7 @@ describe('Response Transformer', () => {
       expect(result).toEqual({
         label: 'Item Name',
         value: 'item-value',
+        raw: item,
       });
     });
 
@@ -86,6 +87,7 @@ describe('Response Transformer', () => {
       expect(result).toEqual({
         label: 'Item Name',
         value: 'Item Name',
+        raw: item,
       });
     });
 
@@ -135,8 +137,8 @@ describe('Response Transformer', () => {
       const result = transformResponse(data, config, context);
 
       expect(result).toHaveLength(2);
-      expect(result[0]).toEqual({ label: 'Item 1', value: 'v1' });
-      expect(result[1]).toEqual({ label: 'Item 2', value: 'v2' });
+      expect(result[0]).toEqual({ label: 'Item 1', value: 'v1', raw: data[0] });
+      expect(result[1]).toEqual({ label: 'Item 2', value: 'v2', raw: data[1] });
     });
 
     test('given single object response, should return array with one item', () => {
@@ -150,7 +152,7 @@ describe('Response Transformer', () => {
       const result = transformResponse(data, config, context);
 
       expect(result).toHaveLength(1);
-      expect(result[0]).toEqual({ label: 'Single Item', value: 'single' });
+      expect(result[0]).toEqual({ label: 'Single Item', value: 'single', raw: data });
     });
 
     test('given iteratorTemplate, should iterate over array in response', () => {
@@ -167,8 +169,8 @@ describe('Response Transformer', () => {
       const result = transformResponse(data, config, context);
 
       expect(result).toHaveLength(2);
-      expect(result[0]).toEqual({ label: 'Item 1', value: 1 });
-      expect(result[1]).toEqual({ label: 'Item 2', value: 2 });
+      expect(result[0]).toEqual({ label: 'Item 1', value: 1, raw: data[0] });
+      expect(result[1]).toEqual({ label: 'Item 2', value: 2, raw: data[1] });
     });
 
     test('given iteratorTemplate with non-array data, should still transform single item', () => {
@@ -182,7 +184,7 @@ describe('Response Transformer', () => {
       const result = transformResponse(data, config, context);
 
       expect(result).toHaveLength(1);
-      expect(result[0]).toEqual({ label: 'Single Item', value: 1 });
+      expect(result[0]).toEqual({ label: 'Single Item', value: 1, raw: data });
     });
 
     test('given empty array, should return empty array', () => {
@@ -211,8 +213,8 @@ describe('Response Transformer', () => {
       const result = transformResponse(data, config, context);
 
       expect(result).toHaveLength(2);
-      expect(result[0]).toEqual({ label: 'Title 1:id1', value: 'Title 1:id1' });
-      expect(result[1]).toEqual({ label: 'Title 2:id2', value: 'Title 2:id2' });
+      expect(result[0]).toEqual({ label: 'Title 1:id1', value: 'Title 1:id1', raw: data.results[0] });
+      expect(result[1]).toEqual({ label: 'Title 2:id2', value: 'Title 2:id2', raw: data.results[1] });
     });
 
     test('given nested response with iteratorTemplate Handlebars expression evaluating to path, should extract and transform nested array', () => {
@@ -236,8 +238,8 @@ describe('Response Transformer', () => {
       const result = transformResponse(data, config, context);
 
       expect(result).toHaveLength(2);
-      expect(result[0]).toEqual({ label: 'Item 1 (A1)', value: 'Item 1 (A1)' });
-      expect(result[1]).toEqual({ label: 'Item 2 (A2)', value: 'Item 2 (A2)' });
+      expect(result[0]).toEqual({ label: 'Item 1 (A1)', value: 'Item 1 (A1)', raw: data.data.items[0] });
+      expect(result[1]).toEqual({ label: 'Item 2 (A2)', value: 'Item 2 (A2)', raw: data.data.items[1] });
     });
 
     test('given nested response with deep path, should extract nested array', () => {
@@ -260,8 +262,8 @@ describe('Response Transformer', () => {
       const result = transformResponse(data, config, context);
 
       expect(result).toHaveLength(2);
-      expect(result[0]).toEqual({ label: 'Option 1', value: 'opt1' });
-      expect(result[1]).toEqual({ label: 'Option 2', value: 'opt2' });
+      expect(result[0]).toEqual({ label: 'Option 1', value: 'opt1', raw: data.response.payload.list[0] });
+      expect(result[1]).toEqual({ label: 'Option 2', value: 'opt2', raw: data.response.payload.list[1] });
     });
 
     test('given itemsTemplate with RESPONSE access, should access full response', () => {

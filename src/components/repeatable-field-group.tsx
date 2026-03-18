@@ -177,18 +177,29 @@ export default function RepeatableFieldGroup({
               
               // Build instance-specific form context for template evaluation
               // This allows templates to reference current instance data and index
+              const first = index === 0;
+              const last = index === (groupArray?.length ?? 0) - 1;
+
               const instanceFormContext: FormContext = {
                 ...formContext,
                 // Add current instance data to context for template evaluation
                 [groupId]: groupArray,
                 // Add current instance values directly for easy access (e.g., {{street}})
                 ...(currentInstance || {}),
-                // Add @index helper for accessing current index in templates
-                '@index': index,
-                // Add @first and @last helpers for convenience
-                '@first': index === 0,
-                '@last': index === (groupArray?.length ?? 0) - 1,
+                // Repeatable meta: use non-@ keys for Handlebars compatibility
+                // (Handlebars `@index/@first/@last` are data vars, not normal context vars)
+                index,
+                first,
+                last,
               };
+
+              const withRepeatableMeta = (template: string | undefined): string | undefined =>
+                template
+                  ? template
+                      .replaceAll('@index', 'index')
+                      .replaceAll('@first', 'first')
+                      .replaceAll('@last', 'last')
+                  : template;
 
               const handleInstanceAutoFillSelection = (
                 selectionFieldId: string,
@@ -234,8 +245,20 @@ export default function RepeatableFieldGroup({
                   const baseFieldId = field.id.startsWith(`${groupId}.`)
                     ? field.id.slice(groupId.length + 1)
                     : field.id;
-                  const fieldHidden = evaluateHiddenStatus(field, instanceFormContext);
-                  const fieldDisabled = evaluateDisabledStatus(field, instanceFormContext) || isDisabled;
+                  const fieldWithMeta = field.status
+                    ? {
+                        ...field,
+                        status: {
+                          ...field.status,
+                          hidden: withRepeatableMeta(field.status.hidden),
+                          disabled: withRepeatableMeta(field.status.disabled),
+                          readonly: withRepeatableMeta(field.status.readonly),
+                        },
+                      }
+                    : field;
+
+                  const fieldHidden = evaluateHiddenStatus(fieldWithMeta, instanceFormContext);
+                  const fieldDisabled = evaluateDisabledStatus(fieldWithMeta, instanceFormContext) || isDisabled;
                   if (fieldHidden) {
                     hiddenFieldIds.push(baseFieldId);
                   }
@@ -305,8 +328,20 @@ export default function RepeatableFieldGroup({
                     };
 
                     // Evaluate field visibility and disabled status
-                    const fieldHidden = evaluateHiddenStatus(field, instanceFormContext);
-                    const fieldDisabled = evaluateDisabledStatus(field, instanceFormContext) || isDisabled;
+                    const fieldWithMeta = field.status
+                      ? {
+                          ...field,
+                          status: {
+                            ...field.status,
+                            hidden: withRepeatableMeta(field.status.hidden),
+                            disabled: withRepeatableMeta(field.status.disabled),
+                            readonly: withRepeatableMeta(field.status.readonly),
+                          },
+                        }
+                      : field;
+
+                    const fieldHidden = evaluateHiddenStatus(fieldWithMeta, instanceFormContext);
+                    const fieldDisabled = evaluateDisabledStatus(fieldWithMeta, instanceFormContext) || isDisabled;
 
                     return (
                       <FieldWrapper

@@ -14,6 +14,18 @@ import type { ButtonFieldProps } from './button-field';
 import type { FieldDescriptor, GlobalFormDescriptor, BlockDescriptor } from '@/types/form-descriptor';
 import type { FormContext } from '@/utils/template-evaluator';
 import { registerHandlebarsHelpers } from '@/utils/handlebars-helpers';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import React from 'react';
+
+const renderWithQueryClient = (ui: React.ReactElement) => {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false },
+      mutations: { retry: false },
+    },
+  });
+  return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
+};
 
 // Mock PopinManager context for unit tests
 const mockOpenPopin = vi.fn();
@@ -333,13 +345,11 @@ describe('ButtonField Integration with PopinManager', () => {
   });
 
   test('given button field with single variant, should open popin dialog on click', async () => {
-    // Unmock popin-manager for this integration test
-    vi.doUnmock('./popin-manager');
     vi.resetModules();
-    
-    // Re-import to get the real implementation
+    vi.doUnmock('./popin-manager');
     const { PopinManagerProvider: RealPopinManagerProvider } = await import('./popin-manager');
-    
+    const { default: RealButtonField } = await import('./button-field');
+
     const user = userEvent.setup();
     const block = createMockBlock();
     const descriptor = createMockDescriptor([block]);
@@ -357,7 +367,7 @@ describe('ButtonField Integration with PopinManager', () => {
       },
     };
 
-    render(
+    renderWithQueryClient(
       <RealPopinManagerProvider
         mergedDescriptor={descriptor}
         form={form}
@@ -365,9 +375,10 @@ describe('ButtonField Integration with PopinManager', () => {
         onLoadDataSource={vi.fn()}
         dataSourceCache={{}}
       >
-        <ButtonField field={field} isDisabled={false} />
+        <RealButtonField field={field} isDisabled={false} />
       </RealPopinManagerProvider>
     );
+    
 
     const button = screen.getByRole('button', { name: 'Add Contact' });
     await user.click(button);
@@ -379,10 +390,11 @@ describe('ButtonField Integration with PopinManager', () => {
   });
 
   test('given block not found, should handle error gracefully without opening popin', async () => {
-    vi.doUnmock('./popin-manager');
     vi.resetModules();
+    vi.doUnmock('./popin-manager');
     const { PopinManagerProvider: RealPopinManagerProvider } = await import('./popin-manager');
-    
+    const { default: RealButtonField } = await import('./button-field');
+
     const user = userEvent.setup();
     const descriptor = createMockDescriptor([]); // No blocks
     const form = createMockForm();
@@ -401,7 +413,7 @@ describe('ButtonField Integration with PopinManager', () => {
       },
     };
 
-    render(
+    renderWithQueryClient(
       <RealPopinManagerProvider
         mergedDescriptor={descriptor}
         form={form}
@@ -409,7 +421,7 @@ describe('ButtonField Integration with PopinManager', () => {
         onLoadDataSource={vi.fn()}
         dataSourceCache={{}}
       >
-        <ButtonField field={field} isDisabled={false} />
+        <RealButtonField field={field} isDisabled={false} />
       </RealPopinManagerProvider>
     );
 
@@ -424,10 +436,11 @@ describe('ButtonField Integration with PopinManager', () => {
   });
 
   test('given multiple button triggers, should close previous popin when opening new one', async () => {
-    vi.doUnmock('./popin-manager');
     vi.resetModules();
+    vi.doUnmock('./popin-manager');
     const { PopinManagerProvider: RealPopinManagerProvider } = await import('./popin-manager');
-    
+    const { default: RealButtonField } = await import('./button-field');
+
     const user = userEvent.setup();
     const block1 = createMockBlock({ id: 'block-1', title: 'Block 1' });
     const block2 = createMockBlock({ id: 'block-2', title: 'Block 2' });
@@ -457,7 +470,7 @@ describe('ButtonField Integration with PopinManager', () => {
       },
     };
 
-    render(
+    renderWithQueryClient(
       <RealPopinManagerProvider
         mergedDescriptor={descriptor}
         form={form}
@@ -466,8 +479,8 @@ describe('ButtonField Integration with PopinManager', () => {
         dataSourceCache={{}}
       >
         <div>
-          <ButtonField field={field1} isDisabled={false} />
-          <ButtonField field={field2} isDisabled={false} />
+          <RealButtonField field={field1} isDisabled={false} />
+          <RealButtonField field={field2} isDisabled={false} />
         </div>
       </RealPopinManagerProvider>
     );
@@ -491,10 +504,11 @@ describe('ButtonField Integration with PopinManager', () => {
   });
 
   test('given form state, should sync form data between button-triggered popins and main form', async () => {
-    vi.doUnmock('./popin-manager');
     vi.resetModules();
+    vi.doUnmock('./popin-manager');
     const { PopinManagerProvider: RealPopinManagerProvider } = await import('./popin-manager');
-    
+    const { default: RealButtonField } = await import('./button-field');
+
     const user = userEvent.setup();
     const block = createMockBlock({
       fields: [
@@ -524,7 +538,7 @@ describe('ButtonField Integration with PopinManager', () => {
       },
     };
 
-    render(
+    renderWithQueryClient(
       <RealPopinManagerProvider
         mergedDescriptor={descriptor}
         form={form}
@@ -532,7 +546,7 @@ describe('ButtonField Integration with PopinManager', () => {
         onLoadDataSource={vi.fn()}
         dataSourceCache={{}}
       >
-        <ButtonField field={field} isDisabled={false} />
+        <RealButtonField field={field} isDisabled={false} />
       </RealPopinManagerProvider>
     );
 

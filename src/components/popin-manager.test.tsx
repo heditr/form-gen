@@ -13,6 +13,7 @@ import { PopinManagerProvider, usePopinManager } from './popin-manager';
 import type { GlobalFormDescriptor, BlockDescriptor, CaseContext } from '@/types/form-descriptor';
 import type { FormContext } from '@/utils/template-evaluator';
 import { registerHandlebarsHelpers } from '@/utils/handlebars-helpers';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 // Mock Block component
 vi.mock('./block', () => ({
@@ -119,6 +120,15 @@ vi.mock('@tanstack/react-query', async () => {
 });
 
 describe('PopinManager', () => {
+  const renderWithQueryClient = (ui: React.ReactElement) => {
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    });
+    return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
+  };
   beforeAll(() => {
     registerHandlebarsHelpers();
   });
@@ -239,7 +249,7 @@ describe('PopinManager', () => {
         isDisabled: false,
       });
 
-      render(
+      renderWithQueryClient(
         <PopinManagerProvider
           mergedDescriptor={descriptor}
           form={form}
@@ -296,7 +306,7 @@ describe('PopinManager', () => {
         );
       };
 
-      render(
+      renderWithQueryClient(
         <PopinManagerProvider
           mergedDescriptor={descriptor}
           form={form}
@@ -327,7 +337,7 @@ describe('PopinManager', () => {
 
       const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-      render(
+      renderWithQueryClient(
         <PopinManagerProvider
           mergedDescriptor={descriptor}
           form={form}
@@ -385,7 +395,7 @@ describe('PopinManager', () => {
         );
       };
 
-      render(
+      renderWithQueryClient(
         <PopinManagerProvider
           mergedDescriptor={descriptor}
           form={form}
@@ -429,7 +439,7 @@ describe('PopinManager', () => {
 
       const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
-      render(
+      renderWithQueryClient(
         <PopinManagerProvider
           mergedDescriptor={descriptor}
           form={form}
@@ -469,7 +479,7 @@ describe('PopinManager', () => {
         isDisabled: false,
       });
 
-      render(
+      renderWithQueryClient(
         <PopinManagerProvider
           mergedDescriptor={descriptor}
           form={form}
@@ -509,7 +519,7 @@ describe('PopinManager', () => {
         isDisabled: false,
       });
 
-      render(
+      renderWithQueryClient(
         <PopinManagerProvider
           mergedDescriptor={descriptor}
           form={form}
@@ -549,7 +559,7 @@ describe('PopinManager', () => {
         isDisabled: false,
       });
 
-      render(
+      renderWithQueryClient(
         <PopinManagerProvider
           mergedDescriptor={descriptor}
           form={form}
@@ -590,7 +600,7 @@ describe('PopinManager', () => {
         isDisabled: false,
       });
 
-      render(
+      renderWithQueryClient(
         <PopinManagerProvider
           mergedDescriptor={descriptor}
           form={form}
@@ -630,7 +640,7 @@ describe('PopinManager', () => {
         isDisabled: false,
       });
 
-      render(
+      renderWithQueryClient(
         <PopinManagerProvider
           mergedDescriptor={descriptor}
           form={form}
@@ -679,7 +689,7 @@ describe('PopinManager', () => {
         isDisabled: false,
       });
 
-      render(
+      renderWithQueryClient(
         <PopinManagerProvider
           mergedDescriptor={descriptor}
           form={form}
@@ -717,7 +727,7 @@ describe('PopinManager', () => {
         isDisabled: true,
       });
 
-      render(
+      renderWithQueryClient(
         <PopinManagerProvider
           mergedDescriptor={descriptor}
           form={form}
@@ -795,7 +805,7 @@ describe('PopinManager', () => {
         );
       };
 
-      render(
+      renderWithQueryClient(
         <PopinManagerProvider
           mergedDescriptor={descriptor}
           form={form}
@@ -849,7 +859,7 @@ describe('PopinManager', () => {
         );
       };
 
-      render(
+      renderWithQueryClient(
         <PopinManagerProvider
           mergedDescriptor={descriptor}
           form={form}
@@ -911,7 +921,7 @@ describe('PopinManager', () => {
         );
       };
 
-      render(
+      renderWithQueryClient(
         <PopinManagerProvider
           mergedDescriptor={descriptor}
           form={form}
@@ -993,7 +1003,7 @@ describe('PopinManager', () => {
         );
       };
 
-      render(
+      renderWithQueryClient(
         <PopinManagerProvider
           mergedDescriptor={descriptor}
           form={form}
@@ -1081,7 +1091,7 @@ describe('PopinManager', () => {
         );
       };
 
-      render(
+      renderWithQueryClient(
         <PopinManagerProvider
           mergedDescriptor={descriptor}
           form={form}

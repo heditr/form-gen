@@ -12,6 +12,7 @@ import type { UseFormReturn, FieldValues } from 'react-hook-form';
 import type { FormContext } from '@/utils/template-evaluator';
 import { getErrorByPath } from '@/utils/form-errors';
 import { useDataSource } from '@/hooks/use-form-query';
+import { evaluateItemsArrayTemplate } from '@/utils/array-template-evaluator';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
@@ -67,21 +68,37 @@ export default function AutocompleteField({
       if (data && Array.isArray(data)) {
         return data as FieldItem[];
       }
-      // Fallback to callback pattern if hook hasn't loaded yet (backward compatibility)
-      if (!data && onLoadDataSource && field.dataSource.auth) {
-        // Only call callback if auth is compatible (bearer or apikey, not basic)
-        const auth = field.dataSource.auth;
-        if (auth.type === 'bearer' || auth.type === 'apikey') {
-          onLoadDataSource(field.id, field.dataSource.url, {
-            type: auth.type,
-            token: auth.token,
-            headerName: auth.headerName,
-          });
-        }
-      }
     }
-    return field.items || [];
-  }, [field.items, field.dataSource, field.id, dataSourceQuery.data, dataSourceCache, onLoadDataSource]);
+    return evaluateItemsArrayTemplate(field.items, formContext);
+  }, [field.items, field.dataSource, field.id, dataSourceQuery.data, dataSourceCache, formContext]);
+
+  // Backward-compatible callback-based loading, moved to effect to avoid setState during render
+  useEffect(() => {
+    if (!field.dataSource || !onLoadDataSource) {
+      return;
+    }
+
+    const data = dataSourceQuery.data || dataSourceCache[field.id];
+    if (data && Array.isArray(data)) {
+      return;
+    }
+
+    const auth = field.dataSource.auth;
+    if (!auth) {
+      onLoadDataSource(field.id, field.dataSource.url, undefined);
+      return;
+    }
+
+    if (auth.type === 'bearer' || auth.type === 'apikey') {
+      onLoadDataSource(field.id, field.dataSource.url, {
+        type: auth.type,
+        token: auth.token,
+        headerName: auth.headerName,
+      });
+    } else {
+      onLoadDataSource(field.id, field.dataSource.url, undefined);
+    }
+  }, [field.dataSource, field.id, dataSourceQuery.data, dataSourceCache, onLoadDataSource]);
 
   // Derive loading state from hook or cache
   const isLoading = useMemo(() => {

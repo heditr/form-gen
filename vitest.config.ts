@@ -8,6 +8,11 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     include: ['**/*.{test,spec}.{js,ts,jsx,tsx}'],
+    exclude: [
+      '**/node_modules/**',
+      '**/.next/**',
+      'test-autocomplete-transparency.spec.ts',
+    ],
     setupFiles: ['./src/test/setup.ts'],
   },
   resolve: {

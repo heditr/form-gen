@@ -110,7 +110,7 @@ export function useFormDescriptor(
   }, [defaultValues, savedFormData, fieldsWithTemplateDefaults]);
 
   // Build Zod schema from descriptor
-  const zodSchema = useMemo(() => buildZodSchemaFromDescriptor(descriptor), [descriptor]);
+  const zodSchema = useMemo(() => buildZodSchemaFromDescriptor(descriptor, formContext), [descriptor, formContext]);
 
   // Initialize react-hook-form with Zod resolver
   const form = useForm<FieldValues>({

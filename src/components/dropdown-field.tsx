@@ -11,6 +11,7 @@ import type { FieldDescriptor, FieldItem } from '@/types/form-descriptor';
 import type { UseFormReturn, FieldValues } from 'react-hook-form';
 import type { FormContext } from '@/utils/template-evaluator';
 import { getErrorByPath } from '@/utils/form-errors';
+import { evaluateItemsArrayTemplate } from '@/utils/array-template-evaluator';
 import { useDataSource } from '@/hooks/use-form-query';
 import { Select } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
@@ -63,7 +64,7 @@ export default function DropdownField({
   const items = useMemo<FieldItem[]>(() => {
     // If field has static items, use them
     if (field.items) {
-      return field.items;
+      return evaluateItemsArrayTemplate(field.items, formContext);
     }
 
     // If field has dataSource, use hook data or fallback to cache
@@ -79,7 +80,7 @@ export default function DropdownField({
 
   // Backward-compatible callback-based loading, moved to effect to avoid setState during render
   useEffect(() => {
-    if (!field.dataSource || !onLoadDataSource || !field.dataSource.auth) {
+    if (!field.dataSource || !onLoadDataSource) {
       return;
     }
 
@@ -90,12 +91,20 @@ export default function DropdownField({
     }
 
     const auth = field.dataSource.auth;
+    if (!auth) {
+      onLoadDataSource(field.id, field.dataSource.url, undefined);
+      return;
+    }
+
     if (auth.type === 'bearer' || auth.type === 'apikey') {
       onLoadDataSource(field.id, field.dataSource.url, {
         type: auth.type,
         token: auth.token,
         headerName: auth.headerName,
       });
+    } else {
+      // basic auth is not supported by callback loader (use proxy instead)
+      onLoadDataSource(field.id, field.dataSource.url, undefined);
     }
   }, [field.dataSource, field.id, dataSourceQuery.data, dataSourceCache, onLoadDataSource]);
 

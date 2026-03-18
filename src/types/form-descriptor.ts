@@ -213,10 +213,18 @@ export interface FieldDescriptor {
   type: FieldType;
   label: string;
   description?: string;
-  defaultValue?: string | number | boolean | null;
-  items?: FieldItem[];
+  defaultValue?: string | string[] | number | boolean | null;
+  /**
+   * Static option items for selection fields, or a Handlebars template string
+   * that evaluates to a JSON array of FieldItem objects.
+   */
+  items?: FieldItem[] | string;
   dataSource?: DataSourceConfig;
-  validation: ValidationRule[];
+  /**
+   * Validation rules array, or a Handlebars template string that evaluates
+   * to a JSON array of ValidationRule-like objects (JSON-serializable subset).
+   */
+  validation: ValidationRule[] | string;
   isDiscriminant?: boolean;
   status?: StatusTemplates;
   button?: ButtonConfig;

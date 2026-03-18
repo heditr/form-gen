@@ -12,6 +12,7 @@ import { convertToReactHookFormRules, convertToZodSchema } from './validation-ru
 import { evaluateDefaultValue } from './default-value-evaluator';
 import { evaluateTemplate } from './template-evaluator';
 import type { FormContext } from './template-evaluator';
+import { evaluateValidationArrayTemplate } from './array-template-evaluator';
 
 /**
  * Helper to set a nested value on an object using dot-notation path
@@ -395,7 +396,8 @@ export function extractDefaultValues(
  */
 export function getFieldValidationRules(
   descriptor: GlobalFormDescriptor | null,
-  fieldId: string
+  fieldId: string,
+  formContext: FormContext = {}
 ): ReturnType<typeof convertToReactHookFormRules> {
   if (!descriptor) {
     return {};
@@ -404,7 +406,8 @@ export function getFieldValidationRules(
   for (const block of descriptor.blocks) {
     const field = block.fields.find((f) => f.id === fieldId);
     if (field && field.validation) {
-      return convertToReactHookFormRules(field.validation);
+      const rules = evaluateValidationArrayTemplate(field.validation, formContext);
+      return convertToReactHookFormRules(rules);
     }
   }
 
@@ -518,7 +521,8 @@ export function groupFieldsByRepeatableGroupId(
  * @returns Zod schema object with field IDs or group IDs as keys and Zod schemas as values
  */
 export function buildZodSchemaFromDescriptor(
-  descriptor: GlobalFormDescriptor | null
+  descriptor: GlobalFormDescriptor | null,
+  formContext: FormContext = {}
 ): z.ZodObject<Record<string, z.ZodTypeAny>> {
   if (!descriptor) {
     return z.object({});
@@ -604,7 +608,8 @@ export function buildZodSchemaFromDescriptor(
             ? field.id.slice(groupId.length + 1)
             : field.id;
           const fieldType = field.type as Exclude<typeof field.type, 'button'>;
-          const fieldSchema = convertToZodSchema(field.validation, fieldType);
+          const fieldRules = evaluateValidationArrayTemplate(field.validation, formContext);
+          const fieldSchema = convertToZodSchema(fieldRules, fieldType);
 
           if (baseFieldId.includes('.')) {
             addSchemaToTree(groupTree, baseFieldId, fieldSchema);
@@ -640,7 +645,8 @@ export function buildZodSchemaFromDescriptor(
         if (!field.repeatableGroupId && field.type !== 'button') {
           // Type assertion: we've already checked it's not a button
           const fieldType = field.type as Exclude<typeof field.type, 'button'>;
-          const fieldSchema = convertToZodSchema(field.validation, fieldType);
+          const fieldRules = evaluateValidationArrayTemplate(field.validation, formContext);
+          const fieldSchema = convertToZodSchema(fieldRules, fieldType);
 
           if (field.id.includes('.')) {
             addSchemaToTree(nonRepeatableTree, field.id, fieldSchema);

@@ -17,7 +17,7 @@ import type { FieldType } from '@/types/form-descriptor';
  * @returns Evaluated and type-converted default value
  */
 export function evaluateDefaultValue(
-  defaultValue: string | number | boolean | null | undefined,
+  defaultValue: string | string[] | number | boolean | null | undefined,
   fieldType: FieldType,
   context: FormContext
 ): string | number | boolean | string[] | null | undefined {
@@ -38,6 +38,14 @@ export function evaluateDefaultValue(
         return null;
       }
     }
+    // For checkbox/number, allow plain string values to be parsed for convenience
+    if (fieldType === 'checkbox') {
+      return parseBoolean(defaultValue);
+    }
+    if (fieldType === 'number') {
+      return parseNumber(defaultValue);
+    }
+
     // For other field types, return the string as-is (no parsing for non-templates)
     return defaultValue;
   }
@@ -60,16 +68,6 @@ export function evaluateDefaultValue(
       return parseNumber(evaluated);
 
     case 'radio':
-      // Radio can be string or number, but template always returns string
-      // Try to parse as number if it's a pure number string
-      const numValue = parseNumber(evaluated);
-      if (numValue !== 0 || evaluated === '0') {
-        // If it parsed to a number (including 0), return as number
-        // But only if the original string was a pure number
-        if (/^-?\d+(\.\d+)?$/.test(evaluated.trim())) {
-          return numValue;
-        }
-      }
       return evaluated;
 
     case 'file':

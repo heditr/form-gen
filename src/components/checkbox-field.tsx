@@ -40,6 +40,7 @@ export default function CheckboxField({
         <Controller
           name={field.id}
           control={form.control}
+          defaultValue={(field.defaultValue ?? false) as boolean}
           render={({ field: controllerField }) => (
             <input
               id={field.id}

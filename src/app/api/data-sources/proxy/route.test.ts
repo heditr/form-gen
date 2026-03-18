@@ -167,8 +167,8 @@ describe('POST /api/data-sources/proxy', () => {
 
     const data = await response.json();
     expect(data.items).toEqual([
-      { label: 'California', value: 'CA' },
-      { label: 'New York', value: 'NY' },
+      { label: 'California', value: 'CA', raw: { id: 1, name: 'California', code: 'CA' } },
+      { label: 'New York', value: 'NY', raw: { id: 2, name: 'New York', code: 'NY' } },
     ]);
   });
 

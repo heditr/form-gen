@@ -23,10 +23,10 @@ export interface ResolvedBlock {
 
 /**
  * Cache for block lookup map to enable O(1) access
- * Key: descriptor reference (using WeakMap would be better but we need string keys for testing)
+ * Key: descriptor reference
  * Value: Map of block ID to BlockDescriptor
  */
-const blockCache = new Map<string, Map<string, BlockDescriptor>>();
+const blockCache = new WeakMap<GlobalFormDescriptor, Map<string, BlockDescriptor>>();
 
 /**
  * Build or retrieve cached block lookup map for a descriptor
@@ -35,13 +35,10 @@ const blockCache = new Map<string, Map<string, BlockDescriptor>>();
  * @returns Map of block ID to BlockDescriptor
  */
 function getBlockMap(descriptor: GlobalFormDescriptor): Map<string, BlockDescriptor> {
-  // Use a more unique cache key that includes block structure
-  // This ensures different descriptors with same IDs don't share cache
-  const cacheKey = JSON.stringify(descriptor.blocks.map(b => ({ id: b.id, title: b.title })));
-  
   // Check cache first
-  if (blockCache.has(cacheKey)) {
-    return blockCache.get(cacheKey)!;
+  const cached = blockCache.get(descriptor);
+  if (cached) {
+    return cached;
   }
 
   // Build lookup map
@@ -51,7 +48,7 @@ function getBlockMap(descriptor: GlobalFormDescriptor): Map<string, BlockDescrip
   }
 
   // Cache the map
-  blockCache.set(cacheKey, blockMap);
+  blockCache.set(descriptor, blockMap);
 
   return blockMap;
 }

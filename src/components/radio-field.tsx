@@ -11,6 +11,7 @@ import type { FieldDescriptor, FieldItem } from '@/types/form-descriptor';
 import type { UseFormReturn, FieldValues } from 'react-hook-form';
 import type { FormContext } from '@/utils/template-evaluator';
 import { getErrorByPath } from '@/utils/form-errors';
+import { evaluateItemsArrayTemplate } from '@/utils/array-template-evaluator';
 import { useDataSource } from '@/hooks/use-form-query';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
@@ -68,12 +69,12 @@ export default function RadioField({
         return data as FieldItem[];
       }
     }
-    return field.items || [];
-  }, [field.items, field.dataSource, field.id, dataSourceQuery.data, dataSourceCache]);
+    return evaluateItemsArrayTemplate(field.items, formContext);
+  }, [field.items, field.dataSource, field.id, dataSourceQuery.data, dataSourceCache, formContext]);
 
   // Backward-compatible callback-based loading, moved to effect to avoid setState during render
   useEffect(() => {
-    if (!field.dataSource || !onLoadDataSource || !field.dataSource.auth) {
+    if (!field.dataSource || !onLoadDataSource) {
       return;
     }
 
@@ -84,12 +85,19 @@ export default function RadioField({
     }
 
     const auth = field.dataSource.auth;
+    if (!auth) {
+      onLoadDataSource(field.id, field.dataSource.url, undefined);
+      return;
+    }
+
     if (auth.type === 'bearer' || auth.type === 'apikey') {
       onLoadDataSource(field.id, field.dataSource.url, {
         type: auth.type,
         token: auth.token,
         headerName: auth.headerName,
       });
+    } else {
+      onLoadDataSource(field.id, field.dataSource.url, undefined);
     }
   }, [field.dataSource, field.id, dataSourceQuery.data, dataSourceCache, onLoadDataSource]);
 
@@ -124,6 +132,7 @@ export default function RadioField({
           <Controller
             name={field.id}
             control={form.control}
+            defaultValue={(field.defaultValue ?? '') as string | number}
             render={({ field: controllerField }) => (
               <>
                 {items.map((item) => {

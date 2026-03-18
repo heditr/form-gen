@@ -342,12 +342,15 @@ export function PopinManagerProvider({
       const blockToClear = popinDescriptor?.blocks[0] ?? resolvedBlock.block;
       blockToClear.fields.forEach((field) => {
         popinForm.clearErrors(field.id);
+        // Clear any main-form errors for the same field ids (e.g. server errors
+        // that were surfaced on the main form or persisted between openings).
+        mainForm.clearErrors(field.id as never);
       });
     }
     popinForm.reset();
     setOpenBlockId(null);
     setPopinEditContext(null);
-  }, [resolvedBlock, popinForm, popinDescriptor]);
+  }, [resolvedBlock, popinForm, popinDescriptor, mainForm]);
 
   // Handle validate button click
   const handleValidate = useCallback(async () => {
