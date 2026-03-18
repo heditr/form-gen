@@ -28,6 +28,12 @@ Example (template returns a JSON array):
 {{/if}}
 ```
 
+Practical tip: for non-trivial arrays, prefer building the array as real data and using the `json` helper:
+
+```txt
+{{json caseContext.relationshipItems "[]"}}
+```
+
 ### `FieldDescriptor.validation`
 
 Current:
@@ -54,6 +60,18 @@ Example (template returns a JSON array of rules):
 Notes:
 - `pattern.value` should be serialized as a **string**, not a `RegExp`, to keep templates JSON-serializable.
 - This aligns with existing typing that already allows `RegExp | string` but keeps templates practical.
+
+---
+
+## Authoring guidelines (what works best)
+
+- **Return a JSON array string**: templates must output a JSON array, e.g. `[...]`.
+- **Use the `json` helper when possible**: it avoids quoting/escaping mistakes and preserves quotes.
+- **Keep rules serializable**:
+  - `required`: `{ "type": "required", "message": "..." }`
+  - `minLength/maxLength`: `value` must be a number
+  - `pattern`: `value` must be a string (regex source), not `/.../` or `RegExp`
+- **On evaluation failure**: the engine falls back to `[]` (no items / no validations), so ensure the template can’t accidentally output non-JSON for common states.
 
 ---
 

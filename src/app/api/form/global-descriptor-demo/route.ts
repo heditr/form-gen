@@ -85,17 +85,20 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
               id: 'state',
               type: 'dropdown',
               label: 'State/Province',
-              description: 'Select your state or province (loaded from API)',
+              description: 'Select your state or province (loaded from API). Template validation demo: US adds a pattern rule.',
               dataSource: {
                 url: '/api/data-sources/states',
                 itemsTemplate: '{"label":"{{item.name}}","value":"{{item.code}}"}',
               },
-              validation: [
-                {
-                  type: 'required',
-                  message: 'State/Province is required',
-                },
-              ],
+              validation:
+                '[' +
+                '{"type":"required","message":"State/Province is required"},' +
+                '{{#if (eq country "US")}}' +
+                '{"type":"pattern","value":"^[A-Z]{2}$","message":"Use 2-letter state code (US)"}' +
+                '{{else}}' +
+                '{"type":"minLength","value":2,"message":"Too short"}' +
+                '{{/if}}' +
+                ']',
               // Field is hidden if country is not US or CA
               status: {
                 hidden: '{{not (or (eq country "US") (eq country "CA"))}}',
@@ -626,16 +629,13 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
               id: 'emergencyRelationship',
               type: 'dropdown',
               label: 'Relationship',
-              description: 'Relationship to the contact',
-              items: [
-                { label: 'Spouse', value: 'spouse' },
-                { label: 'Parent', value: 'parent' },
-                { label: 'Sibling', value: 'sibling' },
-                { label: 'Child', value: 'child' },
-                { label: 'Friend', value: 'friend' },
-                { label: 'Colleague', value: 'colleague' },
-                { label: 'Other', value: 'other' },
-              ],
+              description: 'Relationship to the contact. Template items demo: varies by entityType.',
+              items:
+                '{{#if (eq entityType "individual")}}' +
+                '[{"label":"Spouse","value":"spouse"},{"label":"Parent","value":"parent"},{"label":"Friend","value":"friend"}]' +
+                '{{else}}' +
+                '[{"label":"Director","value":"director"},{"label":"Officer","value":"officer"},{"label":"Shareholder","value":"shareholder"}]' +
+                '{{/if}}',
               validation: [
                 {
                   type: 'required',

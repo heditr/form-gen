@@ -235,6 +235,54 @@ interface DispatchProps {
 
 type FormContainerWithSubmissionComponentProps = StateProps & DispatchProps & FormContainerWithSubmissionProps;
 
+function withTemplateDemoDescriptor(descriptor: GlobalFormDescriptor | null): GlobalFormDescriptor | null {
+  if (!descriptor) {
+    return null;
+  }
+
+  // Demonstrate template-driven items + validation without changing backend APIs.
+  // - `emergencyRelationship.items` becomes a Handlebars template returning JSON items
+  // - `state.validation` becomes a Handlebars template returning JSON rules
+  return {
+    ...descriptor,
+    blocks: descriptor.blocks.map((block) => ({
+      ...block,
+      fields: block.fields.map((field) => {
+        if (field.id === 'emergencyRelationship' && field.type === 'dropdown') {
+          return {
+            ...field,
+            description: `${field.description ?? ''} (template items demo)`.trim(),
+            items:
+              '{{#if (eq entityType "individual")}}' +
+              '[{"label":"Spouse","value":"spouse"},{"label":"Parent","value":"parent"},{"label":"Friend","value":"friend"}]' +
+              '{{else}}' +
+              '[{"label":"Director","value":"director"},{"label":"Officer","value":"officer"},{"label":"Shareholder","value":"shareholder"}]' +
+              '{{/if}}',
+          };
+        }
+
+        if (field.id === 'state' && field.type === 'dropdown') {
+          return {
+            ...field,
+            description: `${field.description ?? ''} (template validation demo)`.trim(),
+            validation:
+              '[' +
+              '{"type":"required","message":"State/Province is required"},' +
+              '{{#if (eq country "US")}}' +
+              '{"type":"pattern","value":"^[A-Z]{2}$","message":"Use 2-letter state code (US)"}' +
+              '{{else}}' +
+              '{"type":"minLength","value":2,"message":"Too short"}' +
+              '{{/if}}' +
+              ']',
+          };
+        }
+
+        return field;
+      }),
+    })),
+  };
+}
+
 function FormContainerWithSubmissionComponent({
   mergedDescriptor,
   visibleBlocks,
@@ -248,6 +296,8 @@ function FormContainerWithSubmissionComponent({
   fetchDataSource: loadDataSource,
   onSubmissionStateChange,
 }: FormContainerWithSubmissionComponentProps) {
+  const demoDescriptor = useMemo(() => withTemplateDemoDescriptor(mergedDescriptor), [mergedDescriptor]);
+
   // Initialize react-hook-form with descriptor
   const handleDiscriminantChange = useCallback(
     (newFormData: Partial<FormData>) => {
@@ -267,7 +317,7 @@ function FormContainerWithSubmissionComponent({
   );
 
   // Initialize useFormDescriptor hook
-  const { form } = useFormDescriptor(mergedDescriptor, {
+  const { form } = useFormDescriptor(demoDescriptor, {
     savedFormData: _formData,
     caseContext,
     formData: _formData,
@@ -278,7 +328,7 @@ function FormContainerWithSubmissionComponent({
 
   // Create submit handler with payload/response tracking
   const handleSubmitWithTracking = useCallback(async (e?: React.BaseSyntheticEvent) => {
-    if (!mergedDescriptor) {
+    if (!demoDescriptor) {
       return;
     }
 
@@ -291,7 +341,7 @@ function FormContainerWithSubmissionComponent({
 
     // Evaluate payload template
     const evaluatedPayload = evaluatePayloadTemplate(
-      mergedDescriptor.submission.payloadTemplate,
+      demoDescriptor.submission.payloadTemplate,
       formValues as Partial<FormData>
     );
 
@@ -318,7 +368,7 @@ function FormContainerWithSubmissionComponent({
 
     // Construct request to get headers
     const requestInit = constructSubmissionRequest(
-      mergedDescriptor.submission,
+      demoDescriptor.submission,
       requestBody,
       containsFiles
     );
@@ -338,7 +388,7 @@ function FormContainerWithSubmissionComponent({
     // Create submit handler with tracking
     const submitHandler = orchestrator.createSubmitHandler(
       form,
-      mergedDescriptor,
+      demoDescriptor,
       {
         setError: (field: string, error: { type: string; message: string }) => {
           form.setError(field, error);
@@ -383,7 +433,7 @@ function FormContainerWithSubmissionComponent({
 
     // Call the submit handler
     await submitHandler(e);
-  }, [form, mergedDescriptor, orchestrator, onSubmissionStateChange]);
+  }, [form, demoDescriptor, orchestrator, onSubmissionStateChange]);
 
   // Prepare props for presentation component
   const presentationProps = useMemo(
@@ -392,11 +442,11 @@ function FormContainerWithSubmissionComponent({
       visibleBlocks,
       visibleFields,
       isRehydrating,
-      mergedDescriptor,
+      mergedDescriptor: demoDescriptor,
       onLoadDataSource: loadDataSource,
       dataSourceCache,
     }),
-    [form, visibleBlocks, visibleFields, isRehydrating, mergedDescriptor, loadDataSource, dataSourceCache]
+    [form, visibleBlocks, visibleFields, isRehydrating, demoDescriptor, loadDataSource, dataSourceCache]
   );
 
   return (
@@ -408,7 +458,7 @@ function FormContainerWithSubmissionComponent({
     >
       {(formContext) => (
         <PopinManagerProvider
-          mergedDescriptor={mergedDescriptor}
+          mergedDescriptor={demoDescriptor}
           form={form}
           formContext={formContext}
           caseContext={caseContext}
@@ -416,11 +466,11 @@ function FormContainerWithSubmissionComponent({
           dataSourceCache={dataSourceCache}
         >
           <FormPresentation {...presentationProps} formContext={formContext} />
-          {mergedDescriptor && (
+          {demoDescriptor && (
             <div className="mt-6">
               <SubmitButton
                 form={form}
-                descriptor={mergedDescriptor}
+                descriptor={demoDescriptor}
                 isRehydrating={isRehydrating}
                 onSubmit={handleSubmitWithTracking}
               />
