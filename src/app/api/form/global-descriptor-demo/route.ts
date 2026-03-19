@@ -198,6 +198,11 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
           id: 'address-block',
           title: 'Address',
           description: 'A single address entry',
+          layout: {
+            mode: 'grid',
+            columns: 2,
+            gap: 'md',
+          },
           fields: [
             {
               id: 'street',
@@ -222,6 +227,9 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
                   message: 'City is required',
                 },
               ],
+              layout: {
+                width: 'half',
+              },
             },
             {
               id: 'zip',
@@ -234,6 +242,9 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
                   message: 'ZIP/Postal code is required',
                 },
               ],
+              layout: {
+                width: 'half',
+              },
             },
           ],
         },
@@ -313,6 +324,11 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
           repeatable: true,
           repeatablePopin: true,
           repeatableSummaryTemplate: '{{#if name}}{{name}} ({{registrationNumber}}){{else}}New parent company{{/if}}',
+          layout: {
+            mode: 'grid',
+            columns: 2,
+            gap: 'md',
+          },
           fields: [
             {
               id: 'parentCompanies.selector',
@@ -335,6 +351,9 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
                 ],
                 overwrite: true,
               },
+              layout: {
+                width: 'half',
+              },
             },
             {
               id: 'parentCompanies.name',
@@ -343,6 +362,9 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
               description: 'Name of the selected parent company (row-specific).',
               repeatableGroupId: 'parentCompanies',
               validation: [],
+              layout: {
+                width: 'half',
+              },
             },
             {
               id: 'parentCompanies.registrationNumber',
@@ -351,6 +373,9 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
               description: 'Registration number of the selected parent company.',
               repeatableGroupId: 'parentCompanies',
               validation: [],
+              layout: {
+                width: 'half',
+              },
             },
             {
               id: 'parentCompanies.address.line1',
@@ -359,6 +384,9 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
               description: 'Street address of the parent company.',
               repeatableGroupId: 'parentCompanies',
               validation: [],
+              layout: {
+                width: 'half',
+              },
             },
             {
               id: 'parentCompanies.address.city',
@@ -367,6 +395,9 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
               description: 'City of the parent company.',
               repeatableGroupId: 'parentCompanies',
               validation: [],
+              layout: {
+                width: 'half',
+              },
             },
             {
               id: 'parentCompanies.address.country',
@@ -375,6 +406,9 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
               description: 'Country of the parent company.',
               repeatableGroupId: 'parentCompanies',
               validation: [],
+              layout: {
+                width: 'half',
+              },
             },
           ],
         },
@@ -670,6 +704,11 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
           description: 'Additional contact details (opens in popin dialog)',
           popin: true,
           repeatable: true, // Enable repeatable groups in this popin
+          layout: {
+            mode: 'grid',
+            columns: 2,
+            gap: 'md',
+          },
           // Load existing contact details when the popin opens
           popinLoad: {
             url: '/api/popin-demo/contact-load',
@@ -685,7 +724,7 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
             payloadTemplate: '{"contactEmail":"{{formData.contactEmail}}","contactPhone":"{{formData.contactPhone}}","contactAlternateEmail":"{{formData.contactAlternateEmail}}","emergencyContacts":{{~json (lookup formData "emergency-contacts") "[]"~}}}',
           },
           fields: [
-            // Regular fields (no repeatableGroupId)
+            // Regular fields (no repeatableGroupId) — laid out in a 2-column grid
             {
               id: 'contactEmail',
               type: 'text',
@@ -702,6 +741,7 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
                   message: 'Invalid email format',
                 },
               ],
+              layout: { width: 'half' },
             },
             {
               id: 'contactPhone',
@@ -714,6 +754,7 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
                   message: 'Contact phone number is required',
                 },
               ],
+              layout: { width: 'half' },
             },
             {
               id: 'contactAlternateEmail',
@@ -722,9 +763,7 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
               description: 'Optional alternate email address',
               validation: [],
             },
-            // Repeatable group fields (with repeatableGroupId)
-            // These fields will be resolved from emergency-contact-block via repeatableBlockRef
-            // After resolution, they'll have repeatableGroupId: 'emergency-contacts'
+            // Repeatable emergency contact fields — 2-column grid inside each instance
             {
               id: 'emergency-contacts.emergencyName',
               type: 'text',
@@ -759,6 +798,7 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
                   message: 'Relationship is required',
                 },
               ],
+              layout: { width: 'half' },
             },
             {
               id: 'emergency-contacts.emergencyPhone',
@@ -777,6 +817,7 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
                   message: 'Invalid phone number format',
                 },
               ],
+              layout: { width: 'half' },
             },
           ],
           minInstances: 0, // Minimum emergency contacts (0 = optional)
