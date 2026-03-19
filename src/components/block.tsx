@@ -277,7 +277,7 @@ export default function Block({
               )}
             >
               {row.slots.map((slot, slotIndex) => (
-                <div key={`slot-${slotIndex}`}>
+                <div key={`slot-${slotIndex}`} className={slot.colSpan ? `col-span-${slot.colSpan}` : undefined}>
                   {slot.fields.map((field) => {
                     const fieldHidden = evaluateHiddenStatus(field, formContext);
                     const fieldDisabled =

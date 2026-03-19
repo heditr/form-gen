@@ -5,6 +5,7 @@ export type LayoutSlotId = 'left' | 'right' | 'col1' | 'col2' | 'col3';
 export interface LayoutSlot {
   id: LayoutSlotId;
   fields: FieldDescriptor[];
+  colSpan?: number;
 }
 
 export interface LayoutRow {
@@ -90,7 +91,7 @@ export const buildBlockLayoutRows = (block: BlockDescriptor, fields: FieldDescri
         const width = getFieldWidth(field);
         if (width === 'full') {
           flushBuffer();
-          rows.push({ slots: [{ id: 'col1', fields: [field] }] });
+          rows.push({ slots: [{ id: 'col1', fields: [field], colSpan: 2 }] });
           continue;
         }
         if (width === 'half') {
@@ -100,9 +101,9 @@ export const buildBlockLayoutRows = (block: BlockDescriptor, fields: FieldDescri
           }
           continue;
         }
-        // third in 2-column mode → treat as full row for now
+        // third in 2-column mode → treat as full row
         flushBuffer();
-        rows.push({ slots: [{ id: 'col1', fields: [field] }] });
+        rows.push({ slots: [{ id: 'col1', fields: [field], colSpan: 2 }] });
       }
       flushBuffer();
       return;
@@ -124,7 +125,7 @@ export const buildBlockLayoutRows = (block: BlockDescriptor, fields: FieldDescri
       const width = getFieldWidth(field);
       if (width === 'full') {
         flushBuffer();
-        rows.push({ slots: [{ id: 'col1', fields: [field] }] });
+        rows.push({ slots: [{ id: 'col1', fields: [field], colSpan: 3 }] });
         continue;
       }
       if (width === 'third') {
@@ -134,9 +135,9 @@ export const buildBlockLayoutRows = (block: BlockDescriptor, fields: FieldDescri
         }
         continue;
       }
-      // half in 3-column mode → treat as full row for now
+      // half in 3-column mode → treat as full row
       flushBuffer();
-      rows.push({ slots: [{ id: 'col1', fields: [field] }] });
+      rows.push({ slots: [{ id: 'col1', fields: [field], colSpan: 3 }] });
     }
     flushBuffer();
   };
@@ -184,7 +185,7 @@ export const buildBlockLayoutRows = (block: BlockDescriptor, fields: FieldDescri
 
       // Fallback: sequential full-width rows
       groupFields.forEach((field) => {
-        rows.push({ slots: [{ id: 'col1', fields: [field] }] });
+        rows.push({ slots: [{ id: 'col1', fields: [field], colSpan: 2 }] });
       });
       continue;
     }
@@ -219,7 +220,7 @@ export const buildBlockLayoutRows = (block: BlockDescriptor, fields: FieldDescri
     }
 
     groupFields.forEach((field) => {
-      rows.push({ slots: [{ id: 'col1', fields: [field] }] });
+      rows.push({ slots: [{ id: 'col1', fields: [field], colSpan: 3 }] });
     });
   }
 
