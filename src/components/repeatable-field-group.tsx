@@ -13,6 +13,8 @@ import FieldWrapper from './field-wrapper';
 import { evaluateHiddenStatus, evaluateDisabledStatus } from '@/utils/template-evaluator';
 import { evaluateDefaultValue } from '@/utils/default-value-evaluator';
 import { buildAutoFillPatchFromSelection } from '@/utils/form-descriptor-integration';
+import { buildBlockLayoutRows } from '@/utils/block-layout';
+import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Plus, Trash2 } from 'lucide-react';
 
@@ -310,53 +312,78 @@ export default function RepeatableFieldGroup({
                       Remove
                     </Button>
                   </div>
-                  {fields.map((field) => {
-                    // Extract original field ID by removing the groupId prefix if present
-                    // Field IDs are prefixed during block resolution (e.g., "addresses.street")
-                    // We need the base field ID (e.g., "street") for the indexed name
-                    const baseFieldId = field.id.startsWith(`${groupId}.`)
-                      ? field.id.slice(groupId.length + 1) // Remove "groupId." prefix
-                      : field.id;
-                    
-                    // Create indexed field name for react-hook-form (e.g., addresses.0.street)
-                    const indexedFieldName = `${groupId}.${index}.${baseFieldId}`;
-                    
-                    // Create a modified field descriptor with indexed name
-                    const indexedField: FieldDescriptor = {
-                      ...field,
-                      id: indexedFieldName,
+                  {(() => {
+                    const layoutMode = block.layout?.mode ?? 'default';
+
+                    const renderField = (field: FieldDescriptor) => {
+                      const baseFieldId = field.id.startsWith(`${groupId}.`)
+                        ? field.id.slice(groupId.length + 1)
+                        : field.id;
+                      const indexedFieldName = `${groupId}.${index}.${baseFieldId}`;
+                      const indexedField: FieldDescriptor = { ...field, id: indexedFieldName };
+
+                      const fieldWithMeta = field.status
+                        ? {
+                            ...field,
+                            status: {
+                              ...field.status,
+                              hidden: withRepeatableMeta(field.status.hidden),
+                              disabled: withRepeatableMeta(field.status.disabled),
+                              readonly: withRepeatableMeta(field.status.readonly),
+                            },
+                          }
+                        : field;
+
+                      const fieldHidden = evaluateHiddenStatus(fieldWithMeta, instanceFormContext);
+                      const fieldDisabled = evaluateDisabledStatus(fieldWithMeta, instanceFormContext) || isDisabled;
+
+                      return (
+                        <FieldWrapper
+                          key={indexedFieldName}
+                          field={indexedField}
+                          isDisabled={fieldDisabled}
+                          isHidden={fieldHidden}
+                          form={form}
+                          formContext={instanceFormContext}
+                          onLoadDataSource={onLoadDataSource}
+                          dataSourceCache={dataSourceCache}
+                          onAutoFillSelection={handleInstanceAutoFillSelection}
+                        />
+                      );
                     };
 
-                    // Evaluate field visibility and disabled status
-                    const fieldWithMeta = field.status
-                      ? {
-                          ...field,
-                          status: {
-                            ...field.status,
-                            hidden: withRepeatableMeta(field.status.hidden),
-                            disabled: withRepeatableMeta(field.status.disabled),
-                            readonly: withRepeatableMeta(field.status.readonly),
-                          },
-                        }
-                      : field;
+                    if (layoutMode !== 'grid') {
+                      return fields.map(renderField);
+                    }
 
-                    const fieldHidden = evaluateHiddenStatus(fieldWithMeta, instanceFormContext);
-                    const fieldDisabled = evaluateDisabledStatus(fieldWithMeta, instanceFormContext) || isDisabled;
+                    const rows = buildBlockLayoutRows(block, fields);
+                    const columns = block.layout?.columns ?? 1;
+                    const gap = block.layout?.gap ?? 'md';
+                    const gapYClass =
+                      gap === 'sm' ? 'gap-y-2' : gap === 'lg' ? 'gap-y-6' : 'gap-y-4';
+                    const gridColsClass =
+                      columns === 1
+                        ? 'md:grid-cols-1'
+                        : columns === 2
+                        ? 'md:grid-cols-2'
+                        : 'md:grid-cols-3';
 
-                    return (
-                      <FieldWrapper
-                        key={indexedFieldName}
-                        field={indexedField}
-                        isDisabled={fieldDisabled}
-                        isHidden={fieldHidden}
-                        form={form}
-                        formContext={instanceFormContext}
-                        onLoadDataSource={onLoadDataSource}
-                        dataSourceCache={dataSourceCache}
-                        onAutoFillSelection={handleInstanceAutoFillSelection}
-                      />
-                    );
-                  })}
+                    return rows.map((row, rowIndex) => (
+                      <div
+                        key={`row-${rowIndex}`}
+                        className={cn('grid grid-cols-1', gridColsClass, 'gap-x-4', gapYClass)}
+                      >
+                        {row.slots.map((slot, slotIndex) => (
+                          <div
+                            key={`slot-${slotIndex}`}
+                            className={slot.colSpan ? `col-span-${slot.colSpan}` : undefined}
+                          >
+                            {slot.fields.map(renderField)}
+                          </div>
+                        ))}
+                      </div>
+                    ));
+                  })()}
                 </div>
               );
             })}

@@ -140,6 +140,7 @@ export function PopinManagerProvider({
       const instanceBlock = {
         id: `${block.id}-instance`,
         title: block.title,
+        layout: block.layout,
         fields: instanceFields,
       };
       return {
