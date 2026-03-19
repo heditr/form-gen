@@ -141,5 +141,134 @@ describe('buildBlockLayoutRows', () => {
       throw new Error('expected at least one row');
     }
   });
+
+  // ── Natural field order ─────────────────────────────────────────────────────
+
+  test('grouped field appearing first in descriptor produces the first row', () => {
+    const block = createBlock({ mode: 'grid', columns: 2 });
+    // 'first' and 'second' are grouped together and both appear before 'last'
+    const fields = [
+      createField('first', { width: 'half', groupId: 'inline' }),
+      createField('second', { width: 'half', groupId: 'inline' }),
+      createField('last', { width: 'full' }),
+    ];
+
+    const rows = buildBlockLayoutRows(block, fields);
+
+    if (rows.length !== 2) {
+      throw new Error(`expected 2 rows, got ${rows.length}`);
+    }
+    const firstRowFieldIds = rows[0].slots.flatMap((s) => s.fields.map((f) => f.id));
+    if (!firstRowFieldIds.includes('first')) {
+      throw new Error(`grouped field 'first' should appear in row 0, got: ${JSON.stringify(firstRowFieldIds)}`);
+    }
+    const secondRowFieldIds = rows[1].slots.flatMap((s) => s.fields.map((f) => f.id));
+    if (!secondRowFieldIds.includes('last')) {
+      throw new Error(`ungrouped field 'last' should appear in row 1, got: ${JSON.stringify(secondRowFieldIds)}`);
+    }
+  });
+
+  test('ungrouped field before a group stays before the group row', () => {
+    const block = createBlock({ mode: 'grid', columns: 2 });
+    const fields = [
+      createField('top', { width: 'full' }),
+      createField('left', { width: 'half', groupId: 'pair' }),
+      createField('right', { width: 'half', groupId: 'pair' }),
+      createField('bottom', { width: 'full' }),
+    ];
+
+    const rows = buildBlockLayoutRows(block, fields);
+
+    if (rows.length !== 3) {
+      throw new Error(`expected 3 rows, got ${rows.length}`);
+    }
+    const row0 = rows[0].slots.flatMap((s) => s.fields.map((f) => f.id));
+    const row1 = rows[1].slots.flatMap((s) => s.fields.map((f) => f.id));
+    const row2 = rows[2].slots.flatMap((s) => s.fields.map((f) => f.id));
+    if (!row0.includes('top')) throw new Error(`row 0 should contain 'top', got: ${JSON.stringify(row0)}`);
+    if (!row1.includes('left') || !row1.includes('right')) throw new Error(`row 1 should contain the group pair, got: ${JSON.stringify(row1)}`);
+    if (!row2.includes('bottom')) throw new Error(`row 2 should contain 'bottom', got: ${JSON.stringify(row2)}`);
+  });
+
+  test('multiple groups interleaved with ungrouped fields preserve descriptor order', () => {
+    const block = createBlock({ mode: 'grid', columns: 2 });
+    const fields = [
+      createField('g1a', { width: 'half', groupId: 'group1' }),
+      createField('standalone', { width: 'full' }),
+      createField('g1b', { width: 'half', groupId: 'group1' }),
+      createField('g2a', { width: 'half', groupId: 'group2' }),
+      createField('g2b', { width: 'half', groupId: 'group2' }),
+    ];
+
+    const rows = buildBlockLayoutRows(block, fields);
+
+    // group1 → row 0 (triggered by g1a)
+    // standalone → row 1
+    // group2 → row 2 (triggered by g2a)
+    if (rows.length !== 3) {
+      throw new Error(`expected 3 rows, got ${rows.length}`);
+    }
+    const row0Ids = rows[0].slots.flatMap((s) => s.fields.map((f) => f.id));
+    if (!row0Ids.includes('g1a')) {
+      throw new Error(`row 0 should contain group1 (g1a), got: ${JSON.stringify(row0Ids)}`);
+    }
+    const row1Ids = rows[1].slots.flatMap((s) => s.fields.map((f) => f.id));
+    if (!row1Ids.includes('standalone')) {
+      throw new Error(`row 1 should contain 'standalone', got: ${JSON.stringify(row1Ids)}`);
+    }
+    const row2Ids = rows[2].slots.flatMap((s) => s.fields.map((f) => f.id));
+    if (!row2Ids.includes('g2a')) {
+      throw new Error(`row 2 should contain group2 (g2a), got: ${JSON.stringify(row2Ids)}`);
+    }
+  });
+
+  test('grouped field at position 0 produces first row even when other fields follow', () => {
+    const block = createBlock({ mode: 'grid', columns: 2 });
+    const fields = [
+      createField('g-left', { width: 'half', groupId: 'topGroup' }),
+      createField('g-right', { width: 'half', groupId: 'topGroup' }),
+      createField('ungrouped-1', { width: 'half' }),
+      createField('ungrouped-2', { width: 'half' }),
+    ];
+
+    const rows = buildBlockLayoutRows(block, fields);
+
+    if (rows.length !== 2) {
+      throw new Error(`expected 2 rows, got ${rows.length}`);
+    }
+    const firstSlotIds = rows[0].slots.flatMap((s) => s.fields.map((f) => f.id));
+    if (!firstSlotIds.includes('g-left')) {
+      throw new Error(`grouped fields should occupy the first row, got: ${JSON.stringify(firstSlotIds)}`);
+    }
+    const secondSlotIds = rows[1].slots.flatMap((s) => s.fields.map((f) => f.id));
+    if (!secondSlotIds.includes('ungrouped-1')) {
+      throw new Error(`ungrouped fields should occupy the second row, got: ${JSON.stringify(secondSlotIds)}`);
+    }
+  });
+
+  test('half-width ungrouped fields buffered before a group are flushed as a row before the group', () => {
+    const block = createBlock({ mode: 'grid', columns: 2 });
+    const fields = [
+      createField('solo-half', { width: 'half' }),
+      createField('g-left', { width: 'half', groupId: 'g' }),
+      createField('g-right', { width: 'half', groupId: 'g' }),
+    ];
+
+    const rows = buildBlockLayoutRows(block, fields);
+
+    // solo-half → row 0 (flushed alone before group)
+    // group g → row 1
+    if (rows.length !== 2) {
+      throw new Error(`expected 2 rows, got ${rows.length}`);
+    }
+    const row0Ids = rows[0].slots.flatMap((s) => s.fields.map((f) => f.id));
+    if (!row0Ids.includes('solo-half')) {
+      throw new Error(`row 0 should contain 'solo-half', got: ${JSON.stringify(row0Ids)}`);
+    }
+    const row1Ids = rows[1].slots.flatMap((s) => s.fields.map((f) => f.id));
+    if (!row1Ids.includes('g-left')) {
+      throw new Error(`row 1 should contain the group, got: ${JSON.stringify(row1Ids)}`);
+    }
+  });
 });
 
