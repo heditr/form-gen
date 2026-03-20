@@ -10,8 +10,6 @@ import { mergeDescriptorWithRules } from './descriptor-merger';
 import type {
   GlobalFormDescriptor,
   RulesObject,
-  BlockDescriptor,
-  FieldDescriptor,
   ValidationRule,
 } from '@/types/form-descriptor';
 
@@ -215,10 +213,11 @@ describe('descriptor merger', () => {
       };
 
       const merged = mergeDescriptorWithRules(globalDescriptor, rulesObject);
+      const field2Validation = merged.blocks[1].fields[0].validation as ValidationRule[];
 
       expect(merged.blocks[0].fields[0].validation).toHaveLength(0);
-      expect(merged.blocks[1].fields[0].validation).toHaveLength(1);
-      expect(merged.blocks[1].fields[0].validation[0].type).toBe('required');
+      expect(field2Validation).toHaveLength(1);
+      expect(field2Validation[0].type).toBe('required');
       expect(merged.blocks[1].fields[1].validation).toHaveLength(2);
     });
 
@@ -254,9 +253,10 @@ describe('descriptor merger', () => {
       };
 
       const merged = mergeDescriptorWithRules(globalDescriptor, rulesObject);
+      const validation = merged.blocks[0].fields[0].validation as ValidationRule[];
 
-      expect(merged.blocks[0].fields[0].validation).toHaveLength(1);
-      expect(merged.blocks[0].fields[0].validation[0].message).toBe('Required');
+      expect(validation).toHaveLength(1);
+      expect(validation[0].message).toBe('Required');
     });
 
     test('given rules object with no matching blocks, should preserve original descriptor', () => {
@@ -317,6 +317,39 @@ describe('descriptor merger', () => {
       expect(merged).toEqual(globalDescriptor);
     });
 
+    test('given a field with a Handlebars validation template, should preserve the template string unchanged', () => {
+      const globalDescriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'block1',
+            title: 'Block 1',
+            fields: [
+              {
+                id: 'field1',
+                type: 'text',
+                label: 'Field 1',
+                validation: '{{validationRules}}',
+              },
+            ],
+          },
+        ],
+        submission: { url: '/api/submit', method: 'POST' },
+      };
+
+      const rulesObject: RulesObject = {
+        fields: [
+          {
+            id: 'field1',
+            validation: [{ type: 'required', message: 'Required' }],
+          },
+        ],
+      };
+
+      const merged = mergeDescriptorWithRules(globalDescriptor, rulesObject);
+
+      expect(merged.blocks[0].fields[0].validation).toBe('{{validationRules}}');
+    });
+
     test('given rules that replace existing validation, should append new rules to existing ones', () => {
       const globalDescriptor: GlobalFormDescriptor = {
         blocks: [
@@ -354,11 +387,12 @@ describe('descriptor merger', () => {
       };
 
       const merged = mergeDescriptorWithRules(globalDescriptor, rulesObject);
+      const validation = merged.blocks[0].fields[0].validation as ValidationRule[];
 
-      expect(merged.blocks[0].fields[0].validation).toHaveLength(3);
-      expect(merged.blocks[0].fields[0].validation[0].type).toBe('required');
-      expect(merged.blocks[0].fields[0].validation[1].type).toBe('minLength');
-      expect(merged.blocks[0].fields[0].validation[2].type).toBe('maxLength');
+      expect(validation).toHaveLength(3);
+      expect(validation[0].type).toBe('required');
+      expect(validation[1].type).toBe('minLength');
+      expect(validation[2].type).toBe('maxLength');
     });
 
     test('given status templates in rules, should merge with existing status templates', () => {

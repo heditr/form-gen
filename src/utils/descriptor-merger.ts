@@ -14,64 +14,40 @@ import type {
   StatusTemplates,
 } from '@/types/form-descriptor';
 
+type FieldRule = NonNullable<RulesObject['fields']>[number];
+type BlockRule = NonNullable<RulesObject['blocks']>[number];
+
 /**
  * Merge status templates, preserving existing templates and adding new ones
- * 
- * @param existing - Existing status templates (may be undefined)
- * @param updates - New status templates from rules
- * @returns Merged status templates
  */
 function mergeStatusTemplates(
   existing: StatusTemplates | undefined,
   updates: StatusTemplates | undefined
 ): StatusTemplates | undefined {
-  if (!updates) {
-    return existing;
-  }
-  
-  if (!existing) {
-    return updates;
-  }
-  
-  return {
-    ...existing,
-    ...updates,
-  };
+  if (!updates) return existing;
+  if (!existing) return updates;
+  return { ...existing, ...updates };
 }
 
 /**
- * Merge validation rules, appending new rules to existing ones
- * 
- * @param existing - Existing validation rules
- * @param updates - New validation rules from rules object
- * @returns Merged validation rules array
+ * Merge validation rules, appending new rules to existing ones.
+ * When `existing` is a Handlebars template string it is preserved as-is.
  */
 function mergeValidationRules(
-  existing: ValidationRule[],
+  existing: ValidationRule[] | string,
   updates: ValidationRule[] | undefined
-): ValidationRule[] {
-  if (!updates || updates.length === 0) {
-    return existing;
-  }
-  
+): ValidationRule[] | string {
+  if (typeof existing === 'string') return existing;
+  if (!updates || updates.length === 0) return existing;
   return [...existing, ...updates];
 }
 
-/**
- * Merge a single field descriptor with rules updates
- * 
- * @param field - Original field descriptor
- * @param fieldRules - Field rules from RulesObject
- * @returns Updated field descriptor
- */
 function mergeFieldDescriptor(
   field: FieldDescriptor,
-  fieldRules: { id: string; validation?: ValidationRule[]; status?: StatusTemplates } | undefined
+  fieldRules: FieldRule | undefined
 ): FieldDescriptor {
-  if (!fieldRules || fieldRules.id !== field.id) {
-    return field;
-  }
-  
+  if (!fieldRules) return field;
+
   return {
     ...field,
     validation: mergeValidationRules(field.validation, fieldRules.validation),
@@ -79,72 +55,46 @@ function mergeFieldDescriptor(
   };
 }
 
-/**
- * Merge a single block descriptor with rules updates
- * 
- * @param block - Original block descriptor
- * @param blockRules - Block rules from RulesObject
- * @param fieldRulesMap - Map of field ID to field rules
- * @returns Updated block descriptor
- */
 function mergeBlockDescriptor(
   block: BlockDescriptor,
-  blockRules: { id: string; status?: StatusTemplates } | undefined,
-  fieldRulesMap: Map<string, { id: string; validation?: ValidationRule[]; status?: StatusTemplates }>
+  blockRules: BlockRule | undefined,
+  fieldRulesMap: Map<string, FieldRule>
 ): BlockDescriptor {
-  const updatedFields = block.fields.map((field) => {
-    const fieldRules = fieldRulesMap.get(field.id);
-    return mergeFieldDescriptor(field, fieldRules);
-  });
-  
-  const updatedStatus = mergeStatusTemplates(block.status, blockRules?.status);
-  
   return {
     ...block,
-    fields: updatedFields,
-    status: updatedStatus,
+    fields: block.fields.map((field) =>
+      mergeFieldDescriptor(field, fieldRulesMap.get(field.id))
+    ),
+    status: mergeStatusTemplates(block.status, blockRules?.status),
   };
 }
 
 /**
- * Deep merge GlobalFormDescriptor with RulesObject
+ * Deep merge GlobalFormDescriptor with RulesObject.
  * 
- * Merges validation rules and status templates from RulesObject into the
+ * Merges validation rules and status templates from a RulesObject into a
  * GlobalFormDescriptor while preserving the original structure.
  * 
  * @param globalDescriptor - The base form descriptor
- * @param rulesObject - Rules object with updates from backend
+ * @param rulesObject - Rules object with updates from the backend
  * @returns Merged GlobalFormDescriptor
  */
 export function mergeDescriptorWithRules(
   globalDescriptor: GlobalFormDescriptor,
   rulesObject: RulesObject
 ): GlobalFormDescriptor {
-  // Create a map of field rules for efficient lookup
-  const fieldRulesMap = new Map<string, { id: string; validation?: ValidationRule[]; status?: StatusTemplates }>();
-  if (rulesObject.fields) {
-    for (const fieldRule of rulesObject.fields) {
-      fieldRulesMap.set(fieldRule.id, fieldRule);
-    }
-  }
-  
-  // Create a map of block rules for efficient lookup
-  const blockRulesMap = new Map<string, { id: string; status?: StatusTemplates }>();
-  if (rulesObject.blocks) {
-    for (const blockRule of rulesObject.blocks) {
-      blockRulesMap.set(blockRule.id, blockRule);
-    }
-  }
-  
-  // Merge blocks
-  const mergedBlocks = globalDescriptor.blocks.map((block) => {
-    const blockRules = blockRulesMap.get(block.id);
-    return mergeBlockDescriptor(block, blockRules, fieldRulesMap);
-  });
-  
-  // Return merged descriptor with preserved structure
+  const fieldRulesMap = new Map<string, FieldRule>(
+    rulesObject.fields?.map((r) => [r.id, r]) ?? []
+  );
+
+  const blockRulesMap = new Map<string, BlockRule>(
+    rulesObject.blocks?.map((r) => [r.id, r]) ?? []
+  );
+
   return {
     ...globalDescriptor,
-    blocks: mergedBlocks,
+    blocks: globalDescriptor.blocks.map((block) =>
+      mergeBlockDescriptor(block, blockRulesMap.get(block.id), fieldRulesMap)
+    ),
   };
 }
