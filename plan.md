@@ -16,6 +16,7 @@
 - [Popin Isolation Epic](tasks/popin-isolation-epic.md) - 📋 PLANNED
 - [Repeatable Fields Epic](tasks/repeatable-fields-epic.md) - 📋 PLANNED
 - [Repeatable Popin Epic](tasks/repeatable-popin-epic.md) - 📋 PLANNED
+- [Manual-Triggered Lookup Autofill Epic](tasks/manual-triggered-lookup-autofill-epic.md) - 📋 PLANNED
 
 ## Completed Epics
 
