@@ -152,6 +152,83 @@ export interface AutoFillConfig {
 }
 
 /**
+ * Manual lookup request configuration for text fields with explicit trigger action.
+ *
+ * @property url - Handlebars-templated URL endpoint
+ * @property method - HTTP method used for lookup request
+ * @property payloadTemplate - Optional Handlebars template for request payload (non-GET requests)
+ * @property dataSourceId - Optional data source identifier for server-side credential lookup
+ * @property auth - Optional authentication configuration (deprecated: use dataSourceId instead)
+ */
+export interface ManualLookupRequestConfig {
+  url: string;
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH';
+  payloadTemplate?: string;
+  dataSourceId?: string;
+  auth?: {
+    type: 'bearer' | 'apikey' | 'basic';
+    token?: string;
+    headerName?: string;
+    username?: string;
+    password?: string;
+  };
+}
+
+/**
+ * Target mapping for manual lookup response autofill.
+ *
+ * @property fieldId - Target field id to update with evaluated value
+ * @property valueTemplate - Handlebars template evaluated against lookup result and current form values
+ */
+export interface ManualLookupAutoFillTarget {
+  fieldId: string;
+  valueTemplate: string;
+}
+
+/**
+ * Manual lookup behavior configuration for source text fields.
+ *
+ * @property request - Lookup request configuration
+ * @property autoFillTargets - Target mappings evaluated from lookup response
+ * @property lockOnSuccess - If true (default), source field is locked after successful lookup
+ * @property showClearOnSuccess - If true (default), clear affordance replaces lookup trigger after success
+ */
+export interface ManualLookupConfig {
+  request: ManualLookupRequestConfig;
+  autoFillTargets: ManualLookupAutoFillTarget[];
+  lockOnSuccess?: boolean;
+  showClearOnSuccess?: boolean;
+  prefillOnMount?: boolean;
+  resilientErrors?: Array<{
+    status?: number;
+    code?: string;
+  }>;
+}
+
+/**
+ * Backend synchronization configuration for fields that are user-edited after autofill.
+ *
+ * @property url - Handlebars-templated URL endpoint
+ * @property method - HTTP method used for update request
+ * @property payloadTemplate - Handlebars payload template for update request body
+ * @property dataSourceId - Optional data source identifier for server-side credential lookup
+ * @property auth - Optional authentication configuration (deprecated: use dataSourceId instead)
+ */
+export interface AutoFilledUpdateConfig {
+  url: string;
+  method: 'POST' | 'PUT' | 'PATCH';
+  payloadTemplate: string;
+  dataSourceId?: string;
+  auth?: {
+    type: 'bearer' | 'apikey' | 'basic';
+    token?: string;
+    headerName?: string;
+    username?: string;
+    password?: string;
+  };
+}
+
+/**
  * Layout configuration for an individual field
  *
  * @property width - Semantic width hint for the field in a grid row
@@ -230,6 +307,8 @@ export interface FieldDescriptor {
   button?: ButtonConfig;
   repeatableGroupId?: string;
   autoFill?: AutoFillConfig;
+  manualLookup?: ManualLookupConfig;
+  autoFilledUpdate?: AutoFilledUpdateConfig;
   layout?: FieldLayoutConfig;
 }
 

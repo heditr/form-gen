@@ -23,6 +23,8 @@ import type {
   PopinSubmitConfig,
   ButtonConfig,
   ButtonMenuItem,
+  ManualLookupConfig,
+  AutoFilledUpdateConfig,
 } from './form-descriptor';
 
 // Verify ValidationRule type
@@ -66,6 +68,53 @@ const fieldWithDataSource: FieldDescriptor = {
   },
   validation: [],
   isDiscriminant: true,
+};
+
+// Verify ManualLookupConfig type
+const manualLookupConfig: ManualLookupConfig = {
+  request: {
+    url: '/api/company/search?registration={{companyRegistrationNumber}}',
+    method: 'GET',
+  },
+  autoFillTargets: [
+    {
+      fieldId: 'companyName',
+      valueTemplate: '{{result.name}}',
+    },
+  ],
+  resilientErrors: [
+    {
+      status: 404,
+      code: 'COMPANY_NOT_FOUND',
+    },
+  ],
+  lockOnSuccess: true,
+  showClearOnSuccess: true,
+};
+
+// Verify AutoFilledUpdateConfig type
+const autoFilledUpdateConfig: AutoFilledUpdateConfig = {
+  url: '/api/company/{{companyId}}',
+  method: 'PATCH',
+  payloadTemplate: '{"name":"{{companyName}}"}',
+};
+
+// Verify FieldDescriptor with manual lookup
+const fieldWithManualLookup: FieldDescriptor = {
+  id: 'companyRegistrationNumber',
+  type: 'text',
+  label: 'Company Registration Number',
+  validation: [],
+  manualLookup: manualLookupConfig,
+};
+
+// Verify FieldDescriptor with autofilled update sync
+const fieldWithAutoFilledUpdate: FieldDescriptor = {
+  id: 'companyName',
+  type: 'text',
+  label: 'Company Name',
+  validation: [],
+  autoFilledUpdate: autoFilledUpdateConfig,
 };
 
 // Verify FieldDescriptor with button (single variant)
@@ -246,6 +295,10 @@ export {
   patternRule,
   fieldWithItems,
   fieldWithDataSource,
+  manualLookupConfig,
+  autoFilledUpdateConfig,
+  fieldWithManualLookup,
+  fieldWithAutoFilledUpdate,
   buttonFieldSingle,
   buttonFieldMenu,
   buttonConfig,

@@ -211,6 +211,82 @@ describe('form-descriptor types', () => {
       expect(field.button?.variant).toBe('link');
       expect(field.button?.popinBlockId).toBe('documents');
     });
+
+    test('given a text field configured for manual lookup, should support templated request and target autofill mapping', () => {
+      const field: FieldDescriptor = {
+        id: 'companyRegistrationNumber',
+        type: 'text',
+        label: 'Company Registration Number',
+        validation: [],
+        manualLookup: {
+          request: {
+            url: '/api/company/search?registration={{companyRegistrationNumber}}',
+            method: 'GET',
+          },
+          resilientErrors: [
+            {
+              status: 404,
+              code: 'COMPANY_NOT_FOUND',
+            },
+          ],
+          autoFillTargets: [
+            {
+              fieldId: 'companyName',
+              valueTemplate: '{{result.name}}',
+            },
+          ],
+        },
+      };
+
+      expect(field.manualLookup).toBeDefined();
+      expect(field.manualLookup?.request.url).toContain('{{companyRegistrationNumber}}');
+      expect(field.manualLookup?.resilientErrors?.[0]?.status).toBe(404);
+      expect(field.manualLookup?.autoFillTargets[0]?.fieldId).toBe('companyName');
+      expect(field.manualLookup?.autoFillTargets[0]?.valueTemplate).toBe('{{result.name}}');
+    });
+
+    test('given a manual lookup field with payload template, should support non-get request payload handlebars', () => {
+      const field: FieldDescriptor = {
+        id: 'externalEntityId',
+        type: 'text',
+        label: 'External Entity ID',
+        validation: [],
+        manualLookup: {
+          request: {
+            url: '/api/company/lookup',
+            method: 'POST',
+            payloadTemplate: '{"entityId":"{{externalEntityId}}","country":"{{country}}"}',
+          },
+          autoFillTargets: [
+            {
+              fieldId: 'legalName',
+              valueTemplate: '{{result.legalName}}',
+            },
+          ],
+        },
+      };
+
+      expect(field.manualLookup?.request.method).toBe('POST');
+      expect(field.manualLookup?.request.payloadTemplate).toContain('{{externalEntityId}}');
+    });
+
+    test('given an autofilled target field, should support backend sync request templates for user edits', () => {
+      const field: FieldDescriptor = {
+        id: 'companyName',
+        type: 'text',
+        label: 'Company Name',
+        validation: [],
+        autoFilledUpdate: {
+          url: '/api/company/{{companyId}}',
+          method: 'PATCH',
+          payloadTemplate: '{"name":"{{companyName}}"}',
+        },
+      };
+
+      expect(field.autoFilledUpdate).toBeDefined();
+      expect(field.autoFilledUpdate?.method).toBe('PATCH');
+      expect(field.autoFilledUpdate?.payloadTemplate).toContain('{{companyName}}');
+    });
   });
 
   describe('BlockDescriptor', () => {

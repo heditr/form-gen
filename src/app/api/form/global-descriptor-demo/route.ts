@@ -193,6 +193,89 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
             },
           ],
         },
+        {
+          id: 'manual-lookup-demo',
+          title: 'Manual Lookup Resilience Demo',
+          description: 'Try REG-OK (success) or REG-404 (resilient fallback).',
+          fields: [
+            {
+              id: 'registrationNumberLookup',
+              type: 'text',
+              label: 'Registration Number',
+              description: 'Type value then click loop button. Typing alone does not call backend.',
+              validation: [],
+              manualLookup: {
+                request: {
+                  url: '/api/demo/company-lookup?registration={{registrationNumberLookup}}',
+                  method: 'GET',
+                },
+                resilientErrors: [
+                  {
+                    status: 404,
+                    code: 'COMPANY_NOT_FOUND',
+                  },
+                ],
+                autoFillTargets: [
+                  {
+                    fieldId: 'companyNameLookup',
+                    valueTemplate: '{{result.legalName}}',
+                  },
+                ],
+              },
+            },
+            {
+              id: 'companyNameLookup',
+              type: 'text',
+              label: 'Company Name',
+              description: 'Enabled after successful lookup (or resilient 404); update sent on blur.',
+              validation: [],
+              autoFilledUpdate: {
+                url: '/api/demo/company-update/{{registrationNumberLookup}}',
+                method: 'PATCH',
+                payloadTemplate: '{"companyName":"{{companyNameLookup}}"}',
+              },
+            },
+            {
+              id: 'registrationNumberLookupPrefilled',
+              type: 'text',
+              label: 'Registration Number (Prefilled + Disabled)',
+              description: 'Prefilled backend-style source locked at load and auto-looked up. Use clear to edit/re-lookup.',
+              defaultValue: 'REG-OK',
+              validation: [],
+              manualLookup: {
+                request: {
+                  url: '/api/demo/company-lookup?registration={{registrationNumberLookupPrefilled}}',
+                  method: 'GET',
+                },
+                resilientErrors: [
+                  {
+                    status: 404,
+                    code: 'COMPANY_NOT_FOUND',
+                  },
+                ],
+                autoFillTargets: [
+                  {
+                    fieldId: 'companyNameLookupPrefilled',
+                    valueTemplate: '{{result.legalName}}',
+                  },
+                ],
+                prefillOnMount: true,
+              },
+            },
+            {
+              id: 'companyNameLookupPrefilled',
+              type: 'text',
+              label: 'Company Name (Prefilled Flow)',
+              description: 'Should be editable at load even when empty because source is prefilled+locked.',
+              validation: [],
+              autoFilledUpdate: {
+                url: '/api/demo/company-update/{{registrationNumberLookupPrefilled}}',
+                method: 'PATCH',
+                payloadTemplate: '{"companyName":"{{companyNameLookupPrefilled}}"}',
+              },
+            },
+          ],
+        },
         // Non-repeatable address block (referenced by repeatable block)
         {
           id: 'address-block',
