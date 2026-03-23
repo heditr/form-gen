@@ -329,6 +329,34 @@ describe('TextField', () => {
     }));
   });
 
+  test('given manual lookup field with empty source value, should disable lookup button until input has characters', async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ name: 'Acme Inc' }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const field = createMockField({
+      id: 'registrationNumber',
+      manualLookup: {
+        request: {
+          url: '/api/lookup?registration={{registrationNumber}}',
+          method: 'GET',
+        },
+        autoFillTargets: [],
+      },
+    });
+    const form = createMockForm();
+    render(<TextField {...createProps({ field, form })} />);
+
+    const lookupButton = screen.getByRole('button', { name: 'Lookup registrationNumber' });
+    expect(lookupButton).toBeDisabled();
+
+    await user.type(screen.getByRole('textbox'), 'R');
+    expect(screen.getByRole('button', { name: 'Lookup registrationNumber' })).not.toBeDisabled();
+  });
+
   test('given manual lookup success, should lock field and swap lookup button to clear button', async () => {
     const user = userEvent.setup();
     const fetchMock = vi.fn().mockResolvedValue({
@@ -358,6 +386,7 @@ describe('TextField', () => {
     });
     render(<TextField {...createProps({ field, form })} />);
 
+    await user.type(screen.getByRole('textbox'), 'R');
     await user.click(screen.getByRole('button', { name: 'Lookup registrationNumber' }));
 
     expect(screen.getByRole('textbox')).toBeDisabled();
@@ -514,6 +543,7 @@ describe('TextField', () => {
     });
     render(<TextField {...createProps({ field, form })} />);
 
+    await user.type(screen.getByRole('textbox'), 'R');
     await user.click(screen.getByRole('button', { name: 'Lookup registrationNumber' }));
     expect(screen.getByRole('textbox')).toBeDisabled();
 
@@ -559,6 +589,7 @@ describe('TextField', () => {
     });
     render(<TextField {...createProps({ field, form })} />);
 
+    await user.type(screen.getByRole('textbox'), 'R');
     await user.click(screen.getByRole('button', { name: 'Lookup registrationNumber' }));
 
     expect(setValue).toHaveBeenCalledWith('companyName', 'Acme Corporation', expect.objectContaining({
@@ -641,6 +672,7 @@ describe('TextField', () => {
     });
     render(<TextField {...createProps({ field, form })} />);
 
+    await user.type(screen.getByRole('textbox'), 'R');
     await user.click(screen.getByRole('button', { name: 'Lookup registrationNumber' }));
     await user.click(screen.getByRole('button', { name: 'Clear lookup registrationNumber' }));
 
@@ -728,6 +760,7 @@ describe('TextField', () => {
     });
     render(<TextField {...createProps({ field, form })} />);
 
+    await user.type(screen.getByRole('textbox'), 'R');
     await user.click(screen.getByRole('button', { name: 'Lookup registrationNumber' }));
 
     expect(screen.getByRole('textbox')).toBeDisabled();

@@ -342,7 +342,7 @@ export default function TextField({
                   size="icon"
                   aria-label={`Lookup ${field.id}`}
                   onClick={handleManualLookup}
-                  disabled={isLookupLoading}
+                  disabled={isLookupLoading || String(controllerField.value ?? '').trim().length === 0}
                 >
                   {isLookupLoading ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
