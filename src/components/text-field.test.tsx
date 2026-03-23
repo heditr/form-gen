@@ -9,6 +9,7 @@ import { describe, test, expect, vi, beforeEach } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import TextField from './text-field';
+import LookupTextField from './lookup-text-field';
 import type { TextFieldProps } from './text-field';
 import type { FieldDescriptor } from '@/types/form-descriptor';
 import type { UseFormReturn, FieldValues, FormState } from 'react-hook-form';
@@ -317,7 +318,7 @@ describe('TextField', () => {
       getValues: getValues as unknown as UseFormReturn<FieldValues>['getValues'],
       watch: vi.fn(() => 'Acme Updated') as unknown as UseFormReturn<FieldValues>['watch'],
     });
-    render(<TextField {...createProps({ field, form })} />);
+    render(<LookupTextField {...createProps({ field, form })} />);
 
     await user.type(screen.getByRole('textbox'), 'REG-123');
     expect(fetchMock).not.toHaveBeenCalled();
@@ -348,7 +349,7 @@ describe('TextField', () => {
       },
     });
     const form = createMockForm();
-    render(<TextField {...createProps({ field, form })} />);
+    render(<LookupTextField {...createProps({ field, form })} />);
 
     const lookupButton = screen.getByRole('button', { name: 'Lookup registrationNumber' });
     expect(lookupButton).toBeDisabled();
@@ -384,7 +385,7 @@ describe('TextField', () => {
     const form = createMockForm({
       getValues: getValues as unknown as UseFormReturn<FieldValues>['getValues'],
     });
-    render(<TextField {...createProps({ field, form })} />);
+    render(<LookupTextField {...createProps({ field, form })} />);
 
     await user.type(screen.getByRole('textbox'), 'R');
     await user.click(screen.getByRole('button', { name: 'Lookup registrationNumber' }));
@@ -423,7 +424,7 @@ describe('TextField', () => {
       setValue,
     });
 
-    render(<TextField {...createProps({ field, form, isDisabled: true })} />);
+    render(<LookupTextField {...createProps({ field, form, isDisabled: true })} />);
 
     expect(screen.getByRole('button', { name: 'Clear lookup registrationNumber' })).toBeInTheDocument();
     expect(setValue).toHaveBeenCalledWith('__lookupUnlocked.companyName', true, expect.any(Object));
@@ -454,7 +455,7 @@ describe('TextField', () => {
       setValue,
     });
 
-    render(<TextField {...createProps({ field, form, isDisabled: true })} />);
+    render(<LookupTextField {...createProps({ field, form, isDisabled: true })} />);
 
     expect(setValue).toHaveBeenCalledWith('registrationNumber', 'REG-404', expect.any(Object));
   });
@@ -504,7 +505,7 @@ describe('TextField', () => {
       setValue,
     });
 
-    render(<TextField {...createProps({ field, form, isDisabled: true })} />);
+    render(<LookupTextField {...createProps({ field, form, isDisabled: true })} />);
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith('/api/lookup?registration=REG-OK', expect.objectContaining({
@@ -541,7 +542,7 @@ describe('TextField', () => {
     const form = createMockForm({
       getValues: getValues as unknown as UseFormReturn<FieldValues>['getValues'],
     });
-    render(<TextField {...createProps({ field, form })} />);
+    render(<LookupTextField {...createProps({ field, form })} />);
 
     await user.type(screen.getByRole('textbox'), 'R');
     await user.click(screen.getByRole('button', { name: 'Lookup registrationNumber' }));
@@ -587,7 +588,7 @@ describe('TextField', () => {
       getValues: getValues as unknown as UseFormReturn<FieldValues>['getValues'],
       setValue,
     });
-    render(<TextField {...createProps({ field, form })} />);
+    render(<LookupTextField {...createProps({ field, form })} />);
 
     await user.type(screen.getByRole('textbox'), 'R');
     await user.click(screen.getByRole('button', { name: 'Lookup registrationNumber' }));
@@ -624,7 +625,7 @@ describe('TextField', () => {
     const form = createMockForm({
       getValues: getValues as unknown as UseFormReturn<FieldValues>['getValues'],
     });
-    render(<TextField {...createProps({ field, form })} />);
+    render(<LookupTextField {...createProps({ field, form })} />);
 
     const input = screen.getByRole('textbox');
     fireEvent.blur(input);
@@ -670,7 +671,7 @@ describe('TextField', () => {
       getValues: getValues as unknown as UseFormReturn<FieldValues>['getValues'],
       setValue,
     });
-    render(<TextField {...createProps({ field, form })} />);
+    render(<LookupTextField {...createProps({ field, form })} />);
 
     await user.type(screen.getByRole('textbox'), 'R');
     await user.click(screen.getByRole('button', { name: 'Lookup registrationNumber' }));
@@ -693,7 +694,7 @@ describe('TextField', () => {
       watch: vi.fn(() => '') as unknown as UseFormReturn<FieldValues>['watch'],
     });
 
-    render(<TextField {...createProps({ field, form })} />);
+    render(<LookupTextField {...createProps({ field, form })} />);
 
     expect(screen.getByRole('textbox')).toBeDisabled();
   });
@@ -711,7 +712,7 @@ describe('TextField', () => {
       watch: vi.fn(() => 'Acme Corporation') as unknown as UseFormReturn<FieldValues>['watch'],
     });
 
-    render(<TextField {...createProps({ field, form })} />);
+    render(<LookupTextField {...createProps({ field, form })} />);
 
     expect(screen.getByRole('textbox')).not.toBeDisabled();
   });
@@ -758,7 +759,7 @@ describe('TextField', () => {
       getValues: getValues as unknown as UseFormReturn<FieldValues>['getValues'],
       setValue,
     });
-    render(<TextField {...createProps({ field, form })} />);
+    render(<LookupTextField {...createProps({ field, form })} />);
 
     await user.type(screen.getByRole('textbox'), 'R');
     await user.click(screen.getByRole('button', { name: 'Lookup registrationNumber' }));
@@ -793,7 +794,7 @@ describe('TextField', () => {
       watch: watch as unknown as UseFormReturn<FieldValues>['watch'],
     });
 
-    render(<TextField {...createProps({ field, form })} />);
+    render(<LookupTextField {...createProps({ field, form })} />);
 
     expect(screen.getByRole('textbox')).not.toBeDisabled();
   });

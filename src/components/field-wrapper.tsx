@@ -9,6 +9,7 @@ import type { UseFormReturn, FieldValues } from 'react-hook-form';
 import type { FormContext } from '@/utils/template-evaluator';
 import { getErrorByPath } from '@/utils/form-errors';
 import TextField from './text-field';
+import LookupTextField from './lookup-text-field';
 import DropdownField from './dropdown-field';
 import AutocompleteField from './autocomplete-field';
 import CheckboxField from './checkbox-field';
@@ -52,6 +53,15 @@ export default function FieldWrapper({
   // Render appropriate field component based on field type
   switch (field.type) {
     case 'text':
+      if (field.manualLookup || field.autoFilledUpdate) {
+        return (
+          <LookupTextField
+            field={field}
+            form={form}
+            isDisabled={isDisabled}
+          />
+        );
+      }
       return (
         <TextField
           field={field}
