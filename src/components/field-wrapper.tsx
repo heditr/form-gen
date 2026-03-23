@@ -8,6 +8,7 @@ import type { FieldDescriptor } from '@/types/form-descriptor';
 import type { UseFormReturn, FieldValues } from 'react-hook-form';
 import type { FormContext } from '@/utils/template-evaluator';
 import { getErrorByPath } from '@/utils/form-errors';
+import { evaluateValidationArrayTemplate } from '@/utils/array-template-evaluator';
 import TextField from './text-field';
 import LookupTextField from './lookup-text-field';
 import DropdownField from './dropdown-field';
@@ -49,6 +50,9 @@ export default function FieldWrapper({
   if (isHidden) {
     return null;
   }
+  const isRequired = evaluateValidationArrayTemplate(field.validation, formContext).some(
+    (rule) => rule.type === 'required'
+  );
 
   // Render appropriate field component based on field type
   switch (field.type) {
@@ -59,6 +63,7 @@ export default function FieldWrapper({
             field={field}
             form={form}
             isDisabled={isDisabled}
+            required={isRequired}
           />
         );
       }
@@ -67,6 +72,7 @@ export default function FieldWrapper({
           field={field}
           form={form}
           isDisabled={isDisabled}
+          required={isRequired}
         />
       );
     case 'dropdown':
@@ -76,6 +82,7 @@ export default function FieldWrapper({
           form={form}
           formContext={formContext}
           isDisabled={isDisabled}
+          required={isRequired}
           onLoadDataSource={onLoadDataSource}
           dataSourceCache={dataSourceCache}
           onAutoFillSelection={onAutoFillSelection}
@@ -88,6 +95,7 @@ export default function FieldWrapper({
           form={form}
           formContext={formContext}
           isDisabled={isDisabled}
+          required={isRequired}
           onLoadDataSource={onLoadDataSource}
           dataSourceCache={dataSourceCache}
           onAutoFillSelection={onAutoFillSelection}
@@ -99,6 +107,7 @@ export default function FieldWrapper({
           field={field}
           form={form}
           isDisabled={isDisabled}
+          required={isRequired}
         />
       );
     case 'radio':
@@ -108,6 +117,7 @@ export default function FieldWrapper({
           form={form}
           formContext={formContext}
           isDisabled={isDisabled}
+          required={isRequired}
           onLoadDataSource={onLoadDataSource}
           dataSourceCache={dataSourceCache}
         />
@@ -118,6 +128,7 @@ export default function FieldWrapper({
           field={field}
           form={form}
           isDisabled={isDisabled}
+          required={isRequired}
         />
       );
     case 'number':
@@ -126,6 +137,7 @@ export default function FieldWrapper({
           field={field}
           form={form}
           isDisabled={isDisabled}
+          required={isRequired}
         />
       );
     case 'file':
@@ -134,6 +146,7 @@ export default function FieldWrapper({
           field={field}
           form={form}
           isDisabled={isDisabled}
+          required={isRequired}
         />
       );
     case 'button':

@@ -21,6 +21,7 @@ export interface RadioFieldProps {
   form: UseFormReturn<FieldValues>;
   formContext: FormContext;
   isDisabled: boolean;
+  required?: boolean;
   onLoadDataSource?: (fieldPath: string, url: string, auth?: { type: 'bearer' | 'apikey'; token?: string; headerName?: string }) => void;
   dataSourceCache?: Record<string, unknown>;
 }
@@ -39,6 +40,7 @@ export default function RadioField({
   form,
   formContext,
   isDisabled,
+  required = false,
   onLoadDataSource,
   dataSourceCache = {},
 }: RadioFieldProps) {
@@ -118,7 +120,10 @@ export default function RadioField({
   return (
     <div data-testid={`radio-field-${field.id}`} className="space-y-2">
       <div>
-        <Label>{field.label}</Label>
+        <Label>
+          {field.label}
+          {required && <span className="ml-1 text-destructive" aria-hidden="true">*</span>}
+        </Label>
         {field.description && (
           <p className="text-sm text-muted-foreground">
             {field.description}
@@ -151,11 +156,11 @@ export default function RadioField({
                         onChange={() => controllerField.onChange(item.value)}
                         onBlur={controllerField.onBlur}
                         disabled={isDisabled}
+                        required={required}
                         className={cn(
                           'h-4 w-4 border-input text-primary focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50',
                           errorMessage && 'border-destructive focus:ring-destructive'
                         )}
-                        aria-invalid={errorMessage ? 'true' : 'false'}
                         aria-describedby={errorMessage ? `${field.id}-error` : undefined}
                       />
                       <Label

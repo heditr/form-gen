@@ -22,6 +22,7 @@ export interface AutocompleteFieldProps {
   form: UseFormReturn<FieldValues>;
   formContext: FormContext;
   isDisabled: boolean;
+  required?: boolean;
   onLoadDataSource?: (fieldPath: string, url: string, auth?: { type: 'bearer' | 'apikey'; token?: string; headerName?: string }) => void;
   dataSourceCache?: Record<string, unknown>;
   onAutoFillSelection?: (fieldId: string, selectedPayload: Record<string, unknown>) => void;
@@ -39,6 +40,7 @@ export default function AutocompleteField({
   form,
   formContext,
   isDisabled,
+  required = false,
   onLoadDataSource,
   dataSourceCache = {},
   onAutoFillSelection,
@@ -239,6 +241,7 @@ export default function AutocompleteField({
     <div data-testid={`autocomplete-field-${field.id}`} className="space-y-2" ref={containerRef}>
       <Label htmlFor={field.id}>
         {field.label}
+        {required && <span className="ml-1 text-destructive" aria-hidden="true">*</span>}
       </Label>
       {field.description && (
         <p className="text-sm text-muted-foreground">
@@ -264,6 +267,7 @@ export default function AutocompleteField({
                 onBlur={controllerField.onBlur}
                 onFocus={() => setIsFocused(true)}
                 disabled={isDisabled || isLoading}
+                required={required}
                 className={cn(
                   errorMessage && 'border-destructive focus-visible:ring-destructive'
                 )}

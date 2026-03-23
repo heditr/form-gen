@@ -8,12 +8,14 @@ export interface LookupTextFieldProps {
   field: FieldDescriptor;
   form: UseFormReturn<FieldValues>;
   isDisabled: boolean;
+  required?: boolean;
 }
 
 export default function LookupTextField({
   field,
   form,
   isDisabled,
+  required = false,
 }: LookupTextFieldProps) {
   const error = getErrorByPath(form.formState.errors, field.id) ?? form.formState.errors[field.id];
   const errorMessage = error?.message as string | undefined;
@@ -22,6 +24,7 @@ export default function LookupTextField({
     <div data-testid={`text-field-${field.id}`} className="space-y-2">
       <Label htmlFor={field.id}>
         {field.label}
+        {required && <span className="ml-1 text-destructive" aria-hidden="true">*</span>}
       </Label>
       {field.description && (
         <p className="text-sm text-muted-foreground">
@@ -32,6 +35,7 @@ export default function LookupTextField({
         field={field}
         form={form}
         isDisabled={isDisabled}
+        required={required}
         errorMessage={errorMessage}
       />
       {errorMessage && (

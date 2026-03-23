@@ -22,6 +22,7 @@ export interface DropdownFieldProps {
   form: UseFormReturn<FieldValues>;
   formContext: FormContext;
   isDisabled: boolean;
+  required?: boolean;
   onLoadDataSource?: (fieldPath: string, url: string, auth?: { type: 'bearer' | 'apikey'; token?: string; headerName?: string }) => void;
   dataSourceCache?: Record<string, unknown>;
   onAutoFillSelection?: (fieldId: string, selectedPayload: Record<string, unknown>) => void;
@@ -39,6 +40,7 @@ export default function DropdownField({
   form,
   formContext,
   isDisabled,
+  required = false,
   onLoadDataSource,
   dataSourceCache = {},
   onAutoFillSelection,
@@ -76,7 +78,7 @@ export default function DropdownField({
     }
 
     return [];
-  }, [field.items, field.dataSource, field.id, dataSourceQuery.data, dataSourceCache]);
+  }, [field.items, field.dataSource, field.id, dataSourceQuery.data, dataSourceCache, formContext]);
 
   // Backward-compatible callback-based loading, moved to effect to avoid setState during render
   useEffect(() => {
@@ -126,6 +128,7 @@ export default function DropdownField({
     <div data-testid={`dropdown-field-${field.id}`} className="space-y-2">
       <Label htmlFor={field.id}>
         {field.label}
+        {required && <span className="ml-1 text-destructive" aria-hidden="true">*</span>}
       </Label>
       {field.description && (
         <p className="text-sm text-muted-foreground">
@@ -161,6 +164,7 @@ export default function DropdownField({
               }
             }}
             disabled={isDisabled || isLoading}
+            required={required}
             className={cn(
               errorMessage && 'border-destructive focus:ring-destructive'
             )}

@@ -13,6 +13,7 @@ export interface TextFieldInputControlProps {
   field: FieldDescriptor;
   form: UseFormReturn<FieldValues>;
   isDisabled: boolean;
+  required?: boolean;
   errorMessage?: string;
 }
 
@@ -20,6 +21,7 @@ export default function TextFieldInputControl({
   field,
   form,
   isDisabled,
+  required = false,
   errorMessage,
 }: TextFieldInputControlProps) {
   const [isLookupLoading, setIsLookupLoading] = useState(false);
@@ -293,6 +295,7 @@ export default function TextFieldInputControl({
                 await handleAutoFilledUpdate();
               }}
               disabled={isFieldDisabled}
+              required={required}
               className={cn(
                 errorMessage && 'border-destructive focus-visible:ring-destructive'
               )}

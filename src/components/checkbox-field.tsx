@@ -16,6 +16,7 @@ export interface CheckboxFieldProps {
   field: FieldDescriptor;
   form: UseFormReturn<FieldValues>;
   isDisabled: boolean;
+  required?: boolean;
 }
 
 /**
@@ -30,6 +31,7 @@ export default function CheckboxField({
   field,
   form,
   isDisabled,
+  required = false,
 }: CheckboxFieldProps) {
   const error = getErrorByPath(form.formState.errors, field.id) ?? form.formState.errors[field.id];
   const errorMessage = error?.message as string | undefined;
@@ -50,6 +52,7 @@ export default function CheckboxField({
               onChange={(e) => controllerField.onChange(e.target.checked)}
               onBlur={controllerField.onBlur}
               disabled={isDisabled}
+              required={required}
               className={cn(
                 'h-4 w-4 rounded border-input text-primary focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50',
                 errorMessage && 'border-destructive focus:ring-destructive'
@@ -61,6 +64,7 @@ export default function CheckboxField({
         />
         <Label htmlFor={field.id} className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
           {field.label}
+          {required && <span className="ml-1 text-destructive" aria-hidden="true">*</span>}
         </Label>
       </div>
       {field.description && (
