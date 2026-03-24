@@ -290,6 +290,18 @@ export default function TextFieldInputControl({
               type="text"
               {...controllerField}
               value={controllerField.value ?? ''}
+              onKeyDown={async (event) => {
+                if (
+                  event.key === 'Enter' &&
+                  hasManualLookup &&
+                  !isLookupLocked &&
+                  !isLookupLoading &&
+                  String(controllerField.value ?? '').trim().length > 0
+                ) {
+                  event.preventDefault();
+                  await handleManualLookup();
+                }
+              }}
               onBlur={async () => {
                 controllerField.onBlur();
                 await handleAutoFilledUpdate();

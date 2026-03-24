@@ -330,6 +330,49 @@ describe('TextField', () => {
     }));
   });
 
+  test('given manual lookup field, should trigger backend lookup on Enter key', async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ name: 'Acme Inc' }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const getValues = vi.fn((fieldName?: string) => {
+      if (fieldName) {
+        return 'REG-123';
+      }
+      return { registrationNumber: 'REG-123' };
+    });
+
+    const field = createMockField({
+      id: 'registrationNumber',
+      manualLookup: {
+        request: {
+          url: '/api/lookup?registration={{registrationNumber}}',
+          method: 'GET',
+        },
+        autoFillTargets: [],
+      },
+    });
+    const form = createMockForm({
+      getValues: getValues as unknown as UseFormReturn<FieldValues>['getValues'],
+    });
+
+    render(<LookupTextField {...createProps({ field, form })} />);
+
+    const input = screen.getByRole('textbox');
+    await user.type(input, 'REG-123');
+    fireEvent.keyDown(input, { key: 'Enter', code: 'Enter', charCode: 13 });
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+    expect(fetchMock).toHaveBeenCalledWith('/api/lookup?registration=REG-123', expect.objectContaining({
+      method: 'GET',
+    }));
+  });
+
   test('given manual lookup field with empty source value, should disable lookup button until input has characters', async () => {
     const user = userEvent.setup();
     const fetchMock = vi.fn().mockResolvedValue({
