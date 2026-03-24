@@ -16,7 +16,7 @@ import { mapBackendErrorsToForm, type BackendError } from './form-descriptor-int
 import type {
   GlobalFormDescriptor,
   SubmissionConfig,
-  FormData,
+  FormData as DescriptorFormData,
 } from '@/types/form-descriptor';
 import type { FormContext } from './template-evaluator';
 
@@ -46,6 +46,37 @@ export interface SubmissionOrchestratorOptions {
    * Error callback
    */
   onError?: (error: Error | BackendErrorResponse) => void;
+}
+
+function formatDateAsIsoDateString(value: Date): string {
+  return value.toISOString().slice(0, 10);
+}
+
+function serializeDatesForTransport(value: unknown): unknown {
+  if (value instanceof Date) {
+    return formatDateAsIsoDateString(value);
+  }
+
+  if (Array.isArray(value)) {
+    return value.map(serializeDatesForTransport);
+  }
+
+  if (value && typeof value === 'object' && !(value instanceof File)) {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([key, nestedValue]) => [
+        key,
+        serializeDatesForTransport(nestedValue),
+      ])
+    );
+  }
+
+  return value;
+}
+
+export function serializeFormValues(
+  formValues: Partial<DescriptorFormData>
+): Partial<DescriptorFormData> {
+  return serializeDatesForTransport(formValues) as Partial<DescriptorFormData>;
 }
 
 /**
@@ -81,12 +112,15 @@ export function scrollToFirstError<T extends Record<string, unknown>>(
  * @param formValues - Form values to check
  * @returns True if form data contains File objects
  */
-export function hasFileObjects(formValues: Partial<FormData>): boolean {
+export function hasFileObjects(formValues: Partial<DescriptorFormData>): boolean {
   for (const value of Object.values(formValues)) {
-    if (value instanceof File) {
+    if (typeof value === 'object' && value !== null && (value as object) instanceof File) {
       return true;
     }
-    if (Array.isArray(value) && value.some(item => item instanceof File)) {
+    if (
+      Array.isArray(value) &&
+      value.some((item) => typeof item === 'object' && item !== null && (item as object) instanceof File)
+    ) {
       return true;
     }
   }
@@ -102,24 +136,26 @@ export function hasFileObjects(formValues: Partial<FormData>): boolean {
  */
 export function evaluatePayloadTemplate(
   template: string | undefined,
-  formValues: Partial<FormData>
-): string | Partial<FormData> {
+  formValues: Partial<DescriptorFormData>
+): string | Partial<DescriptorFormData> {
+  const serializedFormValues = serializeFormValues(formValues);
+
   // If no template provided, return form values directly (for multipart) or JSON stringified (for JSON)
   if (!template || template.trim() === '') {
-    return formValues;
+    return serializedFormValues;
   }
 
   // Evaluate template with form values as context
   const context: FormContext = {
-    formData: formValues,
-    ...formValues, // Also allow direct access to form values
+    formData: serializedFormValues,
+    ...serializedFormValues, // Also allow direct access to form values
   };
 
   const evaluated = evaluateTemplate(template, context);
   
   // If template evaluation returns empty, return form values directly
   if (!evaluated || evaluated.trim() === '') {
-    return formValues;
+    return serializedFormValues;
   }
 
   // Try to parse as JSON, if it fails, return as string
@@ -139,15 +175,16 @@ export function evaluatePayloadTemplate(
  * @returns FormData instance
  */
 export function constructFormData(
-  formValues: Partial<FormData>,
-  evaluatedPayload: Partial<FormData>
-): FormData {
-  const formData = new FormData();
+  formValues: Partial<DescriptorFormData>,
+  evaluatedPayload: string | Partial<DescriptorFormData>
+): globalThis.FormData {
+  const formData = new globalThis.FormData();
+  const serializedFormValues = serializeFormValues(formValues);
 
   // Use evaluated payload if it's an object, otherwise use original form values
   const dataToUse = typeof evaluatedPayload === 'object' && !Array.isArray(evaluatedPayload) && evaluatedPayload !== null
     ? evaluatedPayload
-    : formValues;
+    : serializedFormValues;
 
   // Add all fields to FormData
   for (const [key, value] of Object.entries(dataToUse)) {
@@ -155,13 +192,13 @@ export function constructFormData(
       continue;
     }
 
-    if (value instanceof File) {
+    if (typeof value === 'object' && value !== null && (value as object) instanceof File) {
       // Single file
       formData.append(key, value);
     } else if (Array.isArray(value)) {
       // Array of files or other values
       for (const item of value) {
-        if (item instanceof File) {
+        if (typeof item === 'object' && item !== null && (item as object) instanceof File) {
           formData.append(key, item);
         } else {
           // For non-file arrays, append as JSON string
@@ -187,7 +224,7 @@ export function constructFormData(
  */
 export function constructSubmissionRequest(
   config: SubmissionConfig,
-  payload: string | FormData,
+  payload: string | globalThis.FormData,
   hasFiles: boolean = false
 ): RequestInit {
   const headers: Record<string, string> = {
@@ -265,7 +302,7 @@ export function createSubmissionOrchestrator(): SubmissionOrchestrator {
       // onValid - called when validation passes
       async (validData: T) => {
         try {
-          const formValues = validData as Partial<FormData>;
+          const formValues = validData as Partial<DescriptorFormData>;
           
           // Check if form data contains File objects (pending uploads)
           const containsFiles = hasFileObjects(formValues);
@@ -277,7 +314,7 @@ export function createSubmissionOrchestrator(): SubmissionOrchestrator {
           );
 
           // Construct request body based on whether files are present
-          let requestBody: string | FormData;
+          let requestBody: string | globalThis.FormData;
           if (containsFiles) {
             // Use multipart/form-data for file uploads
             requestBody = constructFormData(formValues, evaluatedPayload);

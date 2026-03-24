@@ -13,6 +13,40 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 
+function formatDateForInput(value: unknown): string {
+  if (value instanceof Date && !isNaN(value.getTime())) {
+    return value.toISOString().slice(0, 10);
+  }
+  if (typeof value === 'string') {
+    return value;
+  }
+  return '';
+}
+
+function parseInputDate(value: string): Date | null {
+  if (!value) {
+    return null;
+  }
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) {
+    return null;
+  }
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+
+  if (
+    parsed.getUTCFullYear() !== year ||
+    parsed.getUTCMonth() + 1 !== month ||
+    parsed.getUTCDate() !== day
+  ) {
+    return null;
+  }
+
+  return parsed;
+}
+
 export interface DateFieldProps {
   field: FieldDescriptor;
   form: UseFormReturn<FieldValues>;
@@ -55,7 +89,10 @@ export default function DateField({
             id={field.id}
             type="date"
             {...controllerField}
-            value={controllerField.value ?? ''}
+            value={formatDateForInput(controllerField.value)}
+            onChange={(event) => {
+              controllerField.onChange(parseInputDate(event.target.value));
+            }}
             disabled={isDisabled}
             required={required}
             className={cn(

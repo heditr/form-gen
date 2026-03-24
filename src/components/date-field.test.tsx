@@ -20,15 +20,15 @@ vi.mock('react-hook-form', async () => {
   return {
     ...actual,
     Controller: ({ render, name, defaultValue }: { 
-      render: (props: { field: { value: string; onChange: (e: React.ChangeEvent<HTMLInputElement> | string) => void; onBlur: () => void; name: string; ref: () => void } }) => React.ReactElement; 
+      render: (props: { field: { value: unknown; onChange: (value: unknown) => void; onBlur: () => void; name: string; ref: () => void } }) => React.ReactElement; 
       name: string; 
-      defaultValue?: string 
+      defaultValue?: unknown
     }) => {
-      const [value, setValue] = React.useState(defaultValue || '');
+      const [value, setValue] = React.useState(defaultValue ?? null);
       const mockField = {
         value,
-        onChange: (e: React.ChangeEvent<HTMLInputElement> | string) => {
-          setValue(typeof e === 'string' ? e : e.target.value);
+        onChange: (nextValue: unknown) => {
+          setValue(nextValue);
         },
         onBlur: vi.fn(),
         name,

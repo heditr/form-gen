@@ -281,8 +281,10 @@ export function extractDefaultValues(
                 case 'text':
                 case 'dropdown':
                 case 'autocomplete':
-                case 'date':
                   setNestedValue(groupDefault, baseFieldId, '');
+                  break;
+                case 'date':
+                  setNestedValue(groupDefault, baseFieldId, null);
                   break;
                 case 'checkbox':
                   setNestedValue(groupDefault, baseFieldId, false);
@@ -360,9 +362,11 @@ export function extractDefaultValues(
             case 'text':
             case 'dropdown':
             case 'autocomplete':
-            case 'date':
               typeDefault = '';
               break;
+              case 'date':
+                typeDefault = null;
+                break;
             case 'checkbox':
               typeDefault = false;
               break;

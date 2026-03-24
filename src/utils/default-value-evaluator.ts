@@ -8,6 +8,32 @@
 import { evaluateTemplate, type FormContext } from './template-evaluator';
 import type { FieldType } from '@/types/form-descriptor';
 
+function parseDateDefaultValue(value: string): Date | null {
+  const trimmed = value.trim();
+  if (trimmed === '') {
+    return null;
+  }
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed);
+  if (!match) {
+    return null;
+  }
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+
+  if (
+    parsed.getUTCFullYear() !== year ||
+    parsed.getUTCMonth() + 1 !== month ||
+    parsed.getUTCDate() !== day
+  ) {
+    return null;
+  }
+
+  return parsed;
+}
+
 /**
  * Evaluate a field's defaultValue, handling both static values and Handlebars templates
  * 
@@ -20,7 +46,7 @@ export function evaluateDefaultValue(
   defaultValue: string | string[] | number | boolean | null | undefined,
   fieldType: FieldType,
   context: FormContext
-): string | number | boolean | string[] | null | undefined {
+): string | number | boolean | Date | string[] | null | undefined {
   // If defaultValue is not a string, return it unchanged (static value)
   if (typeof defaultValue !== 'string') {
     return defaultValue;
@@ -45,6 +71,9 @@ export function evaluateDefaultValue(
     if (fieldType === 'number') {
       return parseNumber(defaultValue);
     }
+    if (fieldType === 'date') {
+      return parseDateDefaultValue(defaultValue);
+    }
 
     // For other field types, return the string as-is (no parsing for non-templates)
     return defaultValue;
@@ -58,8 +87,10 @@ export function evaluateDefaultValue(
     case 'text':
     case 'dropdown':
     case 'autocomplete':
-    case 'date':
       return evaluated;
+
+    case 'date':
+      return parseDateDefaultValue(evaluated);
 
     case 'checkbox':
       return parseBoolean(evaluated);

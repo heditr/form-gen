@@ -13,6 +13,7 @@ import {
   constructSubmissionRequest,
   hasFileObjects,
   constructFormData,
+  serializeFormValues,
 } from './submission-orchestrator';
 import type {
   GlobalFormDescriptor,
@@ -104,6 +105,30 @@ describe('submission orchestrator', () => {
       const payload = evaluatePayloadTemplate('', formValues);
 
       expect(payload).toEqual(formValues);
+    });
+
+    test('given date values, should serialize them to ISO date strings', () => {
+      const formValues: Partial<FormData> = {
+        birthDate: new Date(Date.UTC(2024, 0, 15)),
+      };
+
+      const payload = evaluatePayloadTemplate(undefined, formValues);
+      expect(payload).toEqual({ birthDate: '2024-01-15' });
+    });
+  });
+
+  describe('serializeFormValues', () => {
+    test('given nested objects with Date values, should serialize recursively', () => {
+      const formValues = {
+        dateField: new Date(Date.UTC(2025, 5, 1)),
+        nested: {
+          anotherDate: new Date(Date.UTC(2024, 11, 24)),
+        },
+      } as unknown as Partial<FormData>;
+
+      const serialized = serializeFormValues(formValues) as Record<string, unknown>;
+      expect(serialized.dateField).toBe('2025-06-01');
+      expect((serialized.nested as Record<string, unknown>).anotherDate).toBe('2024-12-24');
     });
   });
 

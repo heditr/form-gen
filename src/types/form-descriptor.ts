@@ -77,8 +77,10 @@ export interface FieldItem {
  * Type-safe default value based on field type
  */
 export type FieldDefaultValue<T extends FieldType> =
-  T extends 'text' | 'dropdown' | 'autocomplete' | 'date'
+  T extends 'text' | 'dropdown' | 'autocomplete'
     ? string
+    : T extends 'date'
+    ? string | Date | null
     : T extends 'checkbox'
     ? boolean
     : T extends 'radio'
@@ -503,7 +505,7 @@ export interface CasePrefill {
  * @property [key: string] - Dynamic properties based on discriminant fields and prefill (e.g. addresses array for repeatable block)
  */
 export interface CaseContext {
-  [key: string]: string | number | boolean | null | undefined | string[] | Array<Record<string, unknown>>;
+  [key: string]: string | number | boolean | Date | null | undefined | string[] | Array<Record<string, unknown>>;
 }
 
 /**
@@ -534,6 +536,8 @@ export interface RulesObject {
 export type FieldValueType<F extends FieldDescriptor> = 
   F['type'] extends 'checkbox'
     ? boolean
+    : F['type'] extends 'date'
+    ? Date | string | null
     : F['type'] extends 'file'
     ? string | string[] | null
     : F['type'] extends 'radio'

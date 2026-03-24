@@ -315,5 +315,38 @@ describe('validation rule adapter', () => {
       const positiveResult = schema.safeParse(5);
       expect(positiveResult.success).toBe(true);
     });
+
+    test('given date field, should parse ISO date string into Date', () => {
+      const schema = convertToZodSchema([], 'date');
+
+      const result = schema.safeParse('2024-01-15');
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data).toBeInstanceOf(Date);
+      }
+    });
+
+    test('given date field with invalid date string, should fail validation', () => {
+      const schema = convertToZodSchema([], 'date');
+
+      const result = schema.safeParse('2024-02-31');
+      expect(result.success).toBe(false);
+    });
+
+    test('given required date rule, should reject null and accept valid date', () => {
+      const rules: ValidationRule[] = [
+        { type: 'required', message: 'Date is required' },
+      ];
+      const schema = convertToZodSchema(rules, 'date');
+
+      const nullResult = schema.safeParse(null);
+      expect(nullResult.success).toBe(false);
+      if (!nullResult.success) {
+        expect(nullResult.error.issues[0].message).toBe('Date is required');
+      }
+
+      const validResult = schema.safeParse('2024-01-15');
+      expect(validResult.success).toBe(true);
+    });
   });
 });

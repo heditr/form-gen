@@ -98,13 +98,14 @@ describe('default-value-evaluator', () => {
       });
 
       describe('date field', () => {
-        test('given a template string, should evaluate and return string', () => {
+        test('given a template string, should evaluate and return Date', () => {
           const template = '{{caseContext.defaultDate}}';
           const context: FormContext = { caseContext: { defaultDate: '2024-01-01' } };
           
           const result = evaluateDefaultValue(template, 'date', context);
           
-          expect(result).toBe('2024-01-01');
+          expect(result).toBeInstanceOf(Date);
+          expect((result as Date).toISOString().slice(0, 10)).toBe('2024-01-01');
         });
       });
 

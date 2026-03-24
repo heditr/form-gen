@@ -9,6 +9,33 @@
 import { z } from 'zod';
 import type { ValidationRule } from '@/types/form-descriptor';
 
+function formatDateAsIsoDateString(value: Date): string {
+  return value.toISOString().slice(0, 10);
+}
+
+function parseIsoDateString(value: string): Date | null {
+  const trimmed = value.trim();
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed);
+  if (!match) {
+    return null;
+  }
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const utcDate = new Date(Date.UTC(year, month - 1, day));
+
+  if (
+    utcDate.getUTCFullYear() !== year ||
+    utcDate.getUTCMonth() + 1 !== month ||
+    utcDate.getUTCDate() !== day
+  ) {
+    return null;
+  }
+
+  return utcDate;
+}
+
 /**
  * React Hook Form validation rules type
  * Matches the structure expected by react-hook-form's register() and Controller
@@ -133,6 +160,19 @@ export function convertToZodSchema(
   if (!rules || !Array.isArray(rules)) {
     // Return appropriate base schema based on field type
     switch (fieldType) {
+      case 'date':
+        return z.preprocess((val) => {
+          if (val === undefined || val === null || val === '') {
+            return null;
+          }
+          if (val instanceof Date) {
+            return isNaN(val.getTime()) ? val : val;
+          }
+          if (typeof val === 'string') {
+            return parseIsoDateString(val) ?? val;
+          }
+          return val;
+        }, z.union([z.date(), z.null()]));
       case 'checkbox':
         return z.boolean();
       case 'file':
@@ -155,6 +195,22 @@ export function convertToZodSchema(
   let preprocessFn: ((val: unknown) => unknown) | null = null;
   
   switch (fieldType) {
+    case 'date':
+      baseSchema = z.union([z.date(), z.null()]);
+      needsPreprocessing = true;
+      preprocessFn = (val) => {
+        if (val === undefined || val === null || val === '') {
+          return null;
+        }
+        if (val instanceof Date) {
+          return val;
+        }
+        if (typeof val === 'string') {
+          return parseIsoDateString(val) ?? val;
+        }
+        return val;
+      };
+      break;
     case 'checkbox':
       baseSchema = z.boolean();
       // Preprocess undefined to false so validation can run
@@ -242,6 +298,11 @@ export function convertToZodSchema(
           }, {
             message: rule.message,
           });
+        } else if (fieldType === 'date') {
+          // For date, required means it must be a valid Date object
+          schema = schema.refine((val) => val instanceof Date && !isNaN(val.getTime()), {
+            message: rule.message,
+          });
         } else {
           // For string fields (text, dropdown, autocomplete, date), ensure not empty
           // Use refine instead of min() since schema is now ZodEffects from preprocessing
@@ -255,11 +316,23 @@ export function convertToZodSchema(
         break;
 
       case 'minLength':
-        if (fieldType === 'text' || fieldType === 'dropdown' || fieldType === 'autocomplete' || fieldType === 'date') {
+        if (fieldType === 'text' || fieldType === 'dropdown' || fieldType === 'autocomplete') {
           // Use refine since schema might be ZodEffects from preprocessing
           schema = schema.refine((val) => {
             const strVal = String(val ?? '');
             return strVal.length >= rule.value;
+          }, {
+            message: rule.message,
+          });
+        } else if (fieldType === 'date') {
+          schema = schema.refine((val) => {
+            if (val === null) {
+              return true;
+            }
+            if (!(val instanceof Date) || isNaN(val.getTime())) {
+              return false;
+            }
+            return formatDateAsIsoDateString(val).length >= rule.value;
           }, {
             message: rule.message,
           });
@@ -268,11 +341,23 @@ export function convertToZodSchema(
         break;
 
       case 'maxLength':
-        if (fieldType === 'text' || fieldType === 'dropdown' || fieldType === 'autocomplete' || fieldType === 'date') {
+        if (fieldType === 'text' || fieldType === 'dropdown' || fieldType === 'autocomplete') {
           // Use refine since schema might be ZodEffects from preprocessing
           schema = schema.refine((val) => {
             const strVal = String(val ?? '');
             return strVal.length <= rule.value;
+          }, {
+            message: rule.message,
+          });
+        } else if (fieldType === 'date') {
+          schema = schema.refine((val) => {
+            if (val === null) {
+              return true;
+            }
+            if (!(val instanceof Date) || isNaN(val.getTime())) {
+              return false;
+            }
+            return formatDateAsIsoDateString(val).length <= rule.value;
           }, {
             message: rule.message,
           });
@@ -298,6 +383,15 @@ export function convertToZodSchema(
           // Use refine since schema might be ZodEffects from preprocessing
           // Skip pattern validation for empty strings - let required validation handle those
           schema = schema.refine((val) => {
+            if (fieldType === 'date') {
+              if (val === null) {
+                return true;
+              }
+              if (!(val instanceof Date) || isNaN(val.getTime())) {
+                return false;
+              }
+              return regexPattern.test(formatDateAsIsoDateString(val));
+            }
             const strVal = String(val ?? '');
             // If empty, skip pattern validation (required validation will catch it)
             if (strVal.length === 0) {
