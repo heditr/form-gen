@@ -16,7 +16,7 @@ import { useDebouncedRehydration } from '@/hooks/use-debounced-rehydration';
 import type { RootState } from '@/store/form-dux';
 import type { AppDispatch } from '@/store/store';
 import { Button } from '@/components/ui/button';
-import { createSubmissionOrchestrator, evaluatePayloadTemplate } from '@/utils/submission-orchestrator';
+import { createSubmissionOrchestrator, evaluatePayloadTemplate, serializeFormValues } from '@/utils/submission-orchestrator';
 import type { FormData, GlobalFormDescriptor, BlockDescriptor, FieldDescriptor, CaseContext, CasePrefill } from '@/types/form-descriptor';
 import { useFormDescriptor } from '@/hooks/use-form-descriptor';
 import { updateCaseContext, identifyDiscriminantFields, hasContextChanged } from '@/utils/context-extractor';
@@ -450,7 +450,7 @@ function FormContainerWithSubmissionComponent({
       formValues as Partial<FormData>
     );
 
-    let requestBody: string | FormData;
+    let requestBody: string | globalThis.FormData;
     let payloadString: string;
     if (containsFiles) {
       const { constructFormData } = await import('@/utils/submission-orchestrator');
@@ -606,7 +606,7 @@ function FormContainerWithSubmissionWithHook({
 
   const syncFormData = useCallback(
     (formData: Partial<FormData>) => {
-      dispatch(syncFormDataToContext({ formData }));
+      dispatch(syncFormDataToContext({ formData: serializeFormValues(formData) }));
     },
     [dispatch]
   );

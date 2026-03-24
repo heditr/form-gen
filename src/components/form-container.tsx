@@ -27,6 +27,7 @@ import type { AppDispatch } from '@/store/store';
 import { updateCaseContext, identifyDiscriminantFields, haveDiscriminantFieldsChanged } from '@/utils/context-extractor';
 import type { FormContext } from '@/utils/template-evaluator';
 import { evaluateValidationArrayTemplate } from '@/utils/array-template-evaluator';
+import { serializeFormValues } from '@/utils/submission-orchestrator';
 import FormPresentation from './form-presentation';
 import FormValuesWatcher from './form-values-watcher';
 import { PopinManagerProvider } from './popin-manager';
@@ -187,7 +188,7 @@ export default function FormContainer() {
   // Create callbacks for dispatching actions
   const syncFormData = useCallback(
     (formData: Partial<FormData>) => {
-      dispatch(syncFormDataToContext({ formData }));
+      dispatch(syncFormDataToContext({ formData: serializeFormValues(formData) }));
     },
     [dispatch]
   );
@@ -222,7 +223,10 @@ export default function FormContainer() {
     const validationHash = mergedDescriptor.blocks
       .flatMap((block) => block.fields)
       .map((field) => {
-        const evaluatedRules = evaluateValidationArrayTemplate(field.validation, { caseContext });
+        const evaluatedRules = evaluateValidationArrayTemplate(
+          field.validation,
+          { caseContext: caseContext as unknown as FormContext } as FormContext
+        );
         const ruleTypes = evaluatedRules.map((r) => {
           if (r.type === 'pattern') {
             // Include pattern value in hash to detect pattern changes

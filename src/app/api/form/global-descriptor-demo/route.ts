@@ -191,6 +191,19 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
                 },
               ],
             },
+            {
+              id: 'preferredContactDate',
+              type: 'date',
+              label: 'Preferred Contact Date',
+              description: 'Choose a preferred date for follow-up contact',
+              defaultValue: '{{caseContext.preferredContactDate}}',
+              validation: [
+                {
+                  type: 'required',
+                  message: 'Preferred contact date is required',
+                },
+              ],
+            },
           ],
         },
         {
