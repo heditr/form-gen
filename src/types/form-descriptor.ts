@@ -51,6 +51,7 @@ export type ValidationRule =
 export type FieldType = 
   | 'text'
   | 'dropdown'
+  | 'multiselect'
   | 'autocomplete'
   | 'radio'
   | 'checkbox'
@@ -79,6 +80,8 @@ export interface FieldItem {
 export type FieldDefaultValue<T extends FieldType> =
   T extends 'text' | 'dropdown' | 'autocomplete'
     ? string
+    : T extends 'multiselect'
+    ? string[]
     : T extends 'date'
     ? string | Date | null
     : T extends 'checkbox'
@@ -544,6 +547,8 @@ export type FieldValueType<F extends FieldDescriptor> =
     ? string | number
     : F['type'] extends 'number'
     ? number
+    : F['type'] extends 'multiselect'
+    ? string[]
     : string | number | null;
 
 /**

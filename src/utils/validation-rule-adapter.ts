@@ -147,14 +147,14 @@ export function convertToReactHookFormRules(rules: ValidationRule[] | undefined 
 
 /**
  * Convert ValidationRule[] to Zod schema for a specific field type
- * 
+ *
  * @param rules - Array of validation rules from form descriptor
- * @param fieldType - Type of field (text, checkbox, file, etc.)
+ * @param fieldType - Type of field (text, checkbox, multiselect, etc.)
  * @returns Zod schema with applied validations
  */
 export function convertToZodSchema(
   rules: ValidationRule[] | undefined | null,
-  fieldType: 'text' | 'dropdown' | 'autocomplete' | 'date' | 'radio' | 'checkbox' | 'file' | 'number' = 'text'
+  fieldType: 'text' | 'dropdown' | 'multiselect' | 'autocomplete' | 'date' | 'radio' | 'checkbox' | 'file' | 'number' = 'text'
 ): z.ZodTypeAny {
   // Handle undefined, null, or non-array values
   if (!rules || !Array.isArray(rules)) {
@@ -182,6 +182,9 @@ export function convertToZodSchema(
         return z.union([z.string(), z.number()]);
       case 'number':
         return z.number();
+      case 'multiselect':
+        // Preprocess undefined/null to empty array so optional multiselect fields work
+        return z.preprocess((val) => (val === undefined || val === null ? [] : val), z.array(z.string()));
       default:
         return z.string();
     }
@@ -236,6 +239,12 @@ export function convertToZodSchema(
       // Don't preprocess - let refine handle undefined for required validation
       needsPreprocessing = false;
       break;
+    case 'multiselect':
+      // Preprocess undefined/null to empty array so optional multiselect fields work
+      baseSchema = z.array(z.string());
+      needsPreprocessing = true;
+      preprocessFn = (val) => (val === undefined || val === null ? [] : val);
+      break;
     default:
       // For string fields, preprocess undefined to empty string
       baseSchema = z.string();
@@ -253,7 +262,12 @@ export function convertToZodSchema(
   for (const rule of rules) {
     switch (rule.type) {
       case 'required':
-        if (fieldType === 'checkbox') {
+        if (fieldType === 'multiselect') {
+          // For multiselect, required means at least one item must be selected
+          schema = schema.refine((val: unknown) => Array.isArray(val) && val.length > 0, {
+            message: rule.message,
+          });
+        } else if (fieldType === 'checkbox') {
           // For checkbox, required means it must be true
           schema = (schema as z.ZodBoolean).refine((val) => val === true, {
             message: rule.message,

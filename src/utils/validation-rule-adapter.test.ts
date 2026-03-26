@@ -348,5 +348,59 @@ describe('validation rule adapter', () => {
       const validResult = schema.safeParse('2024-01-15');
       expect(validResult.success).toBe(true);
     });
+
+    test('given multiselect field with no rules, should accept a string array', () => {
+      const schema = convertToZodSchema([], 'multiselect');
+
+      const emptyArrayResult = schema.safeParse([]);
+      expect(emptyArrayResult.success).toBe(true);
+
+      const filledResult = schema.safeParse(['opt1', 'opt2']);
+      expect(filledResult.success).toBe(true);
+    });
+
+    test('given multiselect field with no rules, should reject non-array values', () => {
+      const schema = convertToZodSchema([], 'multiselect');
+
+      const stringResult = schema.safeParse('single-string');
+      expect(stringResult.success).toBe(false);
+    });
+
+    test('given multiselect field with required rule, should reject empty array', () => {
+      const rules: ValidationRule[] = [
+        { type: 'required', message: 'Please select at least one option' },
+      ];
+      const schema = convertToZodSchema(rules, 'multiselect');
+
+      const emptyResult = schema.safeParse([]);
+      expect(emptyResult.success).toBe(false);
+      if (!emptyResult.success) {
+        expect(emptyResult.error.issues[0].message).toBe('Please select at least one option');
+      }
+
+      const undefinedResult = schema.safeParse(undefined);
+      expect(undefinedResult.success).toBe(false);
+
+      const validResult = schema.safeParse(['opt1']);
+      expect(validResult.success).toBe(true);
+    });
+
+    test('given multiselect field with required rule, should accept multiple selections', () => {
+      const rules: ValidationRule[] = [
+        { type: 'required', message: 'Please select at least one option' },
+      ];
+      const schema = convertToZodSchema(rules, 'multiselect');
+
+      const result = schema.safeParse(['opt1', 'opt2', 'opt3']);
+      expect(result.success).toBe(true);
+    });
+
+    test('given multiselect field with no rules, should accept undefined as empty array', () => {
+      const schema = convertToZodSchema([], 'multiselect');
+
+      // undefined preprocessed to [] - optional field with no selection is valid
+      const result = schema.safeParse(undefined);
+      expect(result.success).toBe(true);
+    });
   });
 });

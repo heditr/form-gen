@@ -12,6 +12,7 @@ import { evaluateValidationArrayTemplate } from '@/utils/array-template-evaluato
 import TextField from './text-field';
 import LookupTextField from './lookup-text-field';
 import DropdownField from './dropdown-field';
+import MultiselectField from './multiselect-field';
 import AutocompleteField from './autocomplete-field';
 import CheckboxField from './checkbox-field';
 import RadioField from './radio-field';
@@ -86,6 +87,18 @@ export default function FieldWrapper({
           onLoadDataSource={onLoadDataSource}
           dataSourceCache={dataSourceCache}
           onAutoFillSelection={onAutoFillSelection}
+        />
+      );
+    case 'multiselect':
+      return (
+        <MultiselectField
+          field={field}
+          form={form}
+          formContext={formContext}
+          isDisabled={isDisabled}
+          required={isRequired}
+          onLoadDataSource={onLoadDataSource}
+          dataSourceCache={dataSourceCache}
         />
       );
     case 'autocomplete':

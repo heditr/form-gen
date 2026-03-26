@@ -2,6 +2,8 @@
 
 ## Active Epics
 
+- [Multiselect Field Epic](tasks/multiselect-field-epic.md) - 📋 PLANNED
+
 - [Backend Validation Epic](tasks/backend-validation-epic.md) - 📋 PLANNED
 - [DefaultValue Handlebars Evaluation Epic](tasks/defaultvalue-handlebars-epic.md) - 📋 PLANNED
 - [Demo Page Epic](tasks/demo-page-epic.md) - 📋 PLANNED
