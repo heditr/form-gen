@@ -206,55 +206,6 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
             },
           ],
         },
-        // ── Multiselect demo block ─────────────────────────────────────────
-        {
-          id: 'onboarding-services',
-          title: 'Onboarding Services',
-          description:
-            'Select the services and onboarding regions that apply to this case (multiselect demo).',
-          fields: [
-            {
-              id: 'onboardingCountries',
-              type: 'multiselect',
-              label: 'Onboarding Countries',
-              description:
-                'Countries where onboarding is required — at least one must be selected.',
-              items: [
-                { label: 'United States', value: 'US' },
-                { label: 'Canada', value: 'CA' },
-                { label: 'United Kingdom', value: 'UK' },
-                { label: 'Australia', value: 'AU' },
-                { label: 'Germany', value: 'DE' },
-                { label: 'France', value: 'FR' },
-                { label: 'Japan', value: 'JP' },
-                { label: 'Singapore', value: 'SG' },
-                { label: 'Brazil', value: 'BR' },
-                { label: 'India', value: 'IN' },
-              ],
-              validation: [
-                {
-                  type: 'required',
-                  message: 'At least one onboarding country is required',
-                },
-              ],
-            },
-            {
-              id: 'applicableServices',
-              type: 'multiselect',
-              label: 'Applicable Services',
-              description: 'Optionally select the services required for this entity.',
-              items: [
-                { label: 'KYC Verification', value: 'kyc' },
-                { label: 'AML Screening', value: 'aml' },
-                { label: 'Document Collection', value: 'docs' },
-                { label: 'Credit Assessment', value: 'credit' },
-                { label: 'Source of Funds Review', value: 'sof' },
-                { label: 'PEP / Sanctions Check', value: 'pep' },
-              ],
-              validation: [],
-            },
-          ],
-        },
         {
           id: 'manual-lookup-demo',
           title: 'Manual Lookup Resilience Demo',
@@ -848,6 +799,7 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
           title: 'Contact Information',
           description: 'Additional contact details (opens in popin dialog)',
           popin: true,
+          includeInMainValidation: false,
           repeatable: true, // Enable repeatable groups in this popin
           layout: {
             mode: 'grid',

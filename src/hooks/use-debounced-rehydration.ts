@@ -11,7 +11,7 @@ import { useMutation } from '@tanstack/react-query';
 import { useDispatch } from 'react-redux';
 import { createError } from 'error-causes';
 import type { CaseContext, RulesObject } from '@/types/form-descriptor';
-import { triggerRehydration, applyRulesUpdate } from '@/store/form-dux';
+import { triggerRehydration, applyRulesUpdate, updateCaseContextValues } from '@/store/form-dux';
 import type { AppDispatch } from '@/store/store';
 
 /**
@@ -111,6 +111,10 @@ export function useDebouncedRehydration() {
   // Create debounced mutate function
   const debouncedMutate = useCallback(
     (caseContext: CaseContext) => {
+      // Keep Redux caseContext synchronized with the latest discriminant-driven context.
+      // This ensures validation remount keys and template evaluation use current context.
+      dispatch(updateCaseContextValues({ caseContext }));
+
       // Serialize context for comparison
       const contextString = JSON.stringify(caseContext);
       
@@ -159,7 +163,7 @@ export function useDebouncedRehydration() {
       // Store the timeout ID so we can verify it's still active when it fires
       timeoutRef.current = timeoutId;
     },
-    [] // No dependencies - function is stable
+    [dispatch] // Depends on stable Redux dispatch function
   );
 
 

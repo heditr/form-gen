@@ -23,6 +23,7 @@ export interface UseFormDescriptorOptions {
   savedFormData?: Partial<FormData>; // Form data from Redux to restore on remount
   caseContext?: CaseContext; // Case context for template evaluation
   formData?: Partial<FormData>; // Current form data for template evaluation
+  validationScope?: 'main' | 'popin'; // Validation/default extraction scope
 }
 
 export interface UseFormDescriptorReturn {
@@ -45,19 +46,24 @@ export function useFormDescriptor(
   descriptor: GlobalFormDescriptor | null,
   options: UseFormDescriptorOptions = {}
 ): UseFormDescriptorReturn {
-  const { savedFormData, caseContext = {}, formData: contextFormData = {} } = options;
+  const {
+    savedFormData,
+    caseContext = {},
+    formData: contextFormData = {},
+    validationScope = 'main',
+  } = options;
 
   // Build form context for template evaluation
   const formContext: FormContext = useMemo(() => ({
-    caseContext,
+    caseContext: caseContext as unknown as FormContext,
     formData: contextFormData,
     ...contextFormData, // Also allow direct access to form values
   }), [caseContext, contextFormData]);
 
   // Extract default values from descriptor with context for template evaluation
   const defaultValues = useMemo(
-    () => extractDefaultValues(descriptor, formContext),
-    [descriptor, formContext]
+    () => extractDefaultValues(descriptor, formContext, validationScope),
+    [descriptor, formContext, validationScope]
   );
 
   // Identify fields with template defaultValues (need to be re-evaluated when context changes)
@@ -110,7 +116,10 @@ export function useFormDescriptor(
   }, [defaultValues, savedFormData, fieldsWithTemplateDefaults]);
 
   // Build Zod schema from descriptor
-  const zodSchema = useMemo(() => buildZodSchemaFromDescriptor(descriptor, formContext), [descriptor, formContext]);
+  const zodSchema = useMemo(
+    () => buildZodSchemaFromDescriptor(descriptor, formContext, validationScope),
+    [descriptor, formContext, validationScope]
+  );
 
   // Initialize react-hook-form with Zod resolver
   const form = useForm<FieldValues>({

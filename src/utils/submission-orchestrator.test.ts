@@ -42,6 +42,7 @@ describe('submission orchestrator', () => {
 
       const mockElement = document.createElement('div');
       mockElement.id = 'email';
+      mockElement.scrollIntoView = vi.fn();
       vi.mocked(document.querySelector).mockReturnValue(mockElement);
 
       scrollToFirstError(errors);
@@ -217,7 +218,20 @@ describe('submission orchestrator', () => {
       } as unknown as UseFormReturn<MockFormValues>;
 
       const descriptor: GlobalFormDescriptor = {
-        blocks: [],
+        blocks: [
+          {
+            id: 'main-block',
+            title: 'Main',
+            fields: [
+              {
+                id: 'email',
+                type: 'text',
+                label: 'Email',
+                validation: [{ type: 'required', message: 'Email is required' }],
+              },
+            ],
+          },
+        ],
         submission: {
           url: '/api/submit',
           method: 'POST',
@@ -290,7 +304,84 @@ describe('submission orchestrator', () => {
       await submitHandler();
 
       expect(mockOnSuccess).not.toHaveBeenCalled();
-      expect(mockElement.scrollIntoView).toHaveBeenCalled();
+      expect(document.querySelector).toHaveBeenCalledWith('[name="email"]');
+      expect(mockOnError).toHaveBeenCalled();
+    });
+
+    test('given onInvalid only contains inactive block errors, should continue submission', async () => {
+      const errors: FieldErrors<MockFormValues> = {
+        contactEmail: { type: 'required', message: 'Contact email is required' },
+      };
+
+      const mockForm = {
+        handleSubmit: vi.fn((onValid, onInvalid) => async () => {
+          await onInvalid(errors);
+        }),
+        formState: {
+          errors,
+        },
+        getValues: vi.fn(() => ({ email: 'main@example.com' })),
+      } as unknown as UseFormReturn<MockFormValues>;
+
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'main-block',
+            title: 'Main',
+            fields: [
+              {
+                id: 'email',
+                type: 'text',
+                label: 'Email',
+                validation: [{ type: 'required', message: 'Email is required' }],
+              },
+            ],
+          },
+          {
+            id: 'popin-block',
+            title: 'Popin',
+            popin: true,
+            includeInMainValidation: false,
+            fields: [
+              {
+                id: 'contactEmail',
+                type: 'text',
+                label: 'Contact Email',
+                validation: [{ type: 'required', message: 'Contact email is required' }],
+              },
+            ],
+          },
+        ],
+        submission: {
+          url: '/api/submit',
+          method: 'POST',
+        },
+      };
+
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ success: true }),
+      });
+
+      const orchestrator = createSubmissionOrchestrator();
+      const mockSetError = vi.fn();
+      const mockOnSuccess = vi.fn();
+      const mockOnError = vi.fn();
+
+      const submitHandler = orchestrator.createSubmitHandler(mockForm, descriptor, {
+        setError: mockSetError,
+        onSuccess: mockOnSuccess,
+        onError: mockOnError,
+      });
+
+      await submitHandler();
+
+      expect(global.fetch).toHaveBeenCalled();
+      expect(mockOnSuccess).toHaveBeenCalled();
+      expect(mockOnError).not.toHaveBeenCalled();
+
+      vi.restoreAllMocks();
     });
 
     test('given backend errors, should map errors to react-hook-form field paths via setError()', async () => {

@@ -848,6 +848,130 @@ describe('form descriptor integration', () => {
     });
   });
 
+  describe('buildZodSchemaFromDescriptor visibility-aware validation', () => {
+    test('given block with includeInMainValidation=false, should exclude it from main schema', () => {
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'main-block',
+            title: 'Main block',
+            fields: [
+              {
+                id: 'mainEmail',
+                type: 'text',
+                label: 'Main email',
+                validation: [{ type: 'required', message: 'Main email is required' }],
+              },
+            ],
+          },
+          {
+            id: 'contact-popin',
+            title: 'Contact popin',
+            popin: true,
+            includeInMainValidation: false,
+            fields: [
+              {
+                id: 'contactEmail',
+                type: 'text',
+                label: 'Contact email',
+                validation: [{ type: 'required', message: 'Contact email is required' }],
+              },
+            ],
+          },
+        ],
+        submission: {
+          url: '/api/submit',
+          method: 'POST',
+        },
+      };
+
+      const schema = buildZodSchemaFromDescriptor(descriptor, {});
+      expect(schema.shape).toHaveProperty('mainEmail');
+      expect(schema.shape).not.toHaveProperty('contactEmail');
+      expect(schema.safeParse({ mainEmail: 'main@example.com' }).success).toBe(true);
+    });
+
+    test('given hidden block with required fields, should skip hidden block fields in schema', () => {
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'visible-block',
+            title: 'Visible block',
+            fields: [
+              {
+                id: 'visibleField',
+                type: 'text',
+                label: 'Visible field',
+                validation: [{ type: 'required', message: 'Visible field is required' }],
+              },
+            ],
+          },
+          {
+            id: 'hidden-block',
+            title: 'Hidden block',
+            status: {
+              hidden: '{{eq "x" "x"}}',
+            },
+            fields: [
+              {
+                id: 'hiddenField',
+                type: 'text',
+                label: 'Hidden field',
+                validation: [{ type: 'required', message: 'Hidden field is required' }],
+              },
+            ],
+          },
+        ],
+        submission: {
+          url: '/api/submit',
+          method: 'POST',
+        },
+      };
+
+      const schema = buildZodSchemaFromDescriptor(descriptor, {});
+      expect(schema.shape).toHaveProperty('visibleField');
+      expect(schema.shape).not.toHaveProperty('hiddenField');
+      expect(schema.safeParse({ visibleField: 'ok' }).success).toBe(true);
+    });
+
+    test('given hidden field in visible block, should skip hidden field from schema', () => {
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'main-block',
+            title: 'Main block',
+            fields: [
+              {
+                id: 'visibleField',
+                type: 'text',
+                label: 'Visible field',
+                validation: [{ type: 'required', message: 'Visible field is required' }],
+              },
+              {
+                id: 'conditionallyHiddenField',
+                type: 'text',
+                label: 'Conditionally hidden field',
+                status: {
+                  hidden: '{{eq "x" "x"}}',
+                },
+                validation: [{ type: 'required', message: 'Conditionally hidden field is required' }],
+              },
+            ],
+          },
+        ],
+        submission: {
+          url: '/api/submit',
+          method: 'POST',
+        },
+      };
+
+      const schema = buildZodSchemaFromDescriptor(descriptor, {});
+      expect(schema.shape).toHaveProperty('visibleField');
+      expect(schema.shape).not.toHaveProperty('conditionallyHiddenField');
+      expect(schema.safeParse({ visibleField: 'ok' }).success).toBe(true);
+    });
+  });
+
   describe('extractDefaultValues with repeatable groups', () => {
     test('given a repeatable block without default values, should initialize as empty array', () => {
       const descriptor: GlobalFormDescriptor = {

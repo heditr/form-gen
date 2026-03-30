@@ -372,6 +372,8 @@ export interface PopinSubmitConfig {
  * @property subFormInstanceId - Optional instance identifier to distinguish multiple uses
  * of the same sub-form template (e.g., incorporation vs onboarding address)
  * @property popin - If true, block is standalone popin (never renders inline, only via button triggers)
+ * @property includeInMainValidation - If false, block is excluded from main-form schema/default extraction.
+ *   This is separate from `popin` so rendering semantics remain independent from validation scope.
  * @property popinLoad - Optional: Load object data when popin opens (merged into formContext)
  * @property popinSubmit - Optional: Call endpoint when validate button clicked, prevent closing on error
  * @property repeatable - If true, block contains repeatable field groups that can be added/removed dynamically
@@ -392,6 +394,7 @@ export interface BlockDescriptor {
   subFormRef?: string;
   subFormInstanceId?: string;
   popin?: boolean;
+  includeInMainValidation?: boolean;
   popinLoad?: PopinLoadConfig;
   popinSubmit?: PopinSubmitConfig;
   repeatable?: boolean;

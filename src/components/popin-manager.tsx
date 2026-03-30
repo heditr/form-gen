@@ -163,6 +163,7 @@ export function PopinManagerProvider({
   const { form: popinForm } = useFormDescriptor(popinDescriptor, {
     caseContext,
     formData: mainForm.getValues(), // Pass main form values for template evaluation
+    validationScope: 'popin',
     // No onDiscriminantChange - popin form values should not sync to Redux
   });
 

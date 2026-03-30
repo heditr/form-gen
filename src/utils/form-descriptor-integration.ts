@@ -12,7 +12,20 @@ import { convertToReactHookFormRules, convertToZodSchema } from './validation-ru
 import { evaluateDefaultValue } from './default-value-evaluator';
 import { evaluateTemplate } from './template-evaluator';
 import type { FormContext } from './template-evaluator';
+import { evaluateHiddenStatus } from './template-evaluator';
 import { evaluateValidationArrayTemplate } from './array-template-evaluator';
+
+type ValidationScope = 'main' | 'popin';
+
+function shouldIncludeBlockInScope(
+  block: BlockDescriptor,
+  scope: ValidationScope
+): boolean {
+  if (scope === 'popin') {
+    return true;
+  }
+  return block.includeInMainValidation !== false;
+}
 
 /**
  * Helper to set a nested value on an object using dot-notation path
@@ -182,7 +195,8 @@ export function buildAutoFillPatchFromSelection({
  */
 export function extractDefaultValues(
   descriptor: GlobalFormDescriptor | null,
-  context: FormContext = {}
+  context: FormContext = {},
+  scope: ValidationScope = 'main'
 ): Partial<FormData> {
   if (!descriptor) {
     return {};
@@ -192,6 +206,10 @@ export function extractDefaultValues(
   const processedRepeatableGroups = new Set<string>();
 
   for (const block of descriptor.blocks) {
+    if (!shouldIncludeBlockInScope(block, scope)) {
+      continue;
+    }
+
     if (isRepeatableBlock(block)) {
       // Handle repeatable blocks - group fields by repeatableGroupId
       const fieldGroups = groupFieldsByRepeatableGroupId(block.fields);
@@ -526,7 +544,8 @@ export function groupFieldsByRepeatableGroupId(
  */
 export function buildZodSchemaFromDescriptor(
   descriptor: GlobalFormDescriptor | null,
-  formContext: FormContext = {}
+  formContext: FormContext = {},
+  scope: ValidationScope = 'main'
 ): z.ZodObject<Record<string, z.ZodTypeAny>> {
   if (!descriptor) {
     return z.object({});
@@ -590,6 +609,15 @@ export function buildZodSchemaFromDescriptor(
   };
 
   for (const block of descriptor.blocks) {
+    if (!shouldIncludeBlockInScope(block, scope)) {
+      continue;
+    }
+
+    // Hidden blocks should not participate in submit-time validation.
+    if (evaluateHiddenStatus(block, formContext)) {
+      continue;
+    }
+
     if (isRepeatableBlock(block)) {
       // Handle repeatable blocks - group fields by repeatableGroupId
       const fieldGroups = groupFieldsByRepeatableGroupId(block.fields);
@@ -606,6 +634,9 @@ export function buildZodSchemaFromDescriptor(
         const groupTree: Record<string, SchemaTreeNode> = {};
         for (const field of fields) {
           if (field.type === 'button') {
+            continue;
+          }
+          if (evaluateHiddenStatus(field, formContext)) {
             continue;
           }
           const baseFieldId = field.id.startsWith(`${groupId}.`)
@@ -646,7 +677,7 @@ export function buildZodSchemaFromDescriptor(
       for (const field of block.fields) {
         // Skip fields that belong to a repeatable group (they're handled above)
         // Skip button fields - they don't have values to validate
-        if (!field.repeatableGroupId && field.type !== 'button') {
+        if (!field.repeatableGroupId && field.type !== 'button' && !evaluateHiddenStatus(field, formContext)) {
           // Type assertion: we've already checked it's not a button
           const fieldType = field.type as Exclude<typeof field.type, 'button'>;
           const fieldRules = evaluateValidationArrayTemplate(field.validation, formContext);

@@ -12,6 +12,8 @@
 
 import type { UseFormReturn, FieldErrors } from 'react-hook-form';
 import { evaluateTemplate } from './template-evaluator';
+import { evaluateHiddenStatus } from './template-evaluator';
+import { isRepeatableBlock, groupFieldsByRepeatableGroupId } from './form-descriptor-integration';
 import { mapBackendErrorsToForm, type BackendError } from './form-descriptor-integration';
 import type {
   GlobalFormDescriptor,
@@ -284,6 +286,71 @@ export interface SubmissionOrchestrator {
   ) => (e?: React.BaseSyntheticEvent) => Promise<void>;
 }
 
+function getActiveValidationTargets(
+  descriptor: GlobalFormDescriptor,
+  formValues: Partial<DescriptorFormData>
+): string[] {
+  const context: FormContext = {
+    ...formValues,
+    formData: formValues,
+  };
+  const targets = new Set<string>();
+
+  for (const block of descriptor.blocks) {
+    if (block.includeInMainValidation === false || evaluateHiddenStatus(block, context)) {
+      continue;
+    }
+
+    if (isRepeatableBlock(block)) {
+      const groups = groupFieldsByRepeatableGroupId(block.fields);
+      for (const [groupId, fields] of Object.entries(groups)) {
+        const hasVisibleField = fields.some(
+          (field) => field.type !== 'button' && !evaluateHiddenStatus(field, context)
+        );
+        if (hasVisibleField) {
+          targets.add(groupId);
+        }
+      }
+      continue;
+    }
+
+    for (const field of block.fields) {
+      if (field.type === 'button' || field.repeatableGroupId || evaluateHiddenStatus(field, context)) {
+        continue;
+      }
+      targets.add(field.id);
+    }
+  }
+
+  return [...targets];
+}
+
+function collectErrorPaths(errors: unknown, prefix: string = ''): string[] {
+  if (!errors || typeof errors !== 'object') {
+    return [];
+  }
+
+  const entries = Object.entries(errors as Record<string, unknown>);
+  const directLeaf = entries.some(([key]) => key === 'message' || key === 'type');
+  if (directLeaf && prefix) {
+    return [prefix];
+  }
+
+  return entries.flatMap(([key, value]) => {
+    const nextPrefix = prefix ? `${prefix}.${key}` : key;
+    return collectErrorPaths(value, nextPrefix);
+  });
+}
+
+function isPathActive(path: string, targets: string[]): boolean {
+  return targets.some(
+    (target) =>
+      path === target ||
+      path.startsWith(`${target}.`) ||
+      path.startsWith(`${target}[`)
+  );
+}
+
 /**
  * Create a new submission orchestrator instance
  * 
@@ -297,100 +364,115 @@ export function createSubmissionOrchestrator(): SubmissionOrchestrator {
   ) => {
     const { setError, onSuccess, onError } = options;
     const { submission } = descriptor;
+    const submitValidData = async (validData: T) => {
+      try {
+        const formValues = validData as Partial<DescriptorFormData>;
+        
+        // Check if form data contains File objects (pending uploads)
+        const containsFiles = hasFileObjects(formValues);
+
+        // Evaluate payload template
+        const evaluatedPayload = evaluatePayloadTemplate(
+          submission.payloadTemplate,
+          formValues
+        );
+
+        // Construct request body based on whether files are present
+        let requestBody: string | globalThis.FormData;
+        if (containsFiles) {
+          // Use multipart/form-data for file uploads
+          requestBody = constructFormData(formValues, evaluatedPayload);
+        } else {
+          // Use JSON for non-file submissions
+          // If evaluated payload is an object, stringify it; otherwise use as-is
+          requestBody = typeof evaluatedPayload === 'string'
+            ? evaluatedPayload
+            : JSON.stringify(evaluatedPayload);
+        }
+
+        // Construct request
+        const requestInit = constructSubmissionRequest(
+          submission,
+          requestBody,
+          containsFiles
+        );
+
+        // Make submission request
+        const response = await fetch(submission.url, requestInit);
+
+        // Handle response
+        if (response.ok) {
+          const result = await response.json();
+          if (onSuccess) {
+            onSuccess(result);
+          }
+        } else {
+          // Handle error response
+          let errorResponse: BackendErrorResponse;
+          try {
+            errorResponse = await response.json();
+          } catch {
+            // If response is not JSON, create a generic error
+            errorResponse = {
+              error: `Submission failed with status ${response.status}`,
+            };
+          }
+
+          // Map backend errors to react-hook-form
+          if (errorResponse.errors && Array.isArray(errorResponse.errors)) {
+            const mappedErrors = mapBackendErrorsToForm(errorResponse.errors);
+            for (const { field, error } of mappedErrors) {
+              setError(field, {
+                type: error.type || 'server',
+                message: error.message || 'Validation error',
+              });
+            }
+          }
+
+          // Scroll to first error if there are field errors
+          if (errorResponse.errors && errorResponse.errors.length > 0) {
+            const errors = {} as FieldErrors<T>;
+            for (const backendError of errorResponse.errors) {
+              (errors as Record<string, { type: string; message: string }>)[backendError.field] = {
+                type: 'server',
+                message: backendError.message,
+              };
+            }
+            scrollToFirstError(errors);
+          }
+
+          if (onError) {
+            onError(errorResponse);
+          }
+        }
+      } catch (error) {
+        // Handle network or other errors
+        const errorObj = error instanceof Error ? error : new Error(String(error));
+        if (onError) {
+          onError(errorObj);
+        }
+      }
+    };
 
     return form.handleSubmit(
       // onValid - called when validation passes
-      async (validData: T) => {
-        try {
-          const formValues = validData as Partial<DescriptorFormData>;
-          
-          // Check if form data contains File objects (pending uploads)
-          const containsFiles = hasFileObjects(formValues);
-
-          // Evaluate payload template
-          const evaluatedPayload = evaluatePayloadTemplate(
-            submission.payloadTemplate,
-            formValues
-          );
-
-          // Construct request body based on whether files are present
-          let requestBody: string | globalThis.FormData;
-          if (containsFiles) {
-            // Use multipart/form-data for file uploads
-            requestBody = constructFormData(formValues, evaluatedPayload);
-          } else {
-            // Use JSON for non-file submissions
-            // If evaluated payload is an object, stringify it; otherwise use as-is
-            requestBody = typeof evaluatedPayload === 'string'
-              ? evaluatedPayload
-              : JSON.stringify(evaluatedPayload);
-          }
-
-          // Construct request
-          const requestInit = constructSubmissionRequest(
-            submission,
-            requestBody,
-            containsFiles
-          );
-
-          // Make submission request
-          const response = await fetch(submission.url, requestInit);
-
-          // Handle response
-          if (response.ok) {
-            const result = await response.json();
-            if (onSuccess) {
-              onSuccess(result);
-            }
-          } else {
-            // Handle error response
-            let errorResponse: BackendErrorResponse;
-            try {
-              errorResponse = await response.json();
-            } catch {
-              // If response is not JSON, create a generic error
-              errorResponse = {
-                error: `Submission failed with status ${response.status}`,
-              };
-            }
-
-            // Map backend errors to react-hook-form
-            if (errorResponse.errors && Array.isArray(errorResponse.errors)) {
-              const mappedErrors = mapBackendErrorsToForm(errorResponse.errors);
-              for (const { field, error } of mappedErrors) {
-                setError(field, {
-                  type: error.type || 'server',
-                  message: error.message || 'Validation error',
-                });
-              }
-            }
-
-            // Scroll to first error if there are field errors
-            if (errorResponse.errors && errorResponse.errors.length > 0) {
-              const errors = {} as FieldErrors<T>;
-              for (const backendError of errorResponse.errors) {
-                (errors as Record<string, { type: string; message: string }>)[backendError.field] = {
-                  type: 'server',
-                  message: backendError.message,
-                };
-              }
-              scrollToFirstError(errors);
-            }
-
-            if (onError) {
-              onError(errorResponse);
-            }
-          }
-        } catch (error) {
-          // Handle network or other errors
-          const errorObj = error instanceof Error ? error : new Error(String(error));
-          if (onError) {
-            onError(errorObj);
-          }
-        }
-      },
+      submitValidData,
       // onInvalid - called when validation fails
-      (errors: FieldErrors<T>) => {
+      async (errors: FieldErrors<T>) => {
+        const activeTargets = getActiveValidationTargets(
+          descriptor,
+          form.getValues() as Partial<DescriptorFormData>
+        );
+        const errorPaths = collectErrorPaths(errors);
+        const hasActiveErrors = errorPaths.some((path) => isPathActive(path, activeTargets));
+
+        // If RHF only reported errors from inactive paths (e.g. popin/hidden fields),
+        // continue with submission using current values.
+        if (!hasActiveErrors) {
+          await submitValidData(form.getValues());
+          return;
+        }
+
         // Scroll to first error
         scrollToFirstError(errors);
 

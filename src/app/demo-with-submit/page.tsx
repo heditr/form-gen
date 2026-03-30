@@ -19,6 +19,8 @@ import { updateCaseContext, identifyDiscriminantFields, hasContextChanged } from
 import { useFormDescriptor } from '@/hooks/use-form-descriptor';
 import { createSubmissionOrchestrator, evaluatePayloadTemplate, constructSubmissionRequest, serializeFormValues } from '@/utils/submission-orchestrator';
 import type { GlobalFormDescriptor, FormData, CaseContext, BlockDescriptor, FieldDescriptor } from '@/types/form-descriptor';
+import { evaluateValidationArrayTemplate } from '@/utils/array-template-evaluator';
+import type { FormContext } from '@/utils/template-evaluator';
 import { Button } from '@/components/ui/button';
 import FormPresentation from '@/components/form-presentation';
 import FormValuesWatcher from '@/components/form-values-watcher';
@@ -505,6 +507,34 @@ function FormContainerWithSubmissionWithHook({
 
   const isRehydrating = isRehydratingFromHook || isRehydratingFromRedux;
 
+  // Force form remount when validation/context changes so RHF picks up fresh resolver rules.
+  const formKey = useMemo(() => {
+    if (!mergedDescriptor) {
+      return 'no-descriptor';
+    }
+    const validationHash = mergedDescriptor.blocks
+      .flatMap((block) => block.fields)
+      .map((field) => {
+        const evaluatedRules = evaluateValidationArrayTemplate(
+          field.validation,
+          { caseContext: caseContext as unknown as FormContext } as FormContext
+        );
+        const ruleTypes = evaluatedRules
+          .map((rule) => {
+            if (rule.type === 'pattern') {
+              const patternValue = typeof rule.value === 'string' ? rule.value : rule.value.toString();
+              return `${rule.type}:${patternValue}`;
+            }
+            return `${rule.type}:${'value' in rule ? rule.value : ''}`;
+          })
+          .join(',') || 'none';
+        return `${field.id}:${ruleTypes}`;
+      })
+      .join('|');
+    const contextHash = JSON.stringify(caseContext);
+    return `form-${validationHash}-ctx-${contextHash}`;
+  }, [mergedDescriptor, caseContext]);
+
   const syncFormData = useCallback(
     (formData: Partial<FormData>) => {
       dispatch(syncFormDataToContext({ formData: serializeFormValues(formData) }));
@@ -528,6 +558,7 @@ function FormContainerWithSubmissionWithHook({
 
   return (
     <FormContainerWithSubmissionComponent
+      key={formKey}
       mergedDescriptor={mergedDescriptor}
       visibleBlocks={visibleBlocks}
       visibleFields={visibleFields}
