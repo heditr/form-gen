@@ -435,6 +435,19 @@ export interface SubmissionConfig {
 }
 
 /**
+ * Draft autosave configuration
+ *
+ * Extends SubmissionConfig with an optional debounce interval. When present on a
+ * descriptor, the form engine will debounce field changes and issue a draft-save
+ * HTTP request whenever the current form data passes validation.
+ *
+ * @property debounceMs - Milliseconds to debounce between draft saves (default: 1000)
+ */
+export interface DraftConfig extends SubmissionConfig {
+  debounceMs?: number;
+}
+
+/**
  * Global form descriptor
  * 
  * The root descriptor containing all blocks, fields, and submission configuration.
@@ -455,6 +468,7 @@ export interface GlobalFormDescriptor {
   version?: string;
   blocks: BlockDescriptor[];
   submission: SubmissionConfig;
+  draft?: DraftConfig;
 }
 
 /**
@@ -480,6 +494,7 @@ export interface SubFormDescriptor {
   version: string;
   blocks: BlockDescriptor[];
   submission?: SubmissionConfig;
+  draft?: DraftConfig;
 }
 
 /**

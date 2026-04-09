@@ -17,6 +17,7 @@ import type { RootState } from '@/store/form-dux';
 import type { AppDispatch } from '@/store/store';
 import { Button } from '@/components/ui/button';
 import { createSubmissionOrchestrator, evaluatePayloadTemplate, serializeFormValues } from '@/utils/submission-orchestrator';
+import { useDraftSave } from '@/hooks/use-draft-save';
 import type { FormData, GlobalFormDescriptor, BlockDescriptor, FieldDescriptor, CaseContext, CasePrefill } from '@/types/form-descriptor';
 import { useFormDescriptor } from '@/hooks/use-form-descriptor';
 import { updateCaseContext, identifyDiscriminantFields, hasContextChanged } from '@/utils/context-extractor';
@@ -433,6 +434,11 @@ function FormContainerWithSubmissionComponent({
     formData: savedFormData,
   });
 
+  const { saveDraft } = useDraftSave({
+    form,
+    draftConfig: mergedDescriptor?.draft,
+  });
+
   const orchestrator = useMemo(() => createSubmissionOrchestrator(), []);
 
   const handleSubmitWithTracking = useCallback(async (e?: React.BaseSyntheticEvent) => {
@@ -553,6 +559,7 @@ function FormContainerWithSubmissionComponent({
       caseContext={caseContext}
       descriptor={mergedDescriptor}
       onDiscriminantChange={handleDiscriminantChange}
+      onFormChange={saveDraft}
     >
       {(formContext) => (
         <PopinManagerProvider

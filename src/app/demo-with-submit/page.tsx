@@ -14,6 +14,7 @@ import { useGlobalDescriptor } from '@/hooks/use-form-query';
 import { getFormState, getVisibleBlocks, getVisibleFields, syncFormDataToContext, type RootState } from '@/store/form-dux';
 import { fetchDataSourceThunk } from '@/store/form-thunks';
 import { useDebouncedRehydration } from '@/hooks/use-debounced-rehydration';
+import { useDraftSave } from '@/hooks/use-draft-save';
 import type { AppDispatch } from '@/store/store';
 import { updateCaseContext, identifyDiscriminantFields, hasContextChanged } from '@/utils/context-extractor';
 import { useFormDescriptor } from '@/hooks/use-form-descriptor';
@@ -327,6 +328,10 @@ function FormContainerWithSubmissionComponent({
 
   // Create submission orchestrator
   const orchestrator = useMemo(() => createSubmissionOrchestrator(), []);
+  const { saveDraft } = useDraftSave({
+    form,
+    draftConfig: demoDescriptor?.draft,
+  });
 
   // Create submit handler with payload/response tracking
   const handleSubmitWithTracking = useCallback(async (e?: React.BaseSyntheticEvent) => {
@@ -457,6 +462,7 @@ function FormContainerWithSubmissionComponent({
       caseContext={caseContext}
       descriptor={mergedDescriptor}
       onDiscriminantChange={handleDiscriminantChange}
+      onFormChange={saveDraft}
     >
       {(formContext) => (
         <PopinManagerProvider

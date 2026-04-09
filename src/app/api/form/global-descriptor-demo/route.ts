@@ -925,6 +925,11 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
         url: '/api/submit',
         method: 'POST',
       },
+      draft: {
+        url: '/api/form/draft',
+        method: 'PUT',
+        debounceMs: 1000,
+      },
     };
 
     // Resolve repeatable block references if any are present

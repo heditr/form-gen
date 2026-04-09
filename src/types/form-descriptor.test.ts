@@ -15,6 +15,7 @@ import type {
   CaseContext,
   RulesObject,
   FormData,
+  DraftConfig,
   // Intermediate helper types (exported for testing)
   FieldValueType,
   AllFields,
@@ -614,6 +615,71 @@ describe('form-descriptor types', () => {
       expect(subForm.version).toBe('1.0.0');
       expect(subForm.submission).toBeDefined();
       expect(subForm.submission?.url).toBe('/api/popin-submit');
+    });
+  });
+
+  describe('DraftConfig', () => {
+    test('given a draft config with all fields, should support same shape as SubmissionConfig plus debounceMs', () => {
+      const draft: DraftConfig = {
+        url: '/api/draft',
+        method: 'PUT',
+        payloadTemplate: '{"data": {{formData}}}',
+        headers: { 'X-Draft': 'true' },
+        auth: { type: 'bearer', token: 'tok' },
+        debounceMs: 1000,
+      };
+
+      expect(draft.url).toBe('/api/draft');
+      expect(draft.method).toBe('PUT');
+      expect(draft.debounceMs).toBe(1000);
+    });
+
+    test('given a minimal draft config, should require only url and method', () => {
+      const draft: DraftConfig = {
+        url: '/api/draft',
+        method: 'POST',
+      };
+
+      expect(draft.url).toBe('/api/draft');
+      expect(draft.debounceMs).toBeUndefined();
+    });
+  });
+
+  describe('GlobalFormDescriptor with draft', () => {
+    test('given a descriptor with optional draft config, should accept draft alongside submission', () => {
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [],
+        submission: { url: '/api/submit', method: 'POST' },
+        draft: { url: '/api/draft', method: 'PUT', debounceMs: 500 },
+      };
+
+      expect(descriptor.draft).toBeDefined();
+      expect(descriptor.draft?.url).toBe('/api/draft');
+      expect(descriptor.draft?.debounceMs).toBe(500);
+    });
+
+    test('given a descriptor without draft config, should remain valid', () => {
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [],
+        submission: { url: '/api/submit', method: 'POST' },
+      };
+
+      expect(descriptor.draft).toBeUndefined();
+    });
+  });
+
+  describe('SubFormDescriptor with draft', () => {
+    test('given a sub-form with draft config, should accept optional draft', () => {
+      const subForm: SubFormDescriptor = {
+        id: 'addr',
+        title: 'Address',
+        version: '1.0.0',
+        blocks: [],
+        draft: { url: '/api/draft-addr', method: 'PATCH' },
+      };
+
+      expect(subForm.draft).toBeDefined();
+      expect(subForm.draft?.url).toBe('/api/draft-addr');
     });
   });
 

@@ -18,6 +18,7 @@ export interface FormValuesWatcherProps {
   caseContext: CaseContext;
   descriptor: GlobalFormDescriptor | null;
   onDiscriminantChange?: (formData: Partial<FormData>) => void;
+  onFormChange?: (formData: Partial<FormData>) => void;
   children: (formContext: FormContext) => React.ReactNode;
 }
 
@@ -26,16 +27,13 @@ export default function FormValuesWatcher({
   caseContext,
   descriptor,
   onDiscriminantChange,
+  onFormChange,
   children,
 }: FormValuesWatcherProps) {
   const watchedValues = useWatch({ control: form.control });
   const previousValuesRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!descriptor || !onDiscriminantChange) {
-      return;
-    }
-
     const currentValues = watchedValues ?? {};
     const currentValuesString = JSON.stringify(currentValues);
 
@@ -45,9 +43,21 @@ export default function FormValuesWatcher({
 
     previousValuesRef.current = currentValuesString;
     const formData = currentValues as Partial<FormData>;
-    const id = setTimeout(() => onDiscriminantChange(formData), 0);
-    return () => clearTimeout(id);
+
+    if (descriptor && onDiscriminantChange) {
+      const id = setTimeout(() => onDiscriminantChange(formData), 0);
+      // eslint-disable-next-line consistent-return
+      return () => clearTimeout(id);
+    }
   }, [descriptor, watchedValues, onDiscriminantChange]);
+
+  useEffect(() => {
+    if (!onFormChange) return;
+
+    const currentValues = watchedValues ?? {};
+    const formData = currentValues as Partial<FormData>;
+    onFormChange(formData);
+  }, [watchedValues, onFormChange]);
 
   const formContext: FormContext = useMemo(
     () => ({

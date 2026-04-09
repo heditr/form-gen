@@ -14,10 +14,12 @@ import {
   hasFileObjects,
   constructFormData,
   serializeFormValues,
+  submitDraft,
 } from './submission-orchestrator';
 import type {
   GlobalFormDescriptor,
   SubmissionConfig,
+  DraftConfig,
   FormData,
 } from '@/types/form-descriptor';
 import type { UseFormReturn, FieldErrors } from 'react-hook-form';
@@ -758,6 +760,170 @@ describe('submission orchestrator', () => {
       
       // Verify body is JSON string
       expect(typeof requestInit.body).toBe('string');
+
+      vi.restoreAllMocks();
+    });
+  });
+
+  describe('submitDraft', () => {
+    test('given valid form data and draft config, should send HTTP request to draft URL', async () => {
+      const draftConfig: DraftConfig = {
+        url: '/api/draft',
+        method: 'PUT',
+      };
+
+      const formValues: Partial<FormData> = {
+        email: 'test@example.com',
+        name: 'John',
+      };
+
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ saved: true }),
+      });
+
+      const onSuccess = vi.fn();
+      const onError = vi.fn();
+
+      await submitDraft({ draftConfig, formValues, onSuccess, onError });
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/draft',
+        expect.objectContaining({ method: 'PUT' })
+      );
+      expect(onSuccess).toHaveBeenCalledWith({ saved: true });
+      expect(onError).not.toHaveBeenCalled();
+
+      vi.restoreAllMocks();
+    });
+
+    test('given draft config with payloadTemplate, should evaluate template before sending', async () => {
+      const draftConfig: DraftConfig = {
+        url: '/api/draft',
+        method: 'POST',
+        payloadTemplate: '{"email": "{{email}}"}',
+      };
+
+      const formValues: Partial<FormData> = {
+        email: 'test@example.com',
+        name: 'John',
+      };
+
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ saved: true }),
+      });
+
+      await submitDraft({ draftConfig, formValues });
+
+      const callArgs = vi.mocked(global.fetch).mock.calls[0];
+      const requestInit = callArgs[1] as RequestInit;
+      const body = JSON.parse(requestInit.body as string);
+      expect(body).toEqual({ email: 'test@example.com' });
+
+      vi.restoreAllMocks();
+    });
+
+    test('given draft config with auth, should include authorization headers', async () => {
+      const draftConfig: DraftConfig = {
+        url: '/api/draft',
+        method: 'POST',
+        auth: { type: 'bearer', token: 'draft-token' },
+      };
+
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ saved: true }),
+      });
+
+      await submitDraft({ draftConfig, formValues: { email: 'a@b.com' } });
+
+      const callArgs = vi.mocked(global.fetch).mock.calls[0];
+      const requestInit = callArgs[1] as RequestInit;
+      const headers = requestInit.headers as Record<string, string>;
+      expect(headers['Authorization']).toBe('Bearer draft-token');
+
+      vi.restoreAllMocks();
+    });
+
+    test('given backend error response, should call onError with response', async () => {
+      const draftConfig: DraftConfig = {
+        url: '/api/draft',
+        method: 'POST',
+      };
+
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 422,
+        json: async () => ({ error: 'Invalid data' }),
+      });
+
+      const onSuccess = vi.fn();
+      const onError = vi.fn();
+
+      await submitDraft({
+        draftConfig,
+        formValues: { email: 'bad' },
+        onSuccess,
+        onError,
+      });
+
+      expect(onSuccess).not.toHaveBeenCalled();
+      expect(onError).toHaveBeenCalledWith(expect.objectContaining({ error: 'Invalid data' }));
+
+      vi.restoreAllMocks();
+    });
+
+    test('given network failure, should call onError with Error object', async () => {
+      const draftConfig: DraftConfig = {
+        url: '/api/draft',
+        method: 'POST',
+      };
+
+      global.fetch = vi.fn().mockRejectedValue(new Error('Network error'));
+
+      const onSuccess = vi.fn();
+      const onError = vi.fn();
+
+      await submitDraft({
+        draftConfig,
+        formValues: { email: 'a@b.com' },
+        onSuccess,
+        onError,
+      });
+
+      expect(onSuccess).not.toHaveBeenCalled();
+      expect(onError).toHaveBeenCalledWith(expect.any(Error));
+
+      vi.restoreAllMocks();
+    });
+
+    test('given non-JSON error response, should call onError with generic message', async () => {
+      const draftConfig: DraftConfig = {
+        url: '/api/draft',
+        method: 'POST',
+      };
+
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+        json: async () => { throw new Error('not json'); },
+      });
+
+      const onError = vi.fn();
+
+      await submitDraft({
+        draftConfig,
+        formValues: { email: 'a@b.com' },
+        onError,
+      });
+
+      expect(onError).toHaveBeenCalledWith(
+        expect.objectContaining({ error: expect.stringContaining('500') })
+      );
 
       vi.restoreAllMocks();
     });

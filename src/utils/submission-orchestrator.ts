@@ -18,6 +18,7 @@ import { mapBackendErrorsToForm, type BackendError } from './form-descriptor-int
 import type {
   GlobalFormDescriptor,
   SubmissionConfig,
+  DraftConfig,
   FormData as DescriptorFormData,
 } from '@/types/form-descriptor';
 import type { FormContext } from './template-evaluator';
@@ -487,4 +488,72 @@ export function createSubmissionOrchestrator(): SubmissionOrchestrator {
   return {
     createSubmitHandler,
   };
+}
+
+/**
+ * Options for a standalone draft submission
+ */
+export interface SubmitDraftOptions {
+  draftConfig: DraftConfig;
+  formValues: Partial<DescriptorFormData>;
+  onSuccess?: (response: unknown) => void;
+  onError?: (error: Error | BackendErrorResponse) => void;
+}
+
+/**
+ * Submit form values as a draft save, reusing the same request-building
+ * pipeline as the main submission path. Unlike createSubmitHandler this is
+ * a one-shot function (no RHF handleSubmit gate) because the caller is
+ * responsible for deciding whether the data is valid before invoking.
+ */
+export async function submitDraft({
+  draftConfig,
+  formValues,
+  onSuccess,
+  onError,
+}: SubmitDraftOptions): Promise<void> {
+  try {
+    const containsFiles = hasFileObjects(formValues);
+    const evaluatedPayload = evaluatePayloadTemplate(
+      draftConfig.payloadTemplate,
+      formValues
+    );
+
+    let requestBody: string | globalThis.FormData;
+    if (containsFiles) {
+      requestBody = constructFormData(formValues, evaluatedPayload);
+    } else {
+      requestBody =
+        typeof evaluatedPayload === 'string'
+          ? evaluatedPayload
+          : JSON.stringify(evaluatedPayload);
+    }
+
+    const requestInit = constructSubmissionRequest(
+      draftConfig,
+      requestBody,
+      containsFiles
+    );
+
+    const response = await fetch(draftConfig.url, requestInit);
+
+    if (response.ok) {
+      const result = await response.json();
+      onSuccess?.(result);
+    } else {
+      let errorResponse: BackendErrorResponse;
+      try {
+        errorResponse = await response.json();
+      } catch {
+        errorResponse = {
+          error: `Draft save failed with status ${response.status}`,
+        };
+      }
+      onError?.(errorResponse);
+    }
+  } catch (error) {
+    const errorObj =
+      error instanceof Error ? error : new Error(String(error));
+    onError?.(errorObj);
+  }
 }

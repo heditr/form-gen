@@ -15,6 +15,7 @@ import { ClientOnlyDevTool } from '@/components/client-only-devtool';
 import type { GlobalFormDescriptor, BlockDescriptor, FieldDescriptor, FormData, CaseContext } from '@/types/form-descriptor';
 import { useFormDescriptor } from '@/hooks/use-form-descriptor';
 import { useDebouncedRehydration } from '@/hooks/use-debounced-rehydration';
+import { useDraftSave } from '@/hooks/use-draft-save';
 import {
   getVisibleBlocks,
   getVisibleFields,
@@ -110,12 +111,16 @@ function FormInner({
   // Pass savedFormData to restore form values from Redux
   // Pass caseContext and formData for template evaluation in default values
   const { form } = useFormDescriptor(mergedDescriptor, {
-    savedFormData, // Restore form values from Redux when form remounts
-    caseContext, // Case context for template evaluation
-    formData: savedFormData, // Current form data for template evaluation
+    savedFormData,
+    caseContext,
+    formData: savedFormData,
   });
 
-  // Prepare static props for presentation (formContext comes from FormValuesWatcher)
+  const { saveDraft } = useDraftSave({
+    form,
+    draftConfig: mergedDescriptor?.draft,
+  });
+
   const presentationProps = useMemo(
     () => ({
       form,
@@ -138,6 +143,7 @@ function FormInner({
       caseContext={caseContext}
       descriptor={mergedDescriptor}
       onDiscriminantChange={handleDiscriminantChange}
+      onFormChange={saveDraft}
     >
       {(formContext) => (
         <PopinManagerProvider
