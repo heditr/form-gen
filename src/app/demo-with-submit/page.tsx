@@ -513,7 +513,8 @@ function FormContainerWithSubmissionWithHook({
 
   const isRehydrating = isRehydratingFromHook || isRehydratingFromRedux;
 
-  // Force form remount when validation/context changes so RHF picks up fresh resolver rules.
+  // Force form remount when validation rules change so RHF picks up fresh resolver rules.
+  // Avoid remounting on every context update because it can cancel pending debounced draft saves.
   const formKey = useMemo(() => {
     if (!mergedDescriptor) {
       return 'no-descriptor';
@@ -537,8 +538,7 @@ function FormContainerWithSubmissionWithHook({
         return `${field.id}:${ruleTypes}`;
       })
       .join('|');
-    const contextHash = JSON.stringify(caseContext);
-    return `form-${validationHash}-ctx-${contextHash}`;
+    return `form-${validationHash}`;
   }, [mergedDescriptor, caseContext]);
 
   const syncFormData = useCallback(

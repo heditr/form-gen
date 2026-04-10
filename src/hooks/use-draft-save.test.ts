@@ -205,6 +205,35 @@ describe('useDraftSave', () => {
     expect(submitDraft).not.toHaveBeenCalled();
   });
 
+  test('given pending debounce when hook unmounts, should flush submitDraft', async () => {
+    const form = createMockForm();
+    const draftConfig: DraftConfig = { url: '/api/draft', method: 'POST' };
+
+    const { result, unmount } = renderHook(() => useDraftSave({ form, draftConfig }));
+
+    await act(async () => {
+      result.current.saveDraft({ email: 'a@b.com' } as Partial<FormData>);
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(500);
+    });
+
+    expect(submitDraft).not.toHaveBeenCalled();
+
+    await act(async () => {
+      unmount();
+    });
+
+    // Flush microtasks from attemptDraftSave (await trigger → submitDraft)
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(submitDraft).toHaveBeenCalledTimes(1);
+    expect(form.trigger).toHaveBeenCalledWith(['email']);
+  });
+
   test('given nested dirty fields, should trigger only those field paths', async () => {
     const form = createMockForm({
       dirtyFields: { address: { city: true, zip: true }, name: true },

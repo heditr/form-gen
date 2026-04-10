@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Draft mode adds descriptor-driven autosave for the **main form**. On each main-form value change, the engine can send a debounced HTTP draft request, but only when current form data is valid.
+Draft mode adds descriptor-driven autosave for the **main form**. On each main-form value change, the engine can send a debounced HTTP draft request, but only when the relevant changed fields are valid.
 
 This behavior is configured in the descriptor through `draft` and is independent from final submission (`submission`).
 
@@ -56,15 +56,23 @@ File: `src/hooks/use-draft-save.ts`
 1. Receive latest form values from `onFormChange`
 2. Debounce saves (`draftConfig.debounceMs ?? 1000`)
 3. Deduplicate identical payloads (`JSON.stringify` hash comparison)
-4. Run `form.trigger()` before HTTP call
+4. Validate only dirty fields (`form.trigger(dirtyPaths)`) before HTTP call
 5. If invalid: skip HTTP call
 6. If valid: call `submitDraft(...)`
 
 Important behavior:
 
+- Draft mode skips initial load when the form is not dirty (`formState.isDirty === false`)
+- Draft mode validates only dirty fields, avoiding untouched-field errors
 - Draft mode does not override or force RHF error display policy
 - Validation UI remains controlled by RHF mode (`onChange`, `onBlur`, etc.)
 - Network calls happen only for valid snapshots
+- If a debounced save is pending during unmount/remount, the hook flushes that pending save to avoid dropped draft requests
+
+#### Remount/rehydration note
+
+In flows where descriptor/rules changes can remount the form (for example discriminant changes such as `entityType` in demo pages), a pending debounced draft save could previously be lost.  
+`useDraftSave` now flushes pending debounced work in cleanup, so entity-type transitions do not silently cancel draft API calls.
 
 ### 4) HTTP Execution
 
@@ -112,9 +120,14 @@ flowchart TD
   formContainer --> watcher[FormValuesWatcher]
   watcher -->|onFormChange(formData)| draftHook[useDraftSave]
   draftHook --> debounce[DebounceAndDedupe]
-  debounce --> validate[form.trigger()]
+  debounce --> dirtyCheck{formState.isDirty?}
+  dirtyCheck -->|no| skipDirty[Skip]
+  dirtyCheck -->|yes| validate[form.trigger(dirtyPaths)]
   validate -->|invalid| skip[SkipDraftHttpCall]
   validate -->|valid| submitDraft[submitDraft]
+  debounce --> unmount{UnmountWithPendingDebounce?}
+  unmount -->|yes| flush[FlushPendingSave]
+  flush --> validate
   submitDraft --> request[BuildRequestAndFetch]
 ```
 
@@ -139,6 +152,8 @@ Draft mode is covered by:
   - valid vs invalid behavior
   - debounce behavior
   - dedupe behavior
+  - dirty-only validation targeting
+  - unmount/remount pending-save flush
   - optional config no-op
 - `src/utils/submission-orchestrator.test.ts`
   - `submitDraft` request and error handling

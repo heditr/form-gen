@@ -10,6 +10,10 @@
  *     b. Validates only dirty fields via form.trigger(dirtyPaths)
  *     c. If valid, calls submitDraft (skipping duplicate payloads)
  *
+ * If the component unmounts while a debounced save is still pending (e.g. the
+ * parent forces a remount when discriminants change validation), the pending
+ * save is flushed immediately so the draft request is not dropped.
+ *
  * The hook is a no-op when draftConfig is undefined.
  */
 
@@ -84,16 +88,54 @@ export function useDraftSave({
     draftConfigRef.current = draftConfig;
   }, [draftConfig]);
 
+  const onSuccessRef = useRef(onSuccess);
+  const onErrorRef = useRef(onError);
+  useEffect(() => {
+    onSuccessRef.current = onSuccess;
+    onErrorRef.current = onError;
+  }, [onSuccess, onError]);
+
+  const attemptDraftSave = useCallback(async () => {
+    const config = draftConfigRef.current;
+    if (!config || !latestValuesRef.current) return;
+
+    if (!formRef.current.formState.isDirty) return;
+
+    const currentHash = JSON.stringify(latestValuesRef.current);
+    if (currentHash === lastSentHashRef.current) return;
+
+    const dirtyPaths = flattenDirtyFields(
+      formRef.current.formState.dirtyFields as Record<string, unknown>
+    );
+    if (dirtyPaths.length === 0) return;
+
+    const isValid = await formRef.current.trigger(dirtyPaths);
+    if (!isValid) return;
+
+    lastSentHashRef.current = currentHash;
+
+    await submitDraft({
+      draftConfig: config,
+      formValues: latestValuesRef.current,
+      onSuccess: onSuccessRef.current,
+      onError: onErrorRef.current,
+    });
+  }, []);
+
   useEffect(() => {
     isMountedRef.current = true;
     return () => {
-      isMountedRef.current = false;
+      const hadPendingDebounce = timeoutRef.current !== null;
       if (timeoutRef.current !== null) {
         clearTimeout(timeoutRef.current);
         timeoutRef.current = null;
       }
+      isMountedRef.current = false;
+      if (hadPendingDebounce) {
+        void attemptDraftSave();
+      }
     };
-  }, []);
+  }, [attemptDraftSave]);
 
   const saveDraft = useCallback(
     (formValues: Partial<DescriptorFormData>) => {
@@ -111,36 +153,12 @@ export function useDraftSave({
       const id = setTimeout(async () => {
         if (timeoutRef.current !== id || !isMountedRef.current) return;
         timeoutRef.current = null;
-
-        const config = draftConfigRef.current;
-        if (!config || !latestValuesRef.current) return;
-
-        if (!formRef.current.formState.isDirty) return;
-
-        const currentHash = JSON.stringify(latestValuesRef.current);
-        if (currentHash === lastSentHashRef.current) return;
-
-        const dirtyPaths = flattenDirtyFields(
-          formRef.current.formState.dirtyFields as Record<string, unknown>
-        );
-        if (dirtyPaths.length === 0) return;
-
-        const isValid = await formRef.current.trigger(dirtyPaths);
-        if (!isValid) return;
-
-        lastSentHashRef.current = currentHash;
-
-        await submitDraft({
-          draftConfig: config,
-          formValues: latestValuesRef.current,
-          onSuccess,
-          onError,
-        });
+        await attemptDraftSave();
       }, debounceMs);
 
       timeoutRef.current = id;
     },
-    [onSuccess, onError]
+    [attemptDraftSave]
   );
 
   return { saveDraft };
