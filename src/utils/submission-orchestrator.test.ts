@@ -118,6 +118,23 @@ describe('submission orchestrator', () => {
       const payload = evaluatePayloadTemplate(undefined, formValues);
       expect(payload).toEqual({ birthDate: '2024-01-15' });
     });
+
+    test('given caseContext and formData in template, should expose both objects', () => {
+      const template = '{"entityType":"{{caseContext.entityType}}","email":"{{formData.email}}","direct":"{{email}}"}';
+      const formValues: Partial<FormData> = {
+        email: 'test@example.com',
+      };
+
+      const payload = evaluatePayloadTemplate(template, formValues, {
+        entityType: 'corporation',
+      });
+
+      expect(payload).toEqual({
+        entityType: 'corporation',
+        email: 'test@example.com',
+        direct: 'test@example.com',
+      });
+    });
   });
 
   describe('serializeFormValues', () => {
@@ -557,6 +574,57 @@ describe('submission orchestrator', () => {
 
       vi.restoreAllMocks();
     });
+
+    test('given payload template with caseContext, should evaluate caseContext and formData', async () => {
+      const mockForm = {
+        handleSubmit: vi.fn((onValid) => async () => {
+          await onValid({ email: 'test@example.com' });
+        }),
+        formState: {
+          errors: {},
+        },
+        getValues: vi.fn(() => ({ email: 'test@example.com' })),
+      } as unknown as UseFormReturn<MockFormValues>;
+
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [],
+        submission: {
+          url: '/api/submit',
+          method: 'POST',
+          payloadTemplate:
+            '{"entity":"{{caseContext.entityType}}","email":"{{formData.email}}","direct":"{{email}}"}',
+        },
+      };
+
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ success: true }),
+      });
+
+      const orchestrator = createSubmissionOrchestrator();
+      const submitHandler = orchestrator.createSubmitHandler(
+        mockForm,
+        descriptor,
+        {
+          setError: vi.fn(),
+          caseContext: { entityType: 'individual' },
+        }
+      );
+
+      await submitHandler();
+
+      const callArgs = vi.mocked(global.fetch).mock.calls[0];
+      const requestInit = callArgs[1] as RequestInit;
+      const bodyData = JSON.parse(requestInit.body as string);
+      expect(bodyData).toEqual({
+        entity: 'individual',
+        email: 'test@example.com',
+        direct: 'test@example.com',
+      });
+
+      vi.restoreAllMocks();
+    });
   });
 
   describe('hasFileObjects', () => {
@@ -802,7 +870,8 @@ describe('submission orchestrator', () => {
       const draftConfig: DraftConfig = {
         url: '/api/draft',
         method: 'POST',
-        payloadTemplate: '{"email": "{{email}}"}',
+        payloadTemplate:
+          '{"entity":"{{caseContext.entityType}}","email":"{{formData.email}}","direct":"{{email}}"}',
       };
 
       const formValues: Partial<FormData> = {
@@ -816,12 +885,20 @@ describe('submission orchestrator', () => {
         json: async () => ({ saved: true }),
       });
 
-      await submitDraft({ draftConfig, formValues });
+      await submitDraft({
+        draftConfig,
+        formValues,
+        caseContext: { entityType: 'partnership' },
+      });
 
       const callArgs = vi.mocked(global.fetch).mock.calls[0];
       const requestInit = callArgs[1] as RequestInit;
       const body = JSON.parse(requestInit.body as string);
-      expect(body).toEqual({ email: 'test@example.com' });
+      expect(body).toEqual({
+        entity: 'partnership',
+        email: 'test@example.com',
+        direct: 'test@example.com',
+      });
 
       vi.restoreAllMocks();
     });

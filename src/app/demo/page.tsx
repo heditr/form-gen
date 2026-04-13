@@ -437,6 +437,7 @@ function FormContainerWithSubmissionComponent({
   const { saveDraft } = useDraftSave({
     form,
     draftConfig: mergedDescriptor?.draft,
+    caseContext,
   });
 
   const orchestrator = useMemo(() => createSubmissionOrchestrator(), []);
@@ -453,7 +454,8 @@ function FormContainerWithSubmissionComponent({
 
     const evaluatedPayload = evaluatePayloadTemplate(
       mergedDescriptor.submission?.payloadTemplate,
-      formValues as Partial<FormData>
+      formValues as Partial<FormData>,
+      caseContext
     );
 
     let requestBody: string | globalThis.FormData;
@@ -496,6 +498,7 @@ function FormContainerWithSubmissionComponent({
       form,
       mergedDescriptor,
       {
+        caseContext,
         setError: (field: string, error: { type: string; message: string }) => {
           form.setError(field, error);
         },
@@ -538,7 +541,7 @@ function FormContainerWithSubmissionComponent({
     );
 
     await submitHandler(e);
-  }, [form, mergedDescriptor, orchestrator, onSubmissionStateChange]);
+  }, [form, mergedDescriptor, caseContext, orchestrator, onSubmissionStateChange]);
 
   const presentationProps = useMemo(
     () => ({

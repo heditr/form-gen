@@ -331,6 +331,7 @@ function FormContainerWithSubmissionComponent({
   const { saveDraft } = useDraftSave({
     form,
     draftConfig: demoDescriptor?.draft,
+    caseContext,
   });
 
   // Create submit handler with payload/response tracking
@@ -349,7 +350,8 @@ function FormContainerWithSubmissionComponent({
     // Evaluate payload template
     const evaluatedPayload = evaluatePayloadTemplate(
       demoDescriptor.submission.payloadTemplate,
-      formValues as Partial<FormData>
+      formValues as Partial<FormData>,
+      caseContext
     );
 
     // Construct request body
@@ -397,6 +399,7 @@ function FormContainerWithSubmissionComponent({
       form,
       demoDescriptor,
       {
+        caseContext,
         setError: (field: string, error: { type: string; message: string }) => {
           form.setError(field, error);
         },
@@ -440,7 +443,7 @@ function FormContainerWithSubmissionComponent({
 
     // Call the submit handler
     await submitHandler(e);
-  }, [form, demoDescriptor, orchestrator, onSubmissionStateChange]);
+  }, [form, demoDescriptor, caseContext, orchestrator, onSubmissionStateChange]);
 
   // Prepare props for presentation component
   const presentationProps = useMemo(

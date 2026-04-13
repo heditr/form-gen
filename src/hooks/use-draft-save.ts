@@ -19,7 +19,7 @@
 
 import { useRef, useCallback, useEffect } from 'react';
 import type { UseFormReturn, FieldValues } from 'react-hook-form';
-import type { DraftConfig, FormData as DescriptorFormData } from '@/types/form-descriptor';
+import type { DraftConfig, CaseContext, FormData as DescriptorFormData } from '@/types/form-descriptor';
 import { submitDraft } from '@/utils/submission-orchestrator';
 
 /**
@@ -59,6 +59,7 @@ const DEFAULT_DEBOUNCE_MS = 1000;
 export interface UseDraftSaveOptions {
   form: UseFormReturn<FieldValues>;
   draftConfig: DraftConfig | undefined;
+  caseContext?: CaseContext;
   onSuccess?: (response: unknown) => void;
   onError?: (error: unknown) => void;
 }
@@ -70,6 +71,7 @@ export interface UseDraftSaveReturn {
 export function useDraftSave({
   form,
   draftConfig,
+  caseContext,
   onSuccess,
   onError,
 }: UseDraftSaveOptions): UseDraftSaveReturn {
@@ -87,6 +89,11 @@ export function useDraftSave({
   useEffect(() => {
     draftConfigRef.current = draftConfig;
   }, [draftConfig]);
+
+  const caseContextRef = useRef(caseContext);
+  useEffect(() => {
+    caseContextRef.current = caseContext;
+  }, [caseContext]);
 
   const onSuccessRef = useRef(onSuccess);
   const onErrorRef = useRef(onError);
@@ -117,6 +124,7 @@ export function useDraftSave({
     await submitDraft({
       draftConfig: config,
       formValues: latestValuesRef.current,
+      caseContext: caseContextRef.current,
       onSuccess: onSuccessRef.current,
       onError: onErrorRef.current,
     });

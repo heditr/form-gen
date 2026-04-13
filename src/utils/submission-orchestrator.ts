@@ -19,6 +19,7 @@ import type {
   GlobalFormDescriptor,
   SubmissionConfig,
   DraftConfig,
+  CaseContext,
   FormData as DescriptorFormData,
 } from '@/types/form-descriptor';
 import type { FormContext } from './template-evaluator';
@@ -49,6 +50,11 @@ export interface SubmissionOrchestratorOptions {
    * Error callback
    */
   onError?: (error: Error | BackendErrorResponse) => void;
+
+  /**
+   * Case context used for payload template evaluation
+   */
+  caseContext?: CaseContext;
 }
 
 function formatDateAsIsoDateString(value: Date): string {
@@ -139,7 +145,8 @@ export function hasFileObjects(formValues: Partial<DescriptorFormData>): boolean
  */
 export function evaluatePayloadTemplate(
   template: string | undefined,
-  formValues: Partial<DescriptorFormData>
+  formValues: Partial<DescriptorFormData>,
+  caseContext: CaseContext = {}
 ): string | Partial<DescriptorFormData> {
   const serializedFormValues = serializeFormValues(formValues);
 
@@ -150,6 +157,7 @@ export function evaluatePayloadTemplate(
 
   // Evaluate template with form values as context
   const context: FormContext = {
+    caseContext: caseContext as unknown as FormContext,
     formData: serializedFormValues,
     ...serializedFormValues, // Also allow direct access to form values
   };
@@ -363,7 +371,7 @@ export function createSubmissionOrchestrator(): SubmissionOrchestrator {
     descriptor: GlobalFormDescriptor,
     options: SubmissionOrchestratorOptions
   ) => {
-    const { setError, onSuccess, onError } = options;
+    const { setError, onSuccess, onError, caseContext } = options;
     const { submission } = descriptor;
     const submitValidData = async (validData: T) => {
       try {
@@ -375,7 +383,8 @@ export function createSubmissionOrchestrator(): SubmissionOrchestrator {
         // Evaluate payload template
         const evaluatedPayload = evaluatePayloadTemplate(
           submission.payloadTemplate,
-          formValues
+          formValues,
+          caseContext
         );
 
         // Construct request body based on whether files are present
@@ -496,6 +505,7 @@ export function createSubmissionOrchestrator(): SubmissionOrchestrator {
 export interface SubmitDraftOptions {
   draftConfig: DraftConfig;
   formValues: Partial<DescriptorFormData>;
+  caseContext?: CaseContext;
   onSuccess?: (response: unknown) => void;
   onError?: (error: Error | BackendErrorResponse) => void;
 }
@@ -509,6 +519,7 @@ export interface SubmitDraftOptions {
 export async function submitDraft({
   draftConfig,
   formValues,
+  caseContext,
   onSuccess,
   onError,
 }: SubmitDraftOptions): Promise<void> {
@@ -516,7 +527,8 @@ export async function submitDraft({
     const containsFiles = hasFileObjects(formValues);
     const evaluatedPayload = evaluatePayloadTemplate(
       draftConfig.payloadTemplate,
-      formValues
+      formValues,
+      caseContext
     );
 
     let requestBody: string | globalThis.FormData;

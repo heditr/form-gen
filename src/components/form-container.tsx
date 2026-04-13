@@ -119,6 +119,7 @@ function FormInner({
   const { saveDraft } = useDraftSave({
     form,
     draftConfig: mergedDescriptor?.draft,
+    caseContext,
   });
 
   const presentationProps = useMemo(
