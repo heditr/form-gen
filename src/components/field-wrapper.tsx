@@ -58,7 +58,7 @@ export default function FieldWrapper({
   // Render appropriate field component based on field type
   switch (field.type) {
     case 'text':
-      if (field.manualLookup || field.autoFilledUpdate) {
+      if (field.manualLookup) {
         return (
           <LookupTextField
             field={field}

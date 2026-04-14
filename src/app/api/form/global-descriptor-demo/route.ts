@@ -240,13 +240,8 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
               id: 'companyNameLookup',
               type: 'text',
               label: 'Company Name',
-              description: 'Enabled after successful lookup (or resilient 404); update sent on blur.',
+              description: 'Enabled after successful lookup (or resilient 404).',
               validation: [],
-              autoFilledUpdate: {
-                url: '/api/demo/company-update/{{registrationNumberLookup}}',
-                method: 'PATCH',
-                payloadTemplate: '{"companyName":"{{companyNameLookup}}"}',
-              },
             },
             {
               id: 'registrationNumberLookupPrefilled',
@@ -281,11 +276,6 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
               label: 'Company Name (Prefilled Flow)',
               description: 'Should be editable at load even when empty because source is prefilled+locked.',
               validation: [],
-              autoFilledUpdate: {
-                url: '/api/demo/company-update/{{registrationNumberLookupPrefilled}}',
-                method: 'PATCH',
-                payloadTemplate: '{"companyName":"{{companyNameLookupPrefilled}}"}',
-              },
             },
           ],
         },

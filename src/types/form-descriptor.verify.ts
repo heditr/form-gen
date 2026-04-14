@@ -24,7 +24,6 @@ import type {
   ButtonConfig,
   ButtonMenuItem,
   ManualLookupConfig,
-  AutoFilledUpdateConfig,
 } from './form-descriptor';
 
 // Verify ValidationRule type
@@ -92,13 +91,6 @@ const manualLookupConfig: ManualLookupConfig = {
   showClearOnSuccess: true,
 };
 
-// Verify AutoFilledUpdateConfig type
-const autoFilledUpdateConfig: AutoFilledUpdateConfig = {
-  url: '/api/company/{{companyId}}',
-  method: 'PATCH',
-  payloadTemplate: '{"name":"{{companyName}}"}',
-};
-
 // Verify FieldDescriptor with manual lookup
 const fieldWithManualLookup: FieldDescriptor = {
   id: 'companyRegistrationNumber',
@@ -106,15 +98,6 @@ const fieldWithManualLookup: FieldDescriptor = {
   label: 'Company Registration Number',
   validation: [],
   manualLookup: manualLookupConfig,
-};
-
-// Verify FieldDescriptor with autofilled update sync
-const fieldWithAutoFilledUpdate: FieldDescriptor = {
-  id: 'companyName',
-  type: 'text',
-  label: 'Company Name',
-  validation: [],
-  autoFilledUpdate: autoFilledUpdateConfig,
 };
 
 // Verify FieldDescriptor with button (single variant)
@@ -296,9 +279,7 @@ export {
   fieldWithItems,
   fieldWithDataSource,
   manualLookupConfig,
-  autoFilledUpdateConfig,
   fieldWithManualLookup,
-  fieldWithAutoFilledUpdate,
   buttonFieldSingle,
   buttonFieldMenu,
   buttonConfig,

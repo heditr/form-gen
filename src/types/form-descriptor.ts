@@ -211,29 +211,6 @@ export interface ManualLookupConfig {
 }
 
 /**
- * Backend synchronization configuration for fields that are user-edited after autofill.
- *
- * @property url - Handlebars-templated URL endpoint
- * @property method - HTTP method used for update request
- * @property payloadTemplate - Handlebars payload template for update request body
- * @property dataSourceId - Optional data source identifier for server-side credential lookup
- * @property auth - Optional authentication configuration (deprecated: use dataSourceId instead)
- */
-export interface AutoFilledUpdateConfig {
-  url: string;
-  method: 'POST' | 'PUT' | 'PATCH';
-  payloadTemplate: string;
-  dataSourceId?: string;
-  auth?: {
-    type: 'bearer' | 'apikey' | 'basic';
-    token?: string;
-    headerName?: string;
-    username?: string;
-    password?: string;
-  };
-}
-
-/**
  * Layout configuration for an individual field
  *
  * @property width - Semantic width hint for the field in a grid row
@@ -313,7 +290,6 @@ export interface FieldDescriptor {
   repeatableGroupId?: string;
   autoFill?: AutoFillConfig;
   manualLookup?: ManualLookupConfig;
-  autoFilledUpdate?: AutoFilledUpdateConfig;
   layout?: FieldLayoutConfig;
 }
 

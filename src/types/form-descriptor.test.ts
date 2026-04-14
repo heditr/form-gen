@@ -271,23 +271,6 @@ describe('form-descriptor types', () => {
       expect(field.manualLookup?.request.payloadTemplate).toContain('{{externalEntityId}}');
     });
 
-    test('given an autofilled target field, should support backend sync request templates for user edits', () => {
-      const field: FieldDescriptor = {
-        id: 'companyName',
-        type: 'text',
-        label: 'Company Name',
-        validation: [],
-        autoFilledUpdate: {
-          url: '/api/company/{{companyId}}',
-          method: 'PATCH',
-          payloadTemplate: '{"name":"{{companyName}}"}',
-        },
-      };
-
-      expect(field.autoFilledUpdate).toBeDefined();
-      expect(field.autoFilledUpdate?.method).toBe('PATCH');
-      expect(field.autoFilledUpdate?.payloadTemplate).toContain('{{companyName}}');
-    });
   });
 
   describe('BlockDescriptor', () => {

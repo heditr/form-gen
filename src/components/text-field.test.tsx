@@ -643,40 +643,35 @@ describe('TextField', () => {
     }));
   });
 
-  test('given edited autofilled target field with update config, should call backend update on blur', async () => {
+  test('given manual lookup source field, should not call backend update on blur', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ success: true }),
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    const getValues = vi.fn((fieldName?: string) => {
-      if (fieldName) {
-        return fieldName === 'companyName' ? 'Acme Updated' : '';
-      }
-      return { companyId: 'cmp-1', companyName: 'Acme Updated' };
-    });
-
     const field = createMockField({
-      id: 'companyName',
-      autoFilledUpdate: {
-        url: '/api/company/{{companyId}}',
-        method: 'PATCH',
-        payloadTemplate: '{"name":"{{companyName}}"}',
+      id: 'registrationNumber',
+      manualLookup: {
+        request: {
+          url: '/api/lookup?registration={{registrationNumber}}',
+          method: 'GET',
+        },
+        autoFillTargets: [
+          {
+            fieldId: 'companyName',
+            valueTemplate: '{{result.legalName}}',
+          },
+        ],
       },
     });
-    const form = createMockForm({
-      getValues: getValues as unknown as UseFormReturn<FieldValues>['getValues'],
-    });
+    const form = createMockForm();
     render(<LookupTextField {...createProps({ field, form })} />);
 
     const input = screen.getByRole('textbox');
     fireEvent.blur(input);
 
-    expect(fetchMock).toHaveBeenCalledWith('/api/company/cmp-1', expect.objectContaining({
-      method: 'PATCH',
-      body: '{"name":"Acme Updated"}',
-    }));
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   test('given source clear after successful lookup, should clear source and mapped target fields', async () => {
@@ -722,42 +717,6 @@ describe('TextField', () => {
 
     expect(setValue).toHaveBeenCalledWith('registrationNumber', '', expect.any(Object));
     expect(setValue).toHaveBeenCalledWith('companyName', '', expect.any(Object));
-  });
-
-  test('given target field with autoFilledUpdate and empty value, should render disabled', () => {
-    const field = createMockField({
-      id: 'companyName',
-      autoFilledUpdate: {
-        url: '/api/company/{{companyId}}',
-        method: 'PATCH',
-        payloadTemplate: '{"name":"{{companyName}}"}',
-      },
-    });
-    const form = createMockForm({
-      watch: vi.fn(() => '') as unknown as UseFormReturn<FieldValues>['watch'],
-    });
-
-    render(<LookupTextField {...createProps({ field, form })} />);
-
-    expect(screen.getByRole('textbox')).toBeDisabled();
-  });
-
-  test('given target field with autoFilledUpdate and non-empty value, should render enabled', () => {
-    const field = createMockField({
-      id: 'companyName',
-      autoFilledUpdate: {
-        url: '/api/company/{{companyId}}',
-        method: 'PATCH',
-        payloadTemplate: '{"name":"{{companyName}}"}',
-      },
-    });
-    const form = createMockForm({
-      watch: vi.fn(() => 'Acme Corporation') as unknown as UseFormReturn<FieldValues>['watch'],
-    });
-
-    render(<LookupTextField {...createProps({ field, form })} />);
-
-    expect(screen.getByRole('textbox')).not.toBeDisabled();
   });
 
   test('given resilient lookup backend error, should lock source and allow empty target editing flow', async () => {
@@ -815,30 +774,4 @@ describe('TextField', () => {
     expect(screen.queryByText('Lookup failed with status 404.')).not.toBeInTheDocument();
   });
 
-  test('given autoFilledUpdate target with empty value but unlocked lookup flag, should render enabled', () => {
-    const field = createMockField({
-      id: 'companyName',
-      autoFilledUpdate: {
-        url: '/api/company/{{companyId}}',
-        method: 'PATCH',
-        payloadTemplate: '{"name":"{{companyName}}"}',
-      },
-    });
-    const watch = vi.fn((name?: string) => {
-      if (name === 'companyName') {
-        return '';
-      }
-      if (name === '__lookupUnlocked.companyName') {
-        return true;
-      }
-      return '';
-    });
-    const form = createMockForm({
-      watch: watch as unknown as UseFormReturn<FieldValues>['watch'],
-    });
-
-    render(<LookupTextField {...createProps({ field, form })} />);
-
-    expect(screen.getByRole('textbox')).not.toBeDisabled();
-  });
 });

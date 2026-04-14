@@ -27,25 +27,15 @@ export default function TextFieldInputControl({
   const [isLookupLoading, setIsLookupLoading] = useState(false);
   const [isLookupLocked, setIsLookupLocked] = useState(false);
   const [lookupError, setLookupError] = useState<string | null>(null);
-  const [autoFilledUpdateError, setAutoFilledUpdateError] = useState<string | null>(null);
   const hasInitializedPrefilledLockRef = useRef(false);
   const hasInitializedPrefillLookupRef = useRef(false);
   const hasUserClearedSourceRef = useRef(false);
 
   const hasManualLookup = Boolean(field.manualLookup);
   const currentFieldValue = form.watch(field.id);
-  const isLookupTargetUnlocked = Boolean(
-    form.watch(`__lookupUnlocked.${field.id}`)
-  );
-  const isAutoFilledTargetEmpty = Boolean(field.autoFilledUpdate) && (
-    currentFieldValue === '' ||
-    currentFieldValue === null ||
-    currentFieldValue === undefined
-  );
-  const isEmptyAutoFilledTargetDisabled = isAutoFilledTargetEmpty && !isLookupTargetUnlocked;
   const isFieldDisabled = useMemo(
-    () => isDisabled || (hasManualLookup && isLookupLocked) || isEmptyAutoFilledTargetDisabled,
-    [hasManualLookup, isDisabled, isEmptyAutoFilledTargetDisabled, isLookupLocked]
+    () => isDisabled || (hasManualLookup && isLookupLocked),
+    [hasManualLookup, isDisabled, isLookupLocked]
   );
 
   useEffect(() => {
@@ -226,43 +216,6 @@ export default function TextFieldInputControl({
     setLookupError(null);
   };
 
-  const handleAutoFilledUpdate = async () => {
-    if (!field.autoFilledUpdate) {
-      return;
-    }
-
-    const currentValues = form.getValues() as Record<string, unknown>;
-    const templateContext = {
-      formData: currentValues,
-      ...currentValues,
-    } as FormContext;
-
-    const resolvedUrl = evaluateTemplate(field.autoFilledUpdate.url, templateContext);
-    if (!resolvedUrl) {
-      setAutoFilledUpdateError('Update request URL could not be resolved.');
-      return;
-    }
-
-    const payload = evaluateTemplate(field.autoFilledUpdate.payloadTemplate, templateContext);
-
-    try {
-      setAutoFilledUpdateError(null);
-      const response = await fetch(resolvedUrl, {
-        method: field.autoFilledUpdate.method,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: payload,
-      });
-
-      if (!response.ok) {
-        setAutoFilledUpdateError(`Update failed with status ${response.status}.`);
-      }
-    } catch {
-      setAutoFilledUpdateError('Update request failed. Please retry.');
-    }
-  };
-
   useEffect(() => {
     if (
       hasInitializedPrefillLookupRef.current ||
@@ -302,9 +255,8 @@ export default function TextFieldInputControl({
                   await handleManualLookup();
                 }
               }}
-              onBlur={async () => {
+              onBlur={() => {
                 controllerField.onBlur();
-                await handleAutoFilledUpdate();
               }}
               disabled={isFieldDisabled}
               required={required}
@@ -352,15 +304,6 @@ export default function TextFieldInputControl({
           role="alert"
         >
           {lookupError}
-        </div>
-      )}
-      {autoFilledUpdateError && (
-        <div
-          id={`${field.id}-update-error`}
-          className="text-sm text-destructive"
-          role="alert"
-        >
-          {autoFilledUpdateError}
         </div>
       )}
     </>
