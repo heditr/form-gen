@@ -19,6 +19,7 @@ GlobalFormDescriptor
 ```
 LayoutRow[]
   └─ LayoutRow
+       ├─ gridColumns? : 1 | 2 | 3        (optional row-level grid override)
        └─ LayoutSlot[]
             ├─ id       : 'left' | 'right' | 'col1' | 'col2' | 'col3'
             ├─ fields   : FieldDescriptor[]   (1..N fields stacked inside the slot)
@@ -93,12 +94,8 @@ Three pieces of mutable state are created:
 | `emittedGroups`  | `Set<string>`         | Tracks which `groupId`s have already been emitted.       |
 | `pairBuffer`     | `FieldDescriptor[]`   | Temporary buffer for consecutive pairable ungrouped fields. |
 
-`maxPairSize` is fixed per column count:
-
-| columns | maxPairSize |
-|---------|-------------|
-| 2       | 2           |
-| 3       | 3           |
+`pairBuffer` is now **homogeneous**: it only stores one width at a time (`half` or `third`).
+When width changes, the buffer flushes first to prevent mixed-width rows.
 
 ---
 
@@ -127,17 +124,18 @@ Determine the field's semantic width:
 width = field.layout?.width ?? 'full'   →  'full' | 'half' | 'third'
 ```
 
-Determine if the field is pairable:
+Determine if the field is pairable and its pack size:
 
-| columns | pairable when width is |
-|---------|----------------------|
-| 2       | `'half'`             |
-| 3       | `'third'`            |
-| 1       | never                |
+| columns | pairable widths | pack size |
+|---------|-----------------|-----------|
+| 2       | `'half'`, `'third'` | `2` for half, `3` for third |
+| 3       | `'half'`, `'third'` | `2` for half, `3` for third |
+| 1       | none            | —         |
 
 **If pairable:**
+- If buffer already contains a different width (`half` vs `third`), flush first.
 - Push the field onto `pairBuffer`.
-- If `pairBuffer.length === maxPairSize` → flush immediately (see Step 5).
+- If `pairBuffer.length === packSize(width)` → flush immediately (see Step 5).
 
 **If not pairable (full-width or mismatched width):**
 - Flush `pairBuffer` first.
@@ -158,17 +156,36 @@ If the buffer is empty, nothing happens.
 
 ### 2-column flush
 
-| Buffer length | Result                                                      |
-|---------------|-------------------------------------------------------------|
-| 1             | `[{ id: 'left', fields: [item0] }]`                        |
+`half` buffer:
+
+| Buffer length | Result |
+|---------------|--------|
+| 1             | `[{ id: 'left', fields: [item0] }]` |
 | 2             | `[{ id: 'left', fields: [item0] }, { id: 'right', fields: [item1] }]` |
+
+`third` buffer:
+
+| Buffer length | Result |
+|---------------|--------|
+| 1             | `[{ id: 'col1', fields: [item0] }]` |
+| 2             | `[{ id: 'col1', ... }, { id: 'col2', ... }]` |
+| 3             | `[{ id: 'col1', ... }, { id: 'col2', ... }, { id: 'col3', ... }]` + `gridColumns: 3` on row |
 
 ### 3-column flush
 
-| Buffer length | Slots produced                                               |
-|---------------|--------------------------------------------------------------|
-| 1             | `[{ id: 'col1', fields: [item0] }]`                         |
-| 2             | `[{ id: 'col1', ... }, { id: 'col2', ... }]`                |
+`half` buffer:
+
+| Buffer length | Result |
+|---------------|--------|
+| 1             | `[{ id: 'col1', fields: [item0], colSpan: 2 }]` |
+| 2             | `[{ id: 'col1', ... }, { id: 'col2', ... }]` |
+
+`third` buffer:
+
+| Buffer length | Result |
+|---------------|--------|
+| 1             | `[{ id: 'col1', fields: [item0] }]` |
+| 2             | `[{ id: 'col1', ... }, { id: 'col2', ... }]` |
 | 3             | `[{ id: 'col1', ... }, { id: 'col2', ... }, { id: 'col3', ... }]` |
 
 After flushing, `pairBuffer` is reset to `[]`.
@@ -211,24 +228,25 @@ Row:
   right slot → [fieldB]
 ```
 
-**Fallback**
+**General grouped packing**
 
-Any other group composition: each field gets its own `col1` row with `colSpan: 2`.
+If role-based patterns don't match, grouped fields are processed with the same homogeneous rules
+as ungrouped fields:
+
+- `half` packs as `left/right` pairs (leftover half stays alone in `left`)
+- `third` packs as triplets (`col1/col2/col3`)
+- mixed `half` and `third` do **not** share the same buffered row
+- for `third` triplets in a 2-column block, row gets `gridColumns: 3`
+- non-pairable fields still fall back to full-width (`colSpan: 2`)
 
 ### 3-column groups
 
-**Pattern — third-width fields**
+Grouped fields use homogeneous buffering:
 
-Condition: at least one field in the group has `width: 'third'`.
-
-- Collect all `'third'`-width fields.
-- Pack them into rows of 3 using an inner buffer identical to the pair-buffer logic:
-  each row uses `col1 / col2 / col3` slots.
-- Remaining fields (non-`'third'` width) each get their own `col1` row.
-
-**Fallback**
-
-No `'third'`-width fields: each field gets its own `col1` row with `colSpan: 3`.
+- `half` packs as 2 (`col1/col2`, leftover half uses `col1` with `colSpan: 2`)
+- `third` packs as 3 (`col1/col2/col3`)
+- mixed widths do not share buffer rows
+- non-pairable fields fall back to full-width (`colSpan: 3`)
 
 ---
 
@@ -266,15 +284,23 @@ buildBlockLayoutRows(block, fields)
           │              ├─ columns === 2
           │              │    ├─ leftStack+right pattern → one row, two slots
           │              │    ├─ two plain half fields   → one row, two slots
-          │              │    └─ fallback → one col1/colSpan=2 row per field
+          │              │    └─ homogeneous group packing:
+          │              │         - half pairs
+          │              │         - third triplets (row.gridColumns=3)
+          │              │         - no half+third mixing
+          │              │         - full-width fallback for non-pairable fields
           │              └─ columns === 3
-          │                   ├─ has 'third' fields → pack into col1/col2/col3 rows
-          │                   └─ fallback → one col1/colSpan=3 row per field
+          │                   └─ homogeneous group packing:
+          │                        - half pairs
+          │                        - third triplets
+          │                        - no half+third mixing
+          │                        - full-width fallback for non-pairable fields
           │
           └─ no groupId:
-               ├─ pairable (half in 2-col | third in 3-col)?
+               ├─ pairable (half|third for columns > 1)?
+               │    ├─ flush if buffer width changes
                │    ├─ push to pairBuffer
-               │    └─ buffer full → flushPairBuffer()
+               │    └─ buffer reaches pack size → flushPairBuffer()
                └─ not pairable:
                     ├─ flushPairBuffer()
                     └─ emit single-slot row (colSpan=columns if >1)
@@ -372,25 +398,38 @@ Row 0: [left: City + PostCode (stacked)] [right: Country]
 
 ---
 
-### Example 4 — 3-column grid, mixed widths
+### Example 4 — 2-column grid with third triplet override
+
+```json
+{ "layout": { "mode": "grid", "columns": 2 } }
+```
+
+Fields: `[A(third), B(third), C(third), D(half)]`
+
+Result:
+```
+Row 0: gridColumns=3, [col1: A] [col2: B] [col3: C]
+Row 1: [left: D]
+```
+
+---
+
+### Example 5 — 3-column grid, mixed homogeneous runs
 
 ```json
 { "layout": { "mode": "grid", "columns": 3 } }
 ```
 
-Fields: `[A(third), B(third), C(third), D(full), E(third)]`
+Fields: `[A(half), B(half), C(third), D(third), E(third), F(full)]`
 
 Processing:
-1. A → pairable → buffer: [A]
-2. B → pairable → buffer: [A, B]
-3. C → pairable → buffer: [A, B, C] → **flush** → Row 0: [col1: A, col2: B, col3: C]
-4. D → not pairable → flush (empty) → Row 1: [col1/colSpan=3: D]
-5. E → pairable → buffer: [E]
-   End of loop → **final flush** → Row 2: [col1: E]
+1. A(half) + B(half) → half pair flush → Row 0: [col1: A] [col2: B]
+2. C/D/E (third run) → third triplet flush → Row 1: [col1: C] [col2: D] [col3: E]
+3. F(full) → Row 2: [col1 (span 3): F]
 
 Result:
 ```
-Row 0: [col1: A] [col2: B] [col3: C]
-Row 1: [col1 (span 3): D]
-Row 2: [col1: E]
+Row 0: [col1: A] [col2: B]
+Row 1: [col1: C] [col2: D] [col3: E]
+Row 2: [col1 (span 3): F]
 ```

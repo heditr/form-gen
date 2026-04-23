@@ -266,12 +266,22 @@ export default function Block({
               ? 'md:grid-cols-2'
               : 'md:grid-cols-3';
 
-          return rows.map((row, rowIndex) => (
+          return rows.map((row, rowIndex) => {
+            const rowGridColsClass =
+              row.gridColumns === 1
+                ? 'md:grid-cols-1'
+                : row.gridColumns === 2
+                ? 'md:grid-cols-2'
+                : row.gridColumns === 3
+                ? 'md:grid-cols-3'
+                : gridColsClass;
+
+            return (
             <div
               key={`row-${rowIndex}`}
               className={cn(
                 'grid grid-cols-1',
-                gridColsClass,
+                rowGridColsClass,
                 'gap-x-4',
                 gapYClass
               )}
@@ -300,7 +310,8 @@ export default function Block({
                 </div>
               ))}
             </div>
-          ));
+            );
+          });
         })()}
       </div>
     </div>

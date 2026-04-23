@@ -10,7 +10,15 @@ export interface LayoutSlot {
 
 export interface LayoutRow {
   slots: LayoutSlot[];
+  gridColumns?: 1 | 2 | 3;
 }
+
+const getPackSize = (columns: 1 | 2 | 3, width: 'full' | 'half' | 'third'): number | null => {
+  if (width === 'half') return 2;
+  if (width === 'third') return 3;
+  if (columns <= 1) return null;
+  return null;
+};
 
 const getColumns = (block: BlockDescriptor): 1 | 2 | 3 => {
   const columns = block.layout?.columns ?? 1;
@@ -28,6 +36,30 @@ const getGroupId = (field: FieldDescriptor): string | undefined => field.layout?
 const getGroupRole = (
   field: FieldDescriptor
 ): 'left' | 'right' | 'leftStack' | 'rightStack' | undefined => field.layout?.groupRole;
+
+const createHalfSlotsForTwoColumns = (buffer: FieldDescriptor[]): LayoutSlot[] =>
+  buffer.length === 1
+    ? [{ id: 'left', fields: [buffer[0]] }]
+    : [
+        { id: 'left', fields: [buffer[0]] },
+        { id: 'right', fields: [buffer[1]] },
+      ];
+
+const createHalfSlotsForThreeColumns = (buffer: FieldDescriptor[]): LayoutSlot[] =>
+  buffer.length === 1
+    ? [{ id: 'col1', fields: [buffer[0]], colSpan: 2 }]
+    : [
+        { id: 'col1', fields: [buffer[0]] },
+        { id: 'col2', fields: [buffer[1]] },
+      ];
+
+const createThirdSlots = (buffer: FieldDescriptor[]): LayoutSlot[] => {
+  const slots: LayoutSlot[] = [];
+  if (buffer.length >= 1) slots.push({ id: 'col1', fields: [buffer[0]] });
+  if (buffer.length >= 2) slots.push({ id: 'col2', fields: [buffer[1]] });
+  if (buffer.length >= 3) slots.push({ id: 'col3', fields: [buffer[2]] });
+  return slots;
+};
 
 export const buildBlockLayoutRows = (block: BlockDescriptor, fields: FieldDescriptor[]): LayoutRow[] => {
   const mode = block.layout?.mode ?? 'default';
@@ -54,30 +86,29 @@ export const buildBlockLayoutRows = (block: BlockDescriptor, fields: FieldDescri
   const rows: LayoutRow[] = [];
   const emittedGroups = new Set<string>();
 
-  // Buffer for consecutive ungrouped half/third-width fields that pair into one row
+  // Buffer for consecutive ungrouped homogeneous width fields
   let pairBuffer: FieldDescriptor[] = [];
-  const maxPairSize = columns === 3 ? 3 : 2;
+  let pairBufferWidth: 'half' | 'third' | null = null;
 
   const flushPairBuffer = () => {
-    if (pairBuffer.length === 0) return;
-    if (columns === 2) {
+    if (pairBuffer.length === 0 || !pairBufferWidth) return;
+    if (pairBufferWidth === 'half' && columns === 2) {
       rows.push({
-        slots: pairBuffer.length === 1
-          ? [{ id: 'left', fields: [pairBuffer[0]] }]
-          : [
-              { id: 'left', fields: [pairBuffer[0]] },
-              { id: 'right', fields: [pairBuffer[1]] },
-            ],
+        slots: createHalfSlotsForTwoColumns(pairBuffer),
+      });
+    } else if (pairBufferWidth === 'third') {
+      rows.push({
+        slots: createThirdSlots(pairBuffer),
+        ...(columns === 2 ? { gridColumns: 3 as const } : {}),
       });
     } else {
-      // columns === 3
-      const slots: LayoutSlot[] = [];
-      if (pairBuffer.length >= 1) slots.push({ id: 'col1', fields: [pairBuffer[0]] });
-      if (pairBuffer.length >= 2) slots.push({ id: 'col2', fields: [pairBuffer[1]] });
-      if (pairBuffer.length >= 3) slots.push({ id: 'col3', fields: [pairBuffer[2]] });
-      rows.push({ slots });
+      // half-width in 3-column blocks
+      rows.push({
+        slots: createHalfSlotsForThreeColumns(pairBuffer),
+      });
     }
     pairBuffer = [];
+    pairBufferWidth = null;
   };
 
   const emitGroupRow = (groupFields: FieldDescriptor[]) => {
@@ -117,34 +148,79 @@ export const buildBlockLayoutRows = (block: BlockDescriptor, fields: FieldDescri
           return;
         }
       }
-
-      // Fallback: sequential full-width rows
-      groupFields.forEach((field) => rows.push({ slots: [{ id: 'col1', fields: [field], colSpan: 2 }] }));
+      let groupBuffer: FieldDescriptor[] = [];
+      let groupBufferWidth: 'half' | 'third' | null = null;
+      const flushGroupBuffer = () => {
+        if (groupBuffer.length === 0 || !groupBufferWidth) return;
+        if (groupBufferWidth === 'half') {
+          rows.push({ slots: createHalfSlotsForTwoColumns(groupBuffer) });
+        } else {
+          rows.push({
+            slots: createThirdSlots(groupBuffer),
+            gridColumns: 3,
+          });
+        }
+        groupBuffer = [];
+        groupBufferWidth = null;
+      };
+      for (const field of groupFields) {
+        const width = getFieldWidth(field);
+        const packSize = getPackSize(columns, width);
+        const pairable = (width === 'half' || width === 'third') && packSize !== null;
+        if (pairable) {
+          if (groupBufferWidth && groupBufferWidth !== width) {
+            flushGroupBuffer();
+          }
+          if (!groupBufferWidth && (width === 'half' || width === 'third')) {
+            groupBufferWidth = width;
+          }
+          groupBuffer.push(field);
+          if (groupBuffer.length === packSize) {
+            flushGroupBuffer();
+          }
+          continue;
+        }
+        flushGroupBuffer();
+        rows.push({ slots: [{ id: 'col1', fields: [field], colSpan: 2 }] });
+      }
+      flushGroupBuffer();
       return;
     }
 
     // columns === 3
-    const thirdFields = groupFields.filter((f) => getFieldWidth(f) === 'third');
-    if (thirdFields.length > 0) {
-      let buffer: FieldDescriptor[] = [];
-      const flushBuffer = () => {
-        if (buffer.length === 0) return;
-        const slots: LayoutSlot[] = [];
-        if (buffer.length >= 1) slots.push({ id: 'col1', fields: [buffer[0]] });
-        if (buffer.length >= 2) slots.push({ id: 'col2', fields: [buffer[1]] });
-        if (buffer.length >= 3) slots.push({ id: 'col3', fields: [buffer[2]] });
-        rows.push({ slots });
-        buffer = [];
-      };
-      thirdFields.forEach((f) => { buffer.push(f); if (buffer.length === 3) flushBuffer(); });
-      flushBuffer();
-      groupFields
-        .filter((f) => !thirdFields.includes(f))
-        .forEach((field) => rows.push({ slots: [{ id: 'col1', fields: [field] }] }));
-      return;
+    let groupBuffer: FieldDescriptor[] = [];
+    let groupBufferWidth: 'half' | 'third' | null = null;
+    const flushGroupBuffer = () => {
+      if (groupBuffer.length === 0 || !groupBufferWidth) return;
+      if (groupBufferWidth === 'half') {
+        rows.push({ slots: createHalfSlotsForThreeColumns(groupBuffer) });
+      } else {
+        rows.push({ slots: createThirdSlots(groupBuffer) });
+      }
+      groupBuffer = [];
+      groupBufferWidth = null;
+    };
+    for (const field of groupFields) {
+      const width = getFieldWidth(field);
+      const packSize = getPackSize(columns, width);
+      const pairable = (width === 'half' || width === 'third') && packSize !== null;
+      if (pairable) {
+        if (groupBufferWidth && groupBufferWidth !== width) {
+          flushGroupBuffer();
+        }
+        if (!groupBufferWidth && (width === 'half' || width === 'third')) {
+          groupBufferWidth = width;
+        }
+        groupBuffer.push(field);
+        if (groupBuffer.length === packSize) {
+          flushGroupBuffer();
+        }
+        continue;
+      }
+      flushGroupBuffer();
+      rows.push({ slots: [{ id: 'col1', fields: [field], colSpan: 3 }] });
     }
-
-    groupFields.forEach((field) => rows.push({ slots: [{ id: 'col1', fields: [field], colSpan: 3 }] }));
+    flushGroupBuffer();
   };
 
   // Process fields in their natural descriptor order. Groups are emitted
@@ -163,15 +239,20 @@ export const buildBlockLayoutRows = (block: BlockDescriptor, fields: FieldDescri
       continue;
     }
 
-    // Ungrouped field — buffer half/third-width fields for pairing; flush on full-width
+    // Ungrouped field — buffer only homogeneous widths; flush on width change or full-width
     const width = getFieldWidth(field);
-    const isPairable =
-      (columns === 2 && width === 'half') ||
-      (columns === 3 && width === 'third');
+    const packSize = getPackSize(columns, width);
+    const isPairable = packSize !== null && columns > 1;
 
     if (isPairable) {
+      if (pairBufferWidth && pairBufferWidth !== width) {
+        flushPairBuffer();
+      }
+      if (!pairBufferWidth && (width === 'half' || width === 'third')) {
+        pairBufferWidth = width;
+      }
       pairBuffer.push(field);
-      if (pairBuffer.length === maxPairSize) flushPairBuffer();
+      if (pairBuffer.length === packSize) flushPairBuffer();
     } else {
       flushPairBuffer();
       rows.push({

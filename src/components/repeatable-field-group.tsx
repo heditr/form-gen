@@ -368,10 +368,20 @@ export default function RepeatableFieldGroup({
                         ? 'md:grid-cols-2'
                         : 'md:grid-cols-3';
 
-                    return rows.map((row, rowIndex) => (
+                    return rows.map((row, rowIndex) => {
+                      const rowGridColsClass =
+                        row.gridColumns === 1
+                          ? 'md:grid-cols-1'
+                          : row.gridColumns === 2
+                          ? 'md:grid-cols-2'
+                          : row.gridColumns === 3
+                          ? 'md:grid-cols-3'
+                          : gridColsClass;
+
+                      return (
                       <div
                         key={`row-${rowIndex}`}
-                        className={cn('grid grid-cols-1', gridColsClass, 'gap-x-4', gapYClass)}
+                        className={cn('grid grid-cols-1', rowGridColsClass, 'gap-x-4', gapYClass)}
                       >
                         {row.slots.map((slot, slotIndex) => (
                           <div
@@ -382,7 +392,8 @@ export default function RepeatableFieldGroup({
                           </div>
                         ))}
                       </div>
-                    ));
+                      );
+                    });
                   })()}
                 </div>
               );

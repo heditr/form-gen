@@ -296,5 +296,128 @@ describe('buildBlockLayoutRows', () => {
       throw new Error(`row 1 should contain the group, got: ${JSON.stringify(row1Ids)}`);
     }
   });
+
+  test('2-column grid renders third/third/third in one row with 3-column override', () => {
+    const block = createBlock({ mode: 'grid', columns: 2 });
+    const fields = [
+      createField('t1', { width: 'third' }),
+      createField('t2', { width: 'third' }),
+      createField('t3', { width: 'third' }),
+    ];
+
+    const rows = buildBlockLayoutRows(block, fields);
+
+    if (rows.length !== 1) {
+      throw new Error(`expected 1 row, got ${rows.length}`);
+    }
+    if (rows[0].gridColumns !== 3) {
+      throw new Error(`expected row gridColumns=3, got ${rows[0].gridColumns}`);
+    }
+    if (rows[0].slots.length !== 3) {
+      throw new Error(`expected 3 slots, got ${rows[0].slots.length}`);
+    }
+  });
+
+  test('3-column grid renders half/half in one row', () => {
+    const block = createBlock({ mode: 'grid', columns: 3 });
+    const fields = [
+      createField('h1', { width: 'half' }),
+      createField('h2', { width: 'half' }),
+    ];
+
+    const rows = buildBlockLayoutRows(block, fields);
+
+    if (rows.length !== 1) {
+      throw new Error(`expected 1 row, got ${rows.length}`);
+    }
+    if (rows[0].slots.length !== 2) {
+      throw new Error(`expected 2 slots, got ${rows[0].slots.length}`);
+    }
+  });
+
+  test('does not mix half and third in the same buffered row', () => {
+    const block = createBlock({ mode: 'grid', columns: 2 });
+    const fields = [
+      createField('h1', { width: 'half' }),
+      createField('t1', { width: 'third' }),
+      createField('t2', { width: 'third' }),
+      createField('t3', { width: 'third' }),
+    ];
+
+    const rows = buildBlockLayoutRows(block, fields);
+
+    if (rows.length !== 2) {
+      throw new Error(`expected 2 rows, got ${rows.length}`);
+    }
+    const row0Ids = rows[0].slots.flatMap((s) => s.fields.map((f) => f.id));
+    const row1Ids = rows[1].slots.flatMap((s) => s.fields.map((f) => f.id));
+    if (row0Ids.length !== 1 || row0Ids[0] !== 'h1') {
+      throw new Error(`row 0 should contain only ['h1'], got ${JSON.stringify(row0Ids)}`);
+    }
+    if (!row1Ids.includes('t1') || !row1Ids.includes('t2') || !row1Ids.includes('t3')) {
+      throw new Error(`row 1 should contain third triplet, got ${JSON.stringify(row1Ids)}`);
+    }
+  });
+
+  test('2-column grouped third/third/third renders in one row with 3-column override', () => {
+    const block = createBlock({ mode: 'grid', columns: 2 });
+    const fields = [
+      createField('g-t1', { width: 'third', groupId: 'g-third' }),
+      createField('g-t2', { width: 'third', groupId: 'g-third' }),
+      createField('g-t3', { width: 'third', groupId: 'g-third' }),
+    ];
+
+    const rows = buildBlockLayoutRows(block, fields);
+
+    if (rows.length !== 1) {
+      throw new Error(`expected 1 row, got ${rows.length}`);
+    }
+    if (rows[0].gridColumns !== 3) {
+      throw new Error(`expected row gridColumns=3, got ${rows[0].gridColumns}`);
+    }
+    if (rows[0].slots.length !== 3) {
+      throw new Error(`expected 3 slots, got ${rows[0].slots.length}`);
+    }
+  });
+
+  test('3-column grouped half/half renders in one row', () => {
+    const block = createBlock({ mode: 'grid', columns: 3 });
+    const fields = [
+      createField('g-h1', { width: 'half', groupId: 'g-half' }),
+      createField('g-h2', { width: 'half', groupId: 'g-half' }),
+    ];
+
+    const rows = buildBlockLayoutRows(block, fields);
+
+    if (rows.length !== 1) {
+      throw new Error(`expected 1 row, got ${rows.length}`);
+    }
+    if (rows[0].slots.length !== 2) {
+      throw new Error(`expected 2 slots, got ${rows[0].slots.length}`);
+    }
+  });
+
+  test('grouped rows do not mix half and third widths', () => {
+    const block = createBlock({ mode: 'grid', columns: 2 });
+    const fields = [
+      createField('g-half', { width: 'half', groupId: 'g-mixed' }),
+      createField('g-third-1', { width: 'third', groupId: 'g-mixed' }),
+      createField('g-third-2', { width: 'third', groupId: 'g-mixed' }),
+      createField('g-third-3', { width: 'third', groupId: 'g-mixed' }),
+    ];
+
+    const rows = buildBlockLayoutRows(block, fields);
+
+    if (rows.length !== 2) {
+      throw new Error(`expected 2 rows, got ${rows.length}`);
+    }
+    const row0Ids = rows[0].slots.flatMap((s) => s.fields.map((f) => f.id));
+    if (row0Ids.length !== 1 || row0Ids[0] !== 'g-half') {
+      throw new Error(`row 0 should contain only ['g-half'], got ${JSON.stringify(row0Ids)}`);
+    }
+    if (rows[1].gridColumns !== 3) {
+      throw new Error(`row 1 should use 3-column override, got ${rows[1].gridColumns}`);
+    }
+  });
 });
 
