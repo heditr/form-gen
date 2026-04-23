@@ -90,12 +90,23 @@ export const buildBlockLayoutRows = (block: BlockDescriptor, fields: FieldDescri
       const leftStack = groupFields.filter(
         (f) => getGroupRole(f) === 'leftStack' && getFieldWidth(f) === 'half'
       );
+      const left = groupFields.filter(
+        (f) => getGroupRole(f) === 'left' && getFieldWidth(f) === 'half'
+      );
+      const rightStack = groupFields.filter(
+        (f) => getGroupRole(f) === 'rightStack' && getFieldWidth(f) === 'half'
+      );
       const right = groupFields.filter(
         (f) => getGroupRole(f) === 'right' && getFieldWidth(f) === 'half'
       );
 
       if (leftStack.length > 0 && right.length === 1) {
         rows.push({ slots: [{ id: 'left', fields: leftStack }, { id: 'right', fields: [right[0]] }] });
+        return;
+      }
+
+      if (left.length === 1 && rightStack.length > 0) {
+        rows.push({ slots: [{ id: 'left', fields: [left[0]] }, { id: 'right', fields: rightStack }] });
         return;
       }
 

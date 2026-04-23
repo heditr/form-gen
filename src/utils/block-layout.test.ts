@@ -142,6 +142,32 @@ describe('buildBlockLayoutRows', () => {
     }
   });
 
+  test('edge case: left + rightStack in 2-column group', () => {
+    const block = createBlock({ mode: 'grid', columns: 2 });
+    const fields = [
+      createField('a', { width: 'half', groupId: 'g', groupRole: 'left' }),
+      createField('b', { width: 'half', groupId: 'g', groupRole: 'rightStack' }),
+      createField('c', { width: 'half', groupId: 'g', groupRole: 'rightStack' }),
+    ];
+
+    const rows = buildBlockLayoutRows(block, fields);
+
+    if (rows.length !== 1) {
+      throw new Error(`expected 1 row, got ${rows.length}`);
+    }
+    if (rows[0].slots.length !== 2) {
+      throw new Error(`expected 2 slots, got ${rows[0].slots.length}`);
+    }
+    const leftIds = rows[0].slots[0].fields.map((f) => f.id);
+    const rightIds = rows[0].slots[1].fields.map((f) => f.id);
+    if (leftIds.length !== 1 || leftIds[0] !== 'a') {
+      throw new Error(`expected left slot to contain ['a'], got: ${JSON.stringify(leftIds)}`);
+    }
+    if (rightIds.length !== 2 || !rightIds.includes('b') || !rightIds.includes('c')) {
+      throw new Error(`expected right slot to contain ['b','c'], got: ${JSON.stringify(rightIds)}`);
+    }
+  });
+
   // ── Natural field order ─────────────────────────────────────────────────────
 
   test('grouped field appearing first in descriptor produces the first row', () => {
