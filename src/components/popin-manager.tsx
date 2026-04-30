@@ -166,6 +166,23 @@ export function PopinManagerProvider({
     validationScope: 'popin',
     // No onDiscriminantChange - popin form values should not sync to Redux
   });
+  const watchedPopinValues = popinForm.watch() as Record<string, unknown>;
+
+  const popinFormContext = useMemo(() => {
+    const currentMainFormValues = mainForm.getValues();
+    const currentPopinFormValues = (watchedPopinValues ?? {}) as Record<string, unknown>;
+    const mergedValues = {
+      ...currentMainFormValues,
+      ...currentPopinFormValues,
+    };
+
+    return {
+      ...mergedValues,
+      ...initialFormContext,
+      ...popinLoadData,
+      formData: mergedValues,
+    } as FormContext;
+  }, [mainForm, watchedPopinValues, initialFormContext, popinLoadData]);
 
   // Seed popin form when in repeatable edit/create mode
   useEffect(() => {
@@ -527,7 +544,7 @@ export function PopinManagerProvider({
                   isDisabled={resolvedBlock.isDisabled}
                   isHidden={false}
                   form={popinForm}
-                  formContext={formContext}
+                  formContext={popinFormContext}
                   onLoadDataSource={onLoadDataSource}
                   dataSourceCache={dataSourceCache}
                   // In popin we always want inline fields, never summary rows
