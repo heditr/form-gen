@@ -22,6 +22,47 @@ export interface FileFieldProps {
   required?: boolean;
 }
 
+const DEFAULT_UPLOAD_URL = '/api/upload';
+
+function getAcceptedFormats(field: FieldDescriptor): string[] {
+  return field.file?.acceptedFormats ?? [];
+}
+
+function getAcceptAttribute(field: FieldDescriptor): string | undefined {
+  const formats = getAcceptedFormats(field);
+  if (formats.length === 0) {
+    return undefined;
+  }
+  return formats.map((format) => `.${format.replace(/^\./, '')}`).join(',');
+}
+
+function getFileExtension(fileName: string): string {
+  const parts = fileName.split('.');
+  return parts.length > 1 ? parts[parts.length - 1].toLowerCase() : '';
+}
+
+function validateSelectedFile(file: File, field: FieldDescriptor): string | null {
+  const maxSizeBytes = field.file?.maxSizeBytes;
+  if (maxSizeBytes !== undefined && file.size > maxSizeBytes) {
+    return `File exceeds the maximum size of ${maxSizeBytes} bytes`;
+  }
+
+  const acceptedFormats = getAcceptedFormats(field).map((format) =>
+    format.replace(/^\./, '').toLowerCase()
+  );
+  if (acceptedFormats.length > 0 && !acceptedFormats.includes(getFileExtension(file.name))) {
+    return `File format must be one of: ${acceptedFormats.join(', ')}`;
+  }
+
+  return null;
+}
+
+function resolveDeleteUrl(deleteUrl: string, fileReference: string): string {
+  return deleteUrl.includes('{id}')
+    ? deleteUrl.replace('{id}', encodeURIComponent(fileReference))
+    : deleteUrl;
+}
+
 /**
  * Upload a file to the server and return the URL
  * 
@@ -29,13 +70,12 @@ export interface FileFieldProps {
  * @param fieldId - Field ID for the upload
  * @returns Promise resolving to the file URL
  */
-async function uploadFile(file: File, fieldId: string): Promise<string> {
+async function uploadFile(file: File, fieldId: string, uploadUrl = DEFAULT_UPLOAD_URL): Promise<string> {
   const formData = new FormData();
   formData.append('file', file);
   formData.append('fieldId', fieldId);
 
-  // Use a standard upload endpoint - can be configured via field descriptor in the future
-  const response = await fetch('/api/upload', {
+  const response = await fetch(uploadUrl, {
     method: 'POST',
     body: formData,
   });
@@ -47,6 +87,21 @@ async function uploadFile(file: File, fieldId: string): Promise<string> {
 
   const result = await response.json();
   return result.url || result.fileUrl || result.path || '';
+}
+
+async function deleteFile(fileReference: string, deleteUrl?: string): Promise<void> {
+  if (!deleteUrl) {
+    return;
+  }
+
+  const response = await fetch(resolveDeleteUrl(deleteUrl, fileReference), {
+    method: 'DELETE',
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: 'Delete failed' }));
+    throw new Error(error.error || `Delete failed with status ${response.status}`);
+  }
 }
 
 /**
@@ -75,13 +130,31 @@ export default function FileField({
   // Check if current value is a URL string (existing file)
   const isUrlString = typeof fieldValue === 'string' && fieldValue.length > 0;
   const fileUrl = isUrlString ? fieldValue : null;
+  const accept = getAcceptAttribute(field);
+  const isMultiple = field.file?.multiple ?? false;
+
+  const setUploadFailure = useCallback((message: string) => {
+    setUploadError(message);
+    form.setError(field.id, {
+      type: 'upload',
+      message,
+    });
+  }, [field.id, form]);
 
   // Handle file selection and upload
   const handleFileChange = useCallback(
-    async (file: File | null, onChange: (value: string | null) => void) => {
-      if (!file) {
+    async (files: File[], onChange: (value: string | string[] | null) => void) => {
+      if (files.length === 0) {
         onChange(null);
         setUploadError(null);
+        return;
+      }
+
+      const validationError = files
+        .map((file) => validateSelectedFile(file, field))
+        .find((message): message is string => message !== null);
+      if (validationError) {
+        setUploadFailure(validationError);
         return;
       }
 
@@ -89,29 +162,42 @@ export default function FileField({
       setUploadError(null);
 
       try {
-        const url = await uploadFile(file, field.id);
-        onChange(url);
+        const uploadUrl = field.file?.uploadUrl ?? DEFAULT_UPLOAD_URL;
+        const urls = await Promise.all(files.map((file) => uploadFile(file, field.id, uploadUrl)));
+        onChange(isMultiple ? urls : urls[0]);
+
+        if (!isMultiple && typeof fieldValue === 'string' && fieldValue.length > 0) {
+          await deleteFile(fieldValue, field.file?.deleteUrl);
+        }
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Failed to upload file';
-        setUploadError(errorMessage);
-        form.setError(field.id, {
-          type: 'upload',
-          message: errorMessage,
-        });
+        setUploadFailure(errorMessage);
       } finally {
         setIsUploading(false);
       }
     },
-    [field.id, form]
+    [field, fieldValue, isMultiple, setUploadFailure]
   );
 
   // Handle removing existing file
   const handleRemoveFile = useCallback(
-    (onChange: (value: string | null) => void) => {
-      onChange(null);
+    async (onChange: (value: string | string[] | null) => void) => {
+      setIsUploading(true);
       setUploadError(null);
+
+      try {
+        if (typeof fieldValue === 'string' && fieldValue.length > 0) {
+          await deleteFile(fieldValue, field.file?.deleteUrl);
+        }
+        onChange(null);
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'Failed to delete file';
+        setUploadFailure(errorMessage);
+      } finally {
+        setIsUploading(false);
+      }
     },
-    []
+    [field.file?.deleteUrl, fieldValue, setUploadFailure]
   );
 
   return (
@@ -159,18 +245,14 @@ export default function FileField({
               name={controllerField.name}
               type="file"
               onChange={(e) => {
-                const files = e.target.files;
-                if (!files || files.length === 0) {
-                  handleFileChange(null, controllerField.onChange);
-                  return;
-                }
-                // Handle single file upload (for now, support single file only)
-                const file = files[0];
-                handleFileChange(file, controllerField.onChange);
+                const selectedFiles: File[] = Array.from(e.currentTarget.files ?? []);
+                handleFileChange(selectedFiles, controllerField.onChange);
               }}
               onBlur={controllerField.onBlur}
               disabled={isDisabled || isUploading}
               required={required}
+              accept={accept}
+              multiple={isMultiple}
               className={cn(
                 errorMessage && 'border-destructive focus-visible:ring-destructive'
               )}

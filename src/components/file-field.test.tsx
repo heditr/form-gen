@@ -335,6 +335,140 @@ describe('FileField', () => {
       // Note: setValue integration is complex to mock, but upload behavior is verified above
     });
 
+    test('given file config with accepted formats and multiple, should set input attributes', () => {
+      const field = createMockField({
+        file: {
+          acceptedFormats: ['pdf', 'png'],
+          multiple: true,
+        },
+      });
+      const props = createProps({ field });
+
+      render(<FileField {...props} />);
+
+      const input = screen.getByLabelText('Test Field');
+      expect(input).toHaveAttribute('accept', '.pdf,.png');
+      expect(input).toHaveAttribute('multiple');
+    });
+
+    test('given oversized file, should reject before upload and surface error', async () => {
+      const user = userEvent.setup();
+      const mockSetError = vi.fn();
+      const field = createMockField({
+        file: {
+          maxSizeBytes: 4,
+        },
+      });
+      const form = createMockForm({
+        watch: vi.fn(() => null),
+        setError: mockSetError,
+      });
+      const props = createProps({ field, form });
+
+      render(<FileField {...props} />);
+
+      const file = new File(['too large'], 'large.pdf', { type: 'application/pdf' });
+      const input = screen.getByLabelText('Test Field') as HTMLInputElement;
+      await user.upload(input, file);
+
+      expect(global.fetch).not.toHaveBeenCalled();
+      expect(mockSetError).toHaveBeenCalledWith('test-field', {
+        type: 'upload',
+        message: 'File exceeds the maximum size of 4 bytes',
+      });
+      expect(screen.getByText('File exceeds the maximum size of 4 bytes')).toBeInTheDocument();
+    });
+
+    test('given disallowed file extension, should reject before upload and surface error', async () => {
+      const user = userEvent.setup({ applyAccept: false });
+      const mockSetError = vi.fn();
+      const field = createMockField({
+        file: {
+          acceptedFormats: ['pdf'],
+        },
+      });
+      const form = createMockForm({
+        watch: vi.fn(() => null),
+        setError: mockSetError,
+      });
+      const props = createProps({ field, form });
+
+      render(<FileField {...props} />);
+
+      const file = new File(['content'], 'image.png', { type: 'image/png' });
+      const input = screen.getByLabelText('Test Field') as HTMLInputElement;
+      await user.upload(input, file);
+
+      expect(global.fetch).not.toHaveBeenCalled();
+      expect(mockSetError).toHaveBeenCalledWith('test-field', {
+        type: 'upload',
+        message: 'File format must be one of: pdf',
+      });
+      expect(screen.getByText('File format must be one of: pdf')).toBeInTheDocument();
+    });
+
+    test('given custom upload endpoint, should upload through configured url', async () => {
+      const user = userEvent.setup();
+      const field = createMockField({
+        file: {
+          uploadUrl: '/api/custom-upload',
+        },
+      });
+      const form = createMockForm({
+        watch: vi.fn(() => null),
+        setValue: vi.fn(),
+        setError: vi.fn(),
+      });
+      const props = createProps({ field, form });
+
+      (global.fetch as any).mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ url: 'https://example.com/uploaded-file.pdf' }),
+      });
+
+      render(<FileField {...props} />);
+
+      const file = new File(['test content'], 'test.pdf', { type: 'application/pdf' });
+      const input = screen.getByLabelText('Test Field') as HTMLInputElement;
+      await user.upload(input, file);
+
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalledWith('/api/custom-upload', expect.objectContaining({
+          method: 'POST',
+        }));
+      });
+    });
+
+    test('given delete endpoint, should call backend before clearing file', async () => {
+      const user = userEvent.setup();
+      const field = createMockField({
+        file: {
+          deleteUrl: '/api/files/{id}',
+        },
+      });
+      const form = createMockForm({
+        watch: vi.fn((fieldId?: string) => (fieldId === 'test-field' ? 'old-file-id' : undefined)),
+        setValue: vi.fn(),
+        setError: vi.fn(),
+      });
+      const props = createProps({ field, form });
+
+      (global.fetch as any).mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({}),
+      });
+
+      render(<FileField {...props} />);
+
+      await user.click(screen.getByText('Remove'));
+
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalledWith('/api/files/old-file-id', expect.objectContaining({
+          method: 'DELETE',
+        }));
+      });
+    });
+
     test('given file upload error, should handle error appropriately', async () => {
       const user = userEvent.setup();
       const mockSetError = vi.fn();
