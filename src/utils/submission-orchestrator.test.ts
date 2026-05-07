@@ -625,6 +625,182 @@ describe('submission orchestrator', () => {
 
       vi.restoreAllMocks();
     });
+
+    test('given primitive file field values, should omit them from the submit payload', async () => {
+      const mockForm = {
+        handleSubmit: vi.fn((onValid) => async () => {
+          await onValid({
+            email: 'test@example.com',
+            proofFile: 'https://example.com/proof.pdf',
+          });
+        }),
+        formState: {
+          errors: {},
+        },
+        getValues: vi.fn(() => ({
+          email: 'test@example.com',
+          proofFile: 'https://example.com/proof.pdf',
+        })),
+      } as unknown as UseFormReturn<MockFormValues>;
+
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'documents',
+            title: 'Documents',
+            fields: [
+              { id: 'email', type: 'text', label: 'Email', validation: [] },
+              { id: 'proofFile', type: 'file', label: 'Proof file', validation: [] },
+            ],
+          },
+        ],
+        submission: {
+          url: '/api/submit',
+          method: 'POST',
+        },
+      };
+
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ success: true }),
+      });
+
+      const orchestrator = createSubmissionOrchestrator();
+      const submitHandler = orchestrator.createSubmitHandler(mockForm, descriptor, {
+        setError: vi.fn(),
+      });
+
+      await submitHandler();
+
+      const callArgs = vi.mocked(global.fetch).mock.calls[0];
+      const requestInit = callArgs[1] as RequestInit;
+      expect(JSON.parse(requestInit.body as string)).toEqual({
+        email: 'test@example.com',
+      });
+
+      vi.restoreAllMocks();
+    });
+
+    test('given payload template references a file field, should allow template access but drop skipped field key from body', async () => {
+      const mockForm = {
+        handleSubmit: vi.fn((onValid) => async () => {
+          await onValid({
+            email: 'test@example.com',
+            proofFile: 'https://example.com/proof.pdf',
+          });
+        }),
+        formState: {
+          errors: {},
+        },
+        getValues: vi.fn(() => ({
+          email: 'test@example.com',
+          proofFile: 'https://example.com/proof.pdf',
+        })),
+      } as unknown as UseFormReturn<MockFormValues>;
+
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'documents',
+            title: 'Documents',
+            fields: [
+              { id: 'email', type: 'text', label: 'Email', validation: [] },
+              { id: 'proofFile', type: 'file', label: 'Proof file', validation: [] },
+            ],
+          },
+        ],
+        submission: {
+          url: '/api/submit',
+          method: 'POST',
+          payloadTemplate:
+            '{"email":"{{email}}","proofFile":"{{proofFile}}","hasProof":"{{#if proofFile}}yes{{else}}no{{/if}}"}',
+        },
+      };
+
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ success: true }),
+      });
+
+      const orchestrator = createSubmissionOrchestrator();
+      const submitHandler = orchestrator.createSubmitHandler(mockForm, descriptor, {
+        setError: vi.fn(),
+      });
+
+      await submitHandler();
+
+      const callArgs = vi.mocked(global.fetch).mock.calls[0];
+      const requestInit = callArgs[1] as RequestInit;
+      expect(JSON.parse(requestInit.body as string)).toEqual({
+        email: 'test@example.com',
+        hasProof: 'yes',
+      });
+
+      vi.restoreAllMocks();
+    });
+
+    test('given only file-field validation errors, should continue submit with skipped file omitted', async () => {
+      const errors: FieldErrors<MockFormValues> = {
+        proofFile: { type: 'required', message: 'Proof file is required' },
+      };
+      const mockForm = {
+        handleSubmit: vi.fn((onValid, onInvalid) => async () => {
+          await onInvalid(errors);
+        }),
+        formState: {
+          errors,
+        },
+        getValues: vi.fn(() => ({
+          email: 'test@example.com',
+          proofFile: null,
+        })),
+      } as unknown as UseFormReturn<MockFormValues>;
+
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'documents',
+            title: 'Documents',
+            fields: [
+              { id: 'email', type: 'text', label: 'Email', validation: [] },
+              {
+                id: 'proofFile',
+                type: 'file',
+                label: 'Proof file',
+                validation: [{ type: 'required', message: 'Proof file is required' }],
+              },
+            ],
+          },
+        ],
+        submission: {
+          url: '/api/submit',
+          method: 'POST',
+        },
+      };
+
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ success: true }),
+      });
+
+      const orchestrator = createSubmissionOrchestrator();
+      const submitHandler = orchestrator.createSubmitHandler(mockForm, descriptor, {
+        setError: vi.fn(),
+      });
+
+      await submitHandler();
+
+      const callArgs = vi.mocked(global.fetch).mock.calls[0];
+      const requestInit = callArgs[1] as RequestInit;
+      expect(JSON.parse(requestInit.body as string)).toEqual({
+        email: 'test@example.com',
+      });
+
+      vi.restoreAllMocks();
+    });
   });
 
   describe('hasFileObjects', () => {

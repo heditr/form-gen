@@ -17,6 +17,15 @@ import { evaluateValidationArrayTemplate } from './array-template-evaluator';
 
 type ValidationScope = 'main' | 'popin';
 
+/**
+ * Fields persisted out-of-band by their own backend interactions should remain
+ * in RHF state for UI/draft purposes, but should not participate in final submit
+ * payloads or submit-time required validation.
+ */
+export function isSubmitSkippedFieldType(fieldType: FieldDescriptor['type'] | string): boolean {
+  return fieldType === 'file' || fieldType === 'document';
+}
+
 function shouldIncludeBlockInScope(
   block: BlockDescriptor,
   scope: ValidationScope
@@ -633,7 +642,7 @@ export function buildZodSchemaFromDescriptor(
         // matches form shape: addresses[0].street or addresses[0].location.street
         const groupTree: Record<string, SchemaTreeNode> = {};
         for (const field of fields) {
-          if (field.type === 'button') {
+          if (field.type === 'button' || isSubmitSkippedFieldType(field.type)) {
             continue;
           }
           if (evaluateHiddenStatus(field, formContext)) {
@@ -677,7 +686,12 @@ export function buildZodSchemaFromDescriptor(
       for (const field of block.fields) {
         // Skip fields that belong to a repeatable group (they're handled above)
         // Skip button fields - they don't have values to validate
-        if (!field.repeatableGroupId && field.type !== 'button' && !evaluateHiddenStatus(field, formContext)) {
+        if (
+          !field.repeatableGroupId &&
+          field.type !== 'button' &&
+          !isSubmitSkippedFieldType(field.type) &&
+          !evaluateHiddenStatus(field, formContext)
+        ) {
           // Type assertion: we've already checked it's not a button
           const fieldType = field.type as Exclude<typeof field.type, 'button'>;
           const fieldRules = evaluateValidationArrayTemplate(field.validation, formContext);

@@ -9,7 +9,15 @@ import { describe, test, expect } from 'vitest';
 import { z } from 'zod';
 import type { BlockDescriptor, GlobalFormDescriptor, FormData } from '@/types/form-descriptor';
 import type { FormContext } from '@/utils/template-evaluator';
-import { isRepeatableBlock, isRepeatablePopinBlock, groupFieldsByRepeatableGroupId, buildZodSchemaFromDescriptor, extractDefaultValues, buildAutoFillPatchFromSelection } from './form-descriptor-integration';
+import {
+  isRepeatableBlock,
+  isRepeatablePopinBlock,
+  groupFieldsByRepeatableGroupId,
+  buildZodSchemaFromDescriptor,
+  extractDefaultValues,
+  buildAutoFillPatchFromSelection,
+  isSubmitSkippedFieldType,
+} from './form-descriptor-integration';
 
 describe('form descriptor integration', () => {
   describe('isRepeatableBlock', () => {
@@ -969,6 +977,52 @@ describe('form descriptor integration', () => {
       expect(schema.shape).toHaveProperty('visibleField');
       expect(schema.shape).not.toHaveProperty('conditionallyHiddenField');
       expect(schema.safeParse({ visibleField: 'ok' }).success).toBe(true);
+    });
+
+    test('given required file field, should skip it from submit-time schema', () => {
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'main-block',
+            title: 'Main block',
+            fields: [
+              {
+                id: 'email',
+                type: 'text',
+                label: 'Email',
+                validation: [{ type: 'required', message: 'Email is required' }],
+              },
+              {
+                id: 'proofFile',
+                type: 'file',
+                label: 'Proof file',
+                validation: [{ type: 'required', message: 'Proof file is required' }],
+              },
+            ],
+          },
+        ],
+        submission: {
+          url: '/api/submit',
+          method: 'POST',
+        },
+      };
+
+      const schema = buildZodSchemaFromDescriptor(descriptor, {});
+      expect(schema.shape).toHaveProperty('email');
+      expect(schema.shape).not.toHaveProperty('proofFile');
+      expect(schema.safeParse({ email: 'test@example.com' }).success).toBe(true);
+    });
+  });
+
+  describe('isSubmitSkippedFieldType', () => {
+    test('given out-of-band persisted field types, should return true', () => {
+      expect(isSubmitSkippedFieldType('file')).toBe(true);
+      expect(isSubmitSkippedFieldType('document')).toBe(true);
+    });
+
+    test('given regular form field types, should return false', () => {
+      expect(isSubmitSkippedFieldType('text')).toBe(false);
+      expect(isSubmitSkippedFieldType('dropdown')).toBe(false);
     });
   });
 

@@ -13,7 +13,11 @@
 import type { UseFormReturn, FieldErrors } from 'react-hook-form';
 import { evaluateTemplate } from './template-evaluator';
 import { evaluateHiddenStatus } from './template-evaluator';
-import { isRepeatableBlock, groupFieldsByRepeatableGroupId } from './form-descriptor-integration';
+import {
+  isRepeatableBlock,
+  groupFieldsByRepeatableGroupId,
+  isSubmitSkippedFieldType,
+} from './form-descriptor-integration';
 import { mapBackendErrorsToForm, type BackendError } from './form-descriptor-integration';
 import type {
   GlobalFormDescriptor,
@@ -86,6 +90,79 @@ export function serializeFormValues(
   formValues: Partial<DescriptorFormData>
 ): Partial<DescriptorFormData> {
   return serializeDatesForTransport(formValues) as Partial<DescriptorFormData>;
+}
+
+function cloneTransportValue(value: unknown): unknown {
+  if (
+    value === null ||
+    typeof value !== 'object' ||
+    value instanceof Date ||
+    (typeof File !== 'undefined' && value instanceof File)
+  ) {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    return value.map(cloneTransportValue);
+  }
+
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>).map(([key, nestedValue]) => [
+      key,
+      cloneTransportValue(nestedValue),
+    ])
+  );
+}
+
+function deleteNestedValue(target: Record<string, unknown>, path: string): void {
+  const parts = path.split('.');
+  let current: Record<string, unknown> | undefined = target;
+
+  for (let i = 0; i < parts.length - 1; i += 1) {
+    const next = current?.[parts[i]];
+    if (!next || typeof next !== 'object' || Array.isArray(next)) {
+      return;
+    }
+    current = next as Record<string, unknown>;
+  }
+
+  delete current?.[parts[parts.length - 1]];
+}
+
+export function stripSubmitSkippedFormValues(
+  descriptor: GlobalFormDescriptor,
+  formValues: Partial<DescriptorFormData>
+): Partial<DescriptorFormData> {
+  const stripped = cloneTransportValue(formValues) as Record<string, unknown>;
+
+  for (const block of descriptor.blocks) {
+    for (const field of block.fields) {
+      if (!isSubmitSkippedFieldType(field.type)) {
+        continue;
+      }
+
+      if (field.repeatableGroupId) {
+        const groupValue = stripped[field.repeatableGroupId];
+        if (!Array.isArray(groupValue)) {
+          continue;
+        }
+        const baseFieldId = field.id.startsWith(`${field.repeatableGroupId}.`)
+          ? field.id.slice(field.repeatableGroupId.length + 1)
+          : field.id;
+        groupValue
+          .filter(
+            (row): row is Record<string, unknown> =>
+              row !== null && typeof row === 'object' && !Array.isArray(row)
+          )
+          .forEach((row) => deleteNestedValue(row, baseFieldId));
+        continue;
+      }
+
+      deleteNestedValue(stripped, field.id);
+    }
+  }
+
+  return stripped as Partial<DescriptorFormData>;
 }
 
 /**
@@ -205,7 +282,7 @@ export function constructFormData(
 
     if (typeof value === 'object' && value !== null && (value as object) instanceof File) {
       // Single file
-      formData.append(key, value);
+      formData.append(key, value as File);
     } else if (Array.isArray(value)) {
       // Array of files or other values
       for (const item of value) {
@@ -314,7 +391,10 @@ function getActiveValidationTargets(
       const groups = groupFieldsByRepeatableGroupId(block.fields);
       for (const [groupId, fields] of Object.entries(groups)) {
         const hasVisibleField = fields.some(
-          (field) => field.type !== 'button' && !evaluateHiddenStatus(field, context)
+          (field) =>
+            field.type !== 'button' &&
+            !isSubmitSkippedFieldType(field.type) &&
+            !evaluateHiddenStatus(field, context)
         );
         if (hasVisibleField) {
           targets.add(groupId);
@@ -324,7 +404,12 @@ function getActiveValidationTargets(
     }
 
     for (const field of block.fields) {
-      if (field.type === 'button' || field.repeatableGroupId || evaluateHiddenStatus(field, context)) {
+      if (
+        field.type === 'button' ||
+        isSubmitSkippedFieldType(field.type) ||
+        field.repeatableGroupId ||
+        evaluateHiddenStatus(field, context)
+      ) {
         continue;
       }
       targets.add(field.id);
@@ -376,9 +461,10 @@ export function createSubmissionOrchestrator(): SubmissionOrchestrator {
     const submitValidData = async (validData: T) => {
       try {
         const formValues = validData as Partial<DescriptorFormData>;
+        const submitFormValues = stripSubmitSkippedFormValues(descriptor, formValues);
         
         // Check if form data contains File objects (pending uploads)
-        const containsFiles = hasFileObjects(formValues);
+        const containsFiles = hasFileObjects(submitFormValues);
 
         // Evaluate payload template
         const evaluatedPayload = evaluatePayloadTemplate(
@@ -386,18 +472,27 @@ export function createSubmissionOrchestrator(): SubmissionOrchestrator {
           formValues,
           caseContext
         );
+        const submitPayload =
+          typeof evaluatedPayload === 'object' &&
+          evaluatedPayload !== null &&
+          !Array.isArray(evaluatedPayload)
+            ? stripSubmitSkippedFormValues(
+                descriptor,
+                evaluatedPayload as Partial<DescriptorFormData>
+              )
+            : evaluatedPayload;
 
         // Construct request body based on whether files are present
         let requestBody: string | globalThis.FormData;
         if (containsFiles) {
           // Use multipart/form-data for file uploads
-          requestBody = constructFormData(formValues, evaluatedPayload);
+          requestBody = constructFormData(submitFormValues, submitPayload);
         } else {
           // Use JSON for non-file submissions
           // If evaluated payload is an object, stringify it; otherwise use as-is
-          requestBody = typeof evaluatedPayload === 'string'
-            ? evaluatedPayload
-            : JSON.stringify(evaluatedPayload);
+          requestBody = typeof submitPayload === 'string'
+            ? submitPayload
+            : JSON.stringify(submitPayload);
         }
 
         // Construct request
