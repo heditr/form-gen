@@ -23,6 +23,7 @@ import type {
   PopinSubmitConfig,
   ButtonConfig,
   ButtonMenuItem,
+  FileFieldConfig,
   ManualLookupConfig,
 } from './form-descriptor';
 
@@ -133,6 +134,24 @@ const buttonConfig: ButtonConfig = {
   popinBlockId: 'documents',
 };
 
+// Verify FileFieldConfig type
+const fileFieldConfig: FileFieldConfig = {
+  acceptedFormats: ['pdf', 'png', 'jpg'],
+  maxSizeBytes: 10_000_000,
+  multiple: true,
+  uploadUrl: '/api/documents/upload',
+  deleteUrl: '/api/documents/{id}',
+};
+
+// Verify FieldDescriptor with file config
+const fileField: FieldDescriptor = {
+  id: 'proofOfAddress',
+  type: 'file',
+  label: 'Proof of address',
+  validation: [],
+  file: fileFieldConfig,
+};
+
 // Verify ButtonMenuItem type
 const buttonMenuItem: ButtonMenuItem = {
   label: 'Add Contact',
@@ -218,6 +237,7 @@ const globalDescriptor: GlobalFormDescriptor = {
       'Content-Type': 'application/json',
     },
   },
+  files: fileFieldConfig,
 };
 
 // Verify SubFormDescriptor (submission is optional)
@@ -283,6 +303,8 @@ export {
   buttonFieldSingle,
   buttonFieldMenu,
   buttonConfig,
+  fileFieldConfig,
+  fileField,
   buttonMenuItem,
   blockWithStatus,
   popinBlock,

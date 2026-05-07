@@ -705,6 +705,48 @@ describe('form-descriptor types', () => {
   });
 
   describe('File field types', () => {
+    test('given a file field descriptor, should support upload constraints and endpoints', () => {
+      const field: FieldDescriptor = {
+        id: 'proofOfAddress',
+        type: 'file',
+        label: 'Proof of address',
+        validation: [],
+        file: {
+          acceptedFormats: ['pdf', 'png', 'jpg'],
+          maxSizeBytes: 10_000_000,
+          multiple: false,
+          uploadUrl: '/api/documents/upload',
+          deleteUrl: '/api/documents/{id}',
+        },
+      };
+
+      expect(field.file?.acceptedFormats).toEqual(['pdf', 'png', 'jpg']);
+      expect(field.file?.maxSizeBytes).toBe(10_000_000);
+      expect(field.file?.multiple).toBe(false);
+      expect(field.file?.uploadUrl).toBe('/api/documents/upload');
+      expect(field.file?.deleteUrl).toBe('/api/documents/{id}');
+    });
+
+    test('given descriptor-level file defaults, should support reusable upload defaults', () => {
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [],
+        submission: { url: '/api/submit', method: 'POST' },
+        files: {
+          acceptedFormats: ['pdf', 'png'],
+          maxSizeBytes: 5_000_000,
+          multiple: true,
+          uploadUrl: '/api/files/upload',
+          deleteUrl: '/api/files/{id}',
+        },
+      };
+
+      expect(descriptor.files?.acceptedFormats).toEqual(['pdf', 'png']);
+      expect(descriptor.files?.maxSizeBytes).toBe(5_000_000);
+      expect(descriptor.files?.multiple).toBe(true);
+      expect(descriptor.files?.uploadUrl).toBe('/api/files/upload');
+      expect(descriptor.files?.deleteUrl).toBe('/api/files/{id}');
+    });
+
     test('given a file field descriptor, should allow defaultValue as URL string', () => {
       const field: FieldDescriptor = {
         id: 'document',

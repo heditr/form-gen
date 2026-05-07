@@ -224,6 +224,24 @@ export interface FieldLayoutConfig {
 }
 
 /**
+ * File upload behavior configuration shared by primitive file fields and
+ * descriptor-level file defaults.
+ *
+ * @property acceptedFormats - Allowed file extensions without leading dots
+ * @property maxSizeBytes - Maximum allowed file size in bytes
+ * @property multiple - Whether the field accepts multiple uploaded files
+ * @property uploadUrl - Endpoint used to persist selected files immediately
+ * @property deleteUrl - Endpoint used when clearing or replacing persisted files
+ */
+export interface FileFieldConfig {
+  acceptedFormats?: string[];
+  maxSizeBytes?: number;
+  multiple?: boolean;
+  uploadUrl?: string;
+  deleteUrl?: string;
+}
+
+/**
  * Button menu item configuration
  * 
  * @property label - Display label for the menu item
@@ -262,6 +280,7 @@ export interface ButtonConfig {
  * @property isDiscriminant - Flag indicating this field triggers re-hydration when changed
  * @property status - Optional status templates for conditional visibility/enabling
  * @property button - Optional button configuration (only for button type fields)
+ * @property file - Optional file upload configuration (only for file type fields)
  * @property repeatableGroupId - Optional identifier to associate this field with a repeatable group
  * @property defaultValue - Optional default value or Handlebars template (e.g. '{{caseContext.email}}').
  *   In repeatable groups with repeatableDefaultSource, use '@index' in the template (e.g. '{{caseContext.addresses.@index.street}}');
@@ -287,6 +306,7 @@ export interface FieldDescriptor {
   isDiscriminant?: boolean;
   status?: StatusTemplates;
   button?: ButtonConfig;
+  file?: FileFieldConfig;
   repeatableGroupId?: string;
   autoFill?: AutoFillConfig;
   manualLookup?: ManualLookupConfig;
@@ -437,6 +457,7 @@ export interface DraftConfig extends SubmissionConfig {
  * @property version - Version identifier for the descriptor
  * @property blocks - Array of block descriptors (may include blocks with subFormRef)
  * @property submission - Submission configuration
+ * @property files - Optional descriptor-level defaults for primitive file fields
  */
 export interface GlobalFormDescriptor {
   id?: string;
@@ -445,6 +466,7 @@ export interface GlobalFormDescriptor {
   blocks: BlockDescriptor[];
   submission: SubmissionConfig;
   draft?: DraftConfig;
+  files?: FileFieldConfig;
 }
 
 /**
