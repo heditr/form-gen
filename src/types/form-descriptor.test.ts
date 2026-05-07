@@ -16,6 +16,11 @@ import type {
   RulesObject,
   FormData,
   DraftConfig,
+  DocumentCardConfig,
+  DocumentCardData,
+  DocumentCardSlotData,
+  DocumentCategory,
+  UploadedFileMeta,
   // Intermediate helper types (exported for testing)
   FieldValueType,
   AllFields,
@@ -269,6 +274,92 @@ describe('form-descriptor types', () => {
 
       expect(field.manualLookup?.request.method).toBe('POST');
       expect(field.manualLookup?.request.payloadTemplate).toContain('{{externalEntityId}}');
+    });
+
+    test('given a document card field, should support document configuration on the field descriptor', () => {
+      const documentConfig: DocumentCardConfig = {
+        docType: 'identity_document',
+        category: 'nominativeUploadableByProspect',
+        subcategory: 'identity',
+        layout: 'perProspect',
+        requiredByAgent: true,
+        requestedDefault: true,
+        requestedDisabled: true,
+        allowOptional: true,
+        allowComment: true,
+        allowClientConfirmation: true,
+        allowFrontOfficeName: true,
+        file: {
+          acceptedFormats: ['jpg', 'jpeg', 'pdf', 'png'],
+          maxSizeBytes: 10_000_000,
+          multiple: true,
+          uploadUrl: '/api/documents/upload',
+          deleteUrl: '/api/documents/{id}',
+        },
+        prospects: [
+          {
+            id: 'person-1',
+            name: 'Jane Doe',
+            requestedDefault: true,
+            optionalDefault: false,
+          },
+        ],
+      };
+
+      const field: FieldDescriptor = {
+        id: 'identityDocuments',
+        type: 'document',
+        label: 'Identity documents',
+        validation: [],
+        document: documentConfig,
+      };
+
+      expect(field.type).toBe('document');
+      expect(field.document?.docType).toBe('identity_document');
+      expect(field.document?.category).toBe('nominativeUploadableByProspect');
+      expect(field.document?.layout).toBe('perProspect');
+      expect(field.document?.prospects?.[0]?.name).toBe('Jane Doe');
+    });
+
+    test('given document card data, should support persisted files and per-slot metadata', () => {
+      const uploadedFile: UploadedFileMeta = {
+        id: 'file-1',
+        url: 'https://example.com/file-1.pdf',
+        filename: 'passport.pdf',
+        uploadedAt: '2026-05-07T09:00:00.000Z',
+        sizeBytes: 1024,
+        contentType: 'application/pdf',
+        clientConfirmationRequested: true,
+        frontOfficeName: 'Passport',
+      };
+      const prospectSlot: DocumentCardSlotData = {
+        requested: true,
+        optional: false,
+        files: [uploadedFile],
+      };
+      const data: DocumentCardData = {
+        requested: true,
+        optional: false,
+        comment: 'Use the latest document only',
+        files: [],
+        prospects: {
+          'person-1': prospectSlot,
+        },
+      };
+
+      expect(data.prospects?.['person-1']?.files[0]?.filename).toBe('passport.pdf');
+      expect(data.prospects?.['person-1']?.files[0]?.clientConfirmationRequested).toBe(true);
+    });
+
+    test('given document category, should support all backend document categories', () => {
+      const categories: DocumentCategory[] = [
+        'agnostic',
+        'nominativeUploadableByProspect',
+        'prefilledOnly',
+        'uploadableByProspect',
+      ];
+
+      expect(categories).toHaveLength(4);
     });
 
   });

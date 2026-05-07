@@ -24,6 +24,10 @@ import type {
   ButtonConfig,
   ButtonMenuItem,
   FileFieldConfig,
+  DocumentCardConfig,
+  DocumentCardData,
+  DocumentCardSlotData,
+  UploadedFileMeta,
   ManualLookupConfig,
 } from './form-descriptor';
 
@@ -150,6 +154,71 @@ const fileField: FieldDescriptor = {
   label: 'Proof of address',
   validation: [],
   file: fileFieldConfig,
+};
+
+// Verify document card file metadata
+const uploadedFileMeta: UploadedFileMeta = {
+  id: 'document-file-1',
+  url: 'https://example.com/document-file-1.pdf',
+  filename: 'passport.pdf',
+  uploadedAt: '2026-05-07T09:00:00.000Z',
+  sizeBytes: 1024,
+  contentType: 'application/pdf',
+  clientConfirmationRequested: true,
+  frontOfficeName: 'Passport',
+};
+
+// Verify document card slot data
+const documentCardSlotData: DocumentCardSlotData = {
+  requested: true,
+  optional: false,
+  files: [uploadedFileMeta],
+};
+
+// Verify document card form data
+const documentCardData: DocumentCardData = {
+  requested: true,
+  optional: false,
+  comment: 'Ask the prospect for the latest version',
+  files: [],
+  variants: {
+    passport: documentCardSlotData,
+  },
+};
+
+// Verify document field config
+const documentCardConfig: DocumentCardConfig = {
+  docType: 'identity_document',
+  category: 'nominativeUploadableByProspect',
+  subcategory: 'identity',
+  layout: 'variants',
+  requiredByAgent: true,
+  requestedDefault: true,
+  allowOptional: true,
+  allowComment: true,
+  allowClientConfirmation: true,
+  allowFrontOfficeName: true,
+  file: fileFieldConfig,
+  variants: [
+    {
+      id: 'passport',
+      label: 'Passport',
+      checkedByDefault: true,
+      requestedDefault: true,
+      optionalDefault: false,
+      defaultFiles: [uploadedFileMeta],
+    },
+  ],
+};
+
+// Verify FieldDescriptor with document config
+const documentField: FieldDescriptor = {
+  id: 'identityDocuments',
+  type: 'document',
+  label: 'Identity documents',
+  defaultValue: documentCardData,
+  validation: [],
+  document: documentCardConfig,
 };
 
 // Verify ButtonMenuItem type
@@ -305,6 +374,11 @@ export {
   buttonConfig,
   fileFieldConfig,
   fileField,
+  uploadedFileMeta,
+  documentCardSlotData,
+  documentCardData,
+  documentCardConfig,
+  documentField,
   buttonMenuItem,
   blockWithStatus,
   popinBlock,

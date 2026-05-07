@@ -57,6 +57,7 @@ export type FieldType =
   | 'checkbox'
   | 'date'
   | 'file'
+  | 'document'
   | 'number'
   | 'button';
 
@@ -90,6 +91,8 @@ export type FieldDefaultValue<T extends FieldType> =
     ? string | number
     : T extends 'file'
     ? string | string[] | null
+    : T extends 'document'
+    ? DocumentCardData
     : T extends 'number'
     ? number
     : unknown;
@@ -242,6 +245,103 @@ export interface FileFieldConfig {
 }
 
 /**
+ * Backend document categories used to derive Document Card capabilities.
+ */
+export type DocumentCategory =
+  | 'agnostic'
+  | 'nominativeUploadableByProspect'
+  | 'prefilledOnly'
+  | 'uploadableByProspect';
+
+/**
+ * Document Card rendering layouts.
+ *
+ * - single: one card-level upload slot
+ * - variants: one row per configured document variant
+ * - perProspect: one row per configured prospect/person
+ */
+export type DocumentCardLayout = 'single' | 'variants' | 'perProspect';
+
+/**
+ * Persisted metadata for a file uploaded through a primitive file field or
+ * Document Card popin. File bytes are already stored by the backend.
+ */
+export interface UploadedFileMeta {
+  id: string;
+  url: string;
+  filename: string;
+  uploadedAt: string;
+  sizeBytes?: number;
+  contentType?: string;
+  clientConfirmationRequested?: boolean;
+  frontOfficeName?: string;
+}
+
+/**
+ * Runtime data stored for one upload slot in a Document Card.
+ */
+export interface DocumentCardSlotData {
+  requested: boolean;
+  optional?: boolean;
+  files: UploadedFileMeta[];
+}
+
+/**
+ * Runtime form value for a Document Card field.
+ */
+export interface DocumentCardData extends DocumentCardSlotData {
+  comment?: string;
+  variants?: Record<string, DocumentCardSlotData>;
+  prospects?: Record<string, DocumentCardSlotData>;
+}
+
+/**
+ * Static descriptor config for a variant row in a Document Card.
+ */
+export interface DocumentCardVariantConfig {
+  id: string;
+  label: string;
+  checkedByDefault?: boolean;
+  requestedDefault?: boolean;
+  optionalDefault?: boolean;
+  defaultFiles?: UploadedFileMeta[];
+}
+
+/**
+ * Static descriptor config for a prospect/person row in a Document Card.
+ */
+export interface DocumentCardProspectConfig {
+  id: string;
+  name: string;
+  requestedDefault?: boolean;
+  optionalDefault?: boolean;
+  defaultFiles?: UploadedFileMeta[];
+}
+
+/**
+ * Document Card field configuration. The field's RHF value is DocumentCardData;
+ * this config describes how to render and initialize the card.
+ */
+export interface DocumentCardConfig {
+  docType: string;
+  category: DocumentCategory;
+  subcategory?: string;
+  layout: DocumentCardLayout;
+  requiredByAgent?: boolean;
+  requestedDefault?: boolean;
+  requestedDisabled?: boolean;
+  optionalDefault?: boolean;
+  allowOptional?: boolean;
+  allowComment?: boolean;
+  allowClientConfirmation?: boolean;
+  allowFrontOfficeName?: boolean;
+  file?: FileFieldConfig;
+  variants?: DocumentCardVariantConfig[];
+  prospects?: DocumentCardProspectConfig[];
+  prospectSource?: string;
+}
+
+/**
  * Button menu item configuration
  * 
  * @property label - Display label for the menu item
@@ -281,6 +381,7 @@ export interface ButtonConfig {
  * @property status - Optional status templates for conditional visibility/enabling
  * @property button - Optional button configuration (only for button type fields)
  * @property file - Optional file upload configuration (only for file type fields)
+ * @property document - Optional Document Card configuration (only for document type fields)
  * @property repeatableGroupId - Optional identifier to associate this field with a repeatable group
  * @property defaultValue - Optional default value or Handlebars template (e.g. '{{caseContext.email}}').
  *   In repeatable groups with repeatableDefaultSource, use '@index' in the template (e.g. '{{caseContext.addresses.@index.street}}');
@@ -291,7 +392,7 @@ export interface FieldDescriptor {
   type: FieldType;
   label: string;
   description?: string;
-  defaultValue?: string | string[] | number | boolean | null;
+  defaultValue?: string | string[] | number | boolean | DocumentCardData | null;
   /**
    * Static option items for selection fields, or a Handlebars template string
    * that evaluates to a JSON array of FieldItem objects.
@@ -307,6 +408,7 @@ export interface FieldDescriptor {
   status?: StatusTemplates;
   button?: ButtonConfig;
   file?: FileFieldConfig;
+  document?: DocumentCardConfig;
   repeatableGroupId?: string;
   autoFill?: AutoFillConfig;
   manualLookup?: ManualLookupConfig;
@@ -559,6 +661,8 @@ export type FieldValueType<F extends FieldDescriptor> =
     ? Date | string | null
     : F['type'] extends 'file'
     ? string | string[] | null
+    : F['type'] extends 'document'
+    ? DocumentCardData
     : F['type'] extends 'radio'
     ? string | number
     : F['type'] extends 'number'
