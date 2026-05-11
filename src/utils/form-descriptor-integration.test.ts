@@ -1026,6 +1026,137 @@ describe('form descriptor integration', () => {
     });
   });
 
+  describe('extractDefaultValues with document fields', () => {
+    test('given a single document field without defaultValue, should build defaults from document config', () => {
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'documents',
+            title: 'Documents',
+            fields: [
+              {
+                id: 'proofOfAddress',
+                type: 'document',
+                label: 'Proof of address',
+                validation: [],
+                document: {
+                  docType: 'proof_of_address',
+                  category: 'uploadableByProspect',
+                  layout: 'single',
+                  requestedDefault: true,
+                  optionalDefault: false,
+                },
+              },
+            ],
+          },
+        ],
+        submission: {
+          url: '/api/submit',
+          method: 'POST',
+        },
+      };
+
+      const defaultValues = extractDefaultValues(descriptor);
+
+      expect(defaultValues.proofOfAddress).toEqual({
+        requested: true,
+        optional: false,
+        files: [],
+      });
+    });
+
+    test('given a per-prospect document defaultValue, should reconcile slots against configured prospects', () => {
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'documents',
+            title: 'Documents',
+            fields: [
+              {
+                id: 'identityDocuments',
+                type: 'document',
+                label: 'Identity documents',
+                validation: [],
+                defaultValue: {
+                  requested: false,
+                  optional: true,
+                  files: [],
+                  prospects: {
+                    'person-1': {
+                      requested: false,
+                      optional: true,
+                      files: [
+                        {
+                          id: 'existing-file',
+                          url: 'https://example.com/existing-file.pdf',
+                          filename: 'existing-file.pdf',
+                          uploadedAt: '2026-05-07T09:00:00.000Z',
+                        },
+                      ],
+                    },
+                    stalePerson: {
+                      requested: true,
+                      files: [],
+                    },
+                  },
+                },
+                document: {
+                  docType: 'identity_document',
+                  category: 'nominativeUploadableByProspect',
+                  layout: 'perProspect',
+                  requestedDefault: true,
+                  prospects: [
+                    {
+                      id: 'person-1',
+                      name: 'Jane Doe',
+                      requestedDefault: true,
+                    },
+                    {
+                      id: 'person-2',
+                      name: 'John Smith',
+                      optionalDefault: true,
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+        submission: {
+          url: '/api/submit',
+          method: 'POST',
+        },
+      };
+
+      const defaultValues = extractDefaultValues(descriptor);
+
+      expect(defaultValues.identityDocuments).toEqual({
+        requested: false,
+        optional: true,
+        files: [],
+        prospects: {
+          'person-1': {
+            requested: false,
+            optional: true,
+            files: [
+              {
+                id: 'existing-file',
+                url: 'https://example.com/existing-file.pdf',
+                filename: 'existing-file.pdf',
+                uploadedAt: '2026-05-07T09:00:00.000Z',
+              },
+            ],
+          },
+          'person-2': {
+            requested: false,
+            optional: true,
+            files: [],
+          },
+        },
+      });
+    });
+  });
+
   describe('extractDefaultValues with repeatable groups', () => {
     test('given a repeatable block without default values, should initialize as empty array', () => {
       const descriptor: GlobalFormDescriptor = {

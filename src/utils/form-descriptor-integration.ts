@@ -7,7 +7,16 @@
 
 import type { FieldError } from 'react-hook-form';
 import { z } from 'zod';
-import type { GlobalFormDescriptor, FormData, BlockDescriptor, FieldDescriptor } from '@/types/form-descriptor';
+import type {
+  DocumentCardConfig,
+  DocumentCardData,
+  DocumentCardProspectConfig,
+  DocumentCardSlotData,
+  GlobalFormDescriptor,
+  FormData,
+  BlockDescriptor,
+  FieldDescriptor,
+} from '@/types/form-descriptor';
 import { convertToReactHookFormRules, convertToZodSchema } from './validation-rule-adapter';
 import { evaluateDefaultValue } from './default-value-evaluator';
 import { evaluateTemplate } from './template-evaluator';
@@ -17,10 +26,87 @@ import { evaluateValidationArrayTemplate } from './array-template-evaluator';
 
 type ValidationScope = 'main' | 'popin';
 
-const createEmptyDocumentCardData = () => ({
-  requested: false,
-  files: [],
+const createDocumentSlotDefault = ({
+  requestedDefault = false,
+  optionalDefault,
+  defaultFiles = [],
+}: Pick<DocumentCardProspectConfig, 'requestedDefault' | 'optionalDefault' | 'defaultFiles'>): DocumentCardSlotData => ({
+  requested: requestedDefault,
+  ...(optionalDefault !== undefined ? { optional: optionalDefault } : {}),
+  files: defaultFiles,
 });
+
+const normalizeDocumentSlotData = (
+  slotDefault: DocumentCardSlotData,
+  value?: DocumentCardSlotData
+): DocumentCardSlotData => ({
+  requested: value?.requested ?? slotDefault.requested,
+  ...((value?.optional ?? slotDefault.optional) !== undefined
+    ? { optional: value?.optional ?? slotDefault.optional }
+    : {}),
+  files: value?.files ?? slotDefault.files,
+});
+
+const resolveDocumentProspects = (
+  config: DocumentCardConfig,
+  context: FormContext
+): DocumentCardProspectConfig[] => {
+  if (config.prospects) {
+    return config.prospects;
+  }
+
+  if (!config.prospectSource) {
+    return [];
+  }
+
+  const key = config.prospectSource.includes('{{') && config.prospectSource.includes('}}')
+    ? evaluateTemplate(config.prospectSource, context).trim()
+    : config.prospectSource.trim();
+  const source = (context.caseContext as Record<string, unknown> | undefined)?.[key];
+
+  return Array.isArray(source)
+    ? source.filter((item): item is DocumentCardProspectConfig =>
+      typeof item === 'object' &&
+      item !== null &&
+      typeof (item as DocumentCardProspectConfig).id === 'string' &&
+      typeof (item as DocumentCardProspectConfig).name === 'string'
+    )
+    : [];
+};
+
+const createDocumentCardDefaultData = (
+  field: FieldDescriptor,
+  context: FormContext,
+  value?: DocumentCardData
+): DocumentCardData => {
+  const config = field.document;
+  const rootDefault = createDocumentSlotDefault({
+    requestedDefault: config?.requestedDefault,
+    optionalDefault: config?.optionalDefault,
+  });
+  const root = normalizeDocumentSlotData(rootDefault, value);
+  const base = {
+    ...root,
+    ...(value?.comment !== undefined ? { comment: value.comment } : {}),
+  };
+
+  if (config?.layout !== 'perProspect') {
+    return base;
+  }
+
+  return {
+    ...base,
+    prospects: Object.fromEntries(
+      resolveDocumentProspects(config, context).map((prospect) => [
+        prospect.id,
+        normalizeDocumentSlotData(
+          createDocumentSlotDefault(prospect),
+          value?.prospects?.[prospect.id]
+        ),
+      ])
+    ),
+  };
+};
 
 /**
  * Fields persisted out-of-band by their own backend interactions should remain
@@ -307,7 +393,13 @@ export function extractDefaultValues(
                 field.type,
                 context
               );
-              setNestedValue(groupDefault, baseFieldId, evaluatedValue);
+              setNestedValue(
+                groupDefault,
+                baseFieldId,
+                field.type === 'document'
+                  ? createDocumentCardDefaultData(field, context, evaluatedValue as DocumentCardData)
+                  : evaluatedValue
+              );
             } else {
               switch (field.type) {
                 case 'text':
@@ -331,7 +423,7 @@ export function extractDefaultValues(
                   setNestedValue(groupDefault, baseFieldId, null);
                   break;
                 case 'document':
-                  setNestedValue(groupDefault, baseFieldId, createEmptyDocumentCardData());
+                  setNestedValue(groupDefault, baseFieldId, createDocumentCardDefaultData(field, context));
                   break;
                 default:
                   setNestedValue(groupDefault, baseFieldId, '');
@@ -359,7 +451,7 @@ export function extractDefaultValues(
                 setNestedValue(emptyInstance, baseFieldId, null);
                 break;
               case 'document':
-                setNestedValue(emptyInstance, baseFieldId, createEmptyDocumentCardData());
+                setNestedValue(emptyInstance, baseFieldId, createDocumentCardDefaultData(field, context));
                 break;
               default:
                 setNestedValue(emptyInstance, baseFieldId, '');
@@ -392,7 +484,13 @@ export function extractDefaultValues(
             field.type,
             context
           );
-          setNestedValue(target, field.id, evaluatedValue);
+          setNestedValue(
+            target,
+            field.id,
+            field.type === 'document'
+              ? createDocumentCardDefaultData(field, context, evaluatedValue as DocumentCardData)
+              : evaluatedValue
+          );
         } else {
           // Set type-appropriate default values for uncontrolled -> controlled transition
           let typeDefault: unknown;
@@ -418,7 +516,7 @@ export function extractDefaultValues(
               typeDefault = null;
               break;
             case 'document':
-              typeDefault = createEmptyDocumentCardData();
+              typeDefault = createDocumentCardDefaultData(field, context);
               break;
             default:
               typeDefault = '';
