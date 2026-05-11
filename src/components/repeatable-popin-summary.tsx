@@ -10,7 +10,6 @@ import type { BlockDescriptor, FieldDescriptor } from '@/types/form-descriptor';
 import type { UseFormReturn, FieldValues } from 'react-hook-form';
 import type { FormContext } from '@/utils/template-evaluator';
 import { evaluateTemplate } from '@/utils/template-evaluator';
-import { evaluateDefaultValue } from '@/utils/default-value-evaluator';
 import { usePopinManager } from './popin-manager';
 import { Button } from '@/components/ui/button';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
@@ -32,7 +31,6 @@ export interface RepeatablePopinSummaryProps {
 export default function RepeatablePopinSummary({
   block,
   groupId,
-  fields,
   isDisabled,
   isHidden,
   form,
@@ -43,41 +41,6 @@ export default function RepeatablePopinSummary({
     control: form.control,
     name: groupId,
   });
-
-  const getDefaultInstanceValues = (): Record<string, unknown> => {
-    const defaultInstance: Record<string, unknown> = {};
-    for (const field of fields) {
-      if (field.type === 'button') continue;
-      const baseFieldId = field.id.startsWith(`${groupId}.`)
-        ? field.id.slice(groupId.length + 1)
-        : field.id;
-      if (field.defaultValue !== undefined) {
-        defaultInstance[baseFieldId] = evaluateDefaultValue(field.defaultValue, field.type, formContext);
-      } else {
-        switch (field.type) {
-          case 'text':
-          case 'dropdown':
-          case 'autocomplete':
-          case 'date':
-          case 'radio':
-            defaultInstance[baseFieldId] = '';
-            break;
-          case 'checkbox':
-            defaultInstance[baseFieldId] = false;
-            break;
-          case 'number':
-            defaultInstance[baseFieldId] = 0;
-            break;
-          case 'file':
-            defaultInstance[baseFieldId] = null;
-            break;
-          default:
-            defaultInstance[baseFieldId] = '';
-        }
-      }
-    }
-    return defaultInstance;
-  };
 
   const handleAdd = () => {
     if (isDisabled) return;

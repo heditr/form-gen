@@ -240,6 +240,9 @@ export function PopinManagerProvider({
           case 'file':
             defaultInstance[baseFieldId] = null;
             break;
+          case 'document':
+            defaultInstance[baseFieldId] = { requested: false, files: [] };
+            break;
           default:
             defaultInstance[baseFieldId] = '';
         }

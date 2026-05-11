@@ -6,7 +6,7 @@
  */
 
 import { evaluateTemplate, type FormContext } from './template-evaluator';
-import type { FieldType } from '@/types/form-descriptor';
+import type { DocumentCardData, FieldType } from '@/types/form-descriptor';
 
 function parseDateDefaultValue(value: string): Date | null {
   const trimmed = value.trim();
@@ -43,10 +43,10 @@ function parseDateDefaultValue(value: string): Date | null {
  * @returns Evaluated and type-converted default value
  */
 export function evaluateDefaultValue(
-  defaultValue: string | string[] | number | boolean | null | undefined,
+  defaultValue: string | string[] | number | boolean | DocumentCardData | null | undefined,
   fieldType: FieldType,
   context: FormContext
-): string | number | boolean | Date | string[] | null | undefined {
+): string | number | boolean | Date | string[] | DocumentCardData | null | undefined {
   // If defaultValue is not a string, return it unchanged (static value)
   if (typeof defaultValue !== 'string') {
     return defaultValue;

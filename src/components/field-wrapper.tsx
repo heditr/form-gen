@@ -18,6 +18,7 @@ import CheckboxField from './checkbox-field';
 import RadioField from './radio-field';
 import DateField from './date-field';
 import FileField from './file-field';
+import DocumentCard from './document-card';
 import NumberField from './number-field';
 import ButtonField from './button-field';
 
@@ -156,6 +157,15 @@ export default function FieldWrapper({
     case 'file':
       return (
         <FileField
+          field={field}
+          form={form}
+          isDisabled={isDisabled}
+          required={isRequired}
+        />
+      );
+    case 'document':
+      return (
+        <DocumentCard
           field={field}
           form={form}
           isDisabled={isDisabled}

@@ -257,10 +257,9 @@ export type DocumentCategory =
  * Document Card rendering layouts.
  *
  * - single: one card-level upload slot
- * - variants: one row per configured document variant
  * - perProspect: one row per configured prospect/person
  */
-export type DocumentCardLayout = 'single' | 'variants' | 'perProspect';
+export type DocumentCardLayout = 'single' | 'perProspect';
 
 /**
  * Persisted metadata for a file uploaded through a primitive file field or
@@ -291,20 +290,7 @@ export interface DocumentCardSlotData {
  */
 export interface DocumentCardData extends DocumentCardSlotData {
   comment?: string;
-  variants?: Record<string, DocumentCardSlotData>;
   prospects?: Record<string, DocumentCardSlotData>;
-}
-
-/**
- * Static descriptor config for a variant row in a Document Card.
- */
-export interface DocumentCardVariantConfig {
-  id: string;
-  label: string;
-  checkedByDefault?: boolean;
-  requestedDefault?: boolean;
-  optionalDefault?: boolean;
-  defaultFiles?: UploadedFileMeta[];
 }
 
 /**
@@ -336,7 +322,6 @@ export interface DocumentCardConfig {
   allowClientConfirmation?: boolean;
   allowFrontOfficeName?: boolean;
   file?: FileFieldConfig;
-  variants?: DocumentCardVariantConfig[];
   prospects?: DocumentCardProspectConfig[];
   prospectSource?: string;
 }

@@ -17,6 +17,11 @@ import { evaluateValidationArrayTemplate } from './array-template-evaluator';
 
 type ValidationScope = 'main' | 'popin';
 
+const createEmptyDocumentCardData = () => ({
+  requested: false,
+  files: [],
+});
+
 /**
  * Fields persisted out-of-band by their own backend interactions should remain
  * in RHF state for UI/draft purposes, but should not participate in final submit
@@ -325,6 +330,9 @@ export function extractDefaultValues(
                 case 'file':
                   setNestedValue(groupDefault, baseFieldId, null);
                   break;
+                case 'document':
+                  setNestedValue(groupDefault, baseFieldId, createEmptyDocumentCardData());
+                  break;
                 default:
                   setNestedValue(groupDefault, baseFieldId, '');
               }
@@ -349,6 +357,9 @@ export function extractDefaultValues(
                 break;
               case 'file':
                 setNestedValue(emptyInstance, baseFieldId, null);
+                break;
+              case 'document':
+                setNestedValue(emptyInstance, baseFieldId, createEmptyDocumentCardData());
                 break;
               default:
                 setNestedValue(emptyInstance, baseFieldId, '');
@@ -405,6 +416,9 @@ export function extractDefaultValues(
               break;
             case 'file':
               typeDefault = null;
+              break;
+            case 'document':
+              typeDefault = createEmptyDocumentCardData();
               break;
             default:
               typeDefault = '';

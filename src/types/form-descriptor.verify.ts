@@ -181,8 +181,8 @@ const documentCardData: DocumentCardData = {
   optional: false,
   comment: 'Ask the prospect for the latest version',
   files: [],
-  variants: {
-    passport: documentCardSlotData,
+  prospects: {
+    'person-1': documentCardSlotData,
   },
 };
 
@@ -191,7 +191,7 @@ const documentCardConfig: DocumentCardConfig = {
   docType: 'identity_document',
   category: 'nominativeUploadableByProspect',
   subcategory: 'identity',
-  layout: 'variants',
+  layout: 'perProspect',
   requiredByAgent: true,
   requestedDefault: true,
   allowOptional: true,
@@ -199,11 +199,10 @@ const documentCardConfig: DocumentCardConfig = {
   allowClientConfirmation: true,
   allowFrontOfficeName: true,
   file: fileFieldConfig,
-  variants: [
+  prospects: [
     {
-      id: 'passport',
-      label: 'Passport',
-      checkedByDefault: true,
+      id: 'person-1',
+      name: 'Jane Doe',
       requestedDefault: true,
       optionalDefault: false,
       defaultFiles: [uploadedFileMeta],

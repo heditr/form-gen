@@ -154,7 +154,7 @@ export function convertToReactHookFormRules(rules: ValidationRule[] | undefined 
  */
 export function convertToZodSchema(
   rules: ValidationRule[] | undefined | null,
-  fieldType: 'text' | 'dropdown' | 'multiselect' | 'autocomplete' | 'date' | 'radio' | 'checkbox' | 'file' | 'number' = 'text'
+  fieldType: 'text' | 'dropdown' | 'multiselect' | 'autocomplete' | 'date' | 'radio' | 'checkbox' | 'file' | 'document' | 'number' = 'text'
 ): z.ZodTypeAny {
   // Handle undefined, null, or non-array values
   if (!rules || !Array.isArray(rules)) {
@@ -178,6 +178,13 @@ export function convertToZodSchema(
       case 'file':
         // File fields store URL strings (not File objects)
         return z.union([z.string(), z.array(z.string()), z.null()]);
+      case 'document':
+        return z.object({
+          requested: z.boolean(),
+          optional: z.boolean().optional(),
+          comment: z.string().optional(),
+          files: z.array(z.any()),
+        }).passthrough();
       case 'radio':
         return z.union([z.string(), z.number()]);
       case 'number':
@@ -226,6 +233,20 @@ export function convertToZodSchema(
       // Preprocess undefined to null so validation can run
       needsPreprocessing = true;
       preprocessFn = (val) => (val === undefined ? null : val);
+      break;
+    case 'document':
+      baseSchema = z.object({
+        requested: z.boolean(),
+        optional: z.boolean().optional(),
+        comment: z.string().optional(),
+        files: z.array(z.any()),
+      }).passthrough();
+      needsPreprocessing = true;
+      preprocessFn = (val) => (
+        val === undefined || val === null
+          ? { requested: false, files: [] }
+          : val
+      );
       break;
     case 'radio':
       baseSchema = z.union([z.string(), z.number()]);
