@@ -14,6 +14,7 @@ import { useGlobalDescriptor } from '@/hooks/use-form-query';
 import { getFormState, getVisibleBlocks, getVisibleFields, syncFormDataToContext, type RootState } from '@/store/form-dux';
 import { fetchDataSourceThunk } from '@/store/form-thunks';
 import { useDebouncedRehydration } from '@/hooks/use-debounced-rehydration';
+import { useDebouncedDocumentsRehydration } from '@/hooks/use-debounced-documents-rehydration';
 import { useDraftSave } from '@/hooks/use-draft-save';
 import type { AppDispatch } from '@/store/store';
 import { updateCaseContext, identifyDiscriminantFields, hasContextChanged } from '@/utils/context-extractor';
@@ -505,6 +506,10 @@ function FormContainerWithSubmissionWithHook({
   const visibleBlocks = useSelector((state: RootState) => getVisibleBlocks(state));
   const visibleFields = useSelector((state: RootState) => getVisibleFields(state));
   const { mutate: debouncedRehydrate, isPending: isRehydratingFromHook } = useDebouncedRehydration();
+  const {
+    mutate: debouncedDocumentsRehydrate,
+    isPending: isDocumentsRehydratingFromHook,
+  } = useDebouncedDocumentsRehydration();
 
   const {
     mergedDescriptor,
@@ -514,7 +519,8 @@ function FormContainerWithSubmissionWithHook({
     dataSourceCache,
   } = formState;
 
-  const isRehydrating = isRehydratingFromHook || isRehydratingFromRedux;
+  const isRehydrating =
+    isRehydratingFromHook || isDocumentsRehydratingFromHook || isRehydratingFromRedux;
 
   // Force form remount when validation rules change so RHF picks up fresh resolver rules.
   // Avoid remounting on every context update because it can cancel pending debounced draft saves.
@@ -554,8 +560,9 @@ function FormContainerWithSubmissionWithHook({
   const rehydrate = useCallback(
     (caseContext: CaseContext) => {
       debouncedRehydrate(caseContext);
+      debouncedDocumentsRehydrate(caseContext);
     },
-    [debouncedRehydrate]
+    [debouncedRehydrate, debouncedDocumentsRehydrate]
   );
 
   const loadDataSource = useCallback(

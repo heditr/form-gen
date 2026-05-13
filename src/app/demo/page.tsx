@@ -13,6 +13,7 @@ import { useGlobalDescriptor } from '@/hooks/use-form-query';
 import { getFormState, getVisibleBlocks, getVisibleFields, syncFormDataToContext, initializeCaseContextFromPrefill, updateCaseContextValues } from '@/store/form-dux';
 import { fetchDataSourceThunk } from '@/store/form-thunks';
 import { useDebouncedRehydration } from '@/hooks/use-debounced-rehydration';
+import { useDebouncedDocumentsRehydration } from '@/hooks/use-debounced-documents-rehydration';
 import type { RootState } from '@/store/form-dux';
 import type { AppDispatch } from '@/store/store';
 import { Button } from '@/components/ui/button';
@@ -603,6 +604,10 @@ function FormContainerWithSubmissionWithHook({
   const visibleBlocks = useSelector((state: RootState) => getVisibleBlocks(state));
   const visibleFields = useSelector((state: RootState) => getVisibleFields(state));
   const { mutate: debouncedRehydrate, isPending: isRehydratingFromHook } = useDebouncedRehydration();
+  const {
+    mutate: debouncedDocumentsRehydrate,
+    isPending: isDocumentsRehydratingFromHook,
+  } = useDebouncedDocumentsRehydration();
 
   const {
     mergedDescriptor,
@@ -612,7 +617,8 @@ function FormContainerWithSubmissionWithHook({
     dataSourceCache,
   } = formState;
 
-  const isRehydrating = isRehydratingFromHook || isRehydratingFromRedux;
+  const isRehydrating =
+    isRehydratingFromHook || isDocumentsRehydratingFromHook || isRehydratingFromRedux;
 
   const syncFormData = useCallback(
     (formData: Partial<FormData>) => {
@@ -624,8 +630,9 @@ function FormContainerWithSubmissionWithHook({
   const rehydrate = useCallback(
     (caseContext: CaseContext) => {
       debouncedRehydrate(caseContext);
+      debouncedDocumentsRehydrate(caseContext);
     },
-    [debouncedRehydrate]
+    [debouncedRehydrate, debouncedDocumentsRehydrate]
   );
 
   const loadDataSource = useCallback(

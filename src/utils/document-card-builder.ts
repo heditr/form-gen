@@ -27,6 +27,8 @@ export interface CaseDocumentsSlotPayload {
 /** One document card entry from the documents list endpoint. */
 export interface CaseDocumentsEntry {
   documentType: string;
+  /** Host block id for surgical placement when merging into the descriptor (fallback `documents`). */
+  targetBlockId?: string;
   label?: string;
   description?: string;
   category: DocumentCategory;

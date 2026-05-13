@@ -15,6 +15,7 @@ import {
   syncFormDataToContext,
   triggerRehydration,
   applyRulesUpdate,
+  applyDocumentsUpdate,
   loadDataSource,
   getFormState,
   getVisibleBlocks,
@@ -39,6 +40,7 @@ describe('form-dux', () => {
       expect(initialState).toEqual({
         globalDescriptor: null,
         mergedDescriptor: null,
+        lastRulesObject: null,
         formData: {},
         caseContext: {},
         isRehydrating: false,
@@ -121,6 +123,7 @@ describe('form-dux', () => {
       const newState = reducer(stateRehydrating, action);
       
       expect(newState.mergedDescriptor).toBeDefined();
+      expect(newState.lastRulesObject).toEqual(rulesObject);
       expect(newState.isRehydrating).toBe(false);
     });
 
@@ -135,6 +138,104 @@ describe('form-dux', () => {
     });
   });
 
+  describe('applyDocumentsUpdate action', () => {
+    test('given documents payload, should replace global document fields and sync formData slices', () => {
+      const descriptor: GlobalFormDescriptor = {
+        version: '1.0.0',
+        blocks: [
+          {
+            id: 'documents',
+            title: 'Documents',
+            fields: [
+              {
+                id: 'gone',
+                type: 'document',
+                label: 'Gone',
+                validation: [],
+                document: {
+                  docType: 'gone',
+                  category: 'agnostic',
+                  layout: 'single',
+                  allowOptional: true,
+                },
+                defaultValue: { requested: false, files: [] },
+              },
+            ],
+          },
+        ],
+        submission: { url: '/api/submit', method: 'POST' },
+      };
+
+      let state = reducer(initialState, loadGlobalDescriptor({ descriptor }));
+      state = reducer(state, syncFormDataToContext({ formData: { gone: { requested: true, files: [] }, keep: 'x' } }));
+
+      state = reducer(
+        state,
+        applyDocumentsUpdate({
+          documents: [
+            {
+              documentType: 'proof',
+              category: 'agnostic',
+              targetBlockId: 'documents',
+              slots: { main: {} },
+            },
+          ],
+        })
+      );
+
+      const docIds = state.globalDescriptor?.blocks.flatMap((b) =>
+        (b.fields ?? []).filter((f) => f.type === 'document').map((f) => f.id)
+      );
+      expect(docIds).toEqual(['proof']);
+      expect(state.formData.gone).toBeUndefined();
+      expect(state.formData.proof).toEqual({ requested: false, files: [] });
+      expect(state.formData.keep).toBe('x');
+    });
+
+    test('given documents update after rules, should replay lastRulesObject onto mergedDescriptor', () => {
+      const descriptor: GlobalFormDescriptor = {
+        version: '1.0.0',
+        blocks: [
+          {
+            id: 'main',
+            title: 'Main',
+            fields: [{ id: 'email', type: 'text', label: 'Email', validation: [] }],
+          },
+          { id: 'documents', title: 'Documents', fields: [] },
+        ],
+        submission: { url: '/api/submit', method: 'POST' },
+      };
+
+      let state = reducer(initialState, loadGlobalDescriptor({ descriptor }));
+      const rulesObject: RulesObject = {
+        fields: [{ id: 'email', validation: [{ type: 'required' as const, message: 'Required' }] }],
+      };
+      state = reducer(state, applyRulesUpdate({ rulesObject }));
+
+      state = reducer(
+        state,
+        applyDocumentsUpdate({
+          documents: [
+            {
+              documentType: 'id_card',
+              category: 'agnostic',
+              slots: { main: {} },
+            },
+          ],
+        })
+      );
+
+      const emailField = state.mergedDescriptor?.blocks
+        .flatMap((b) => b.fields ?? [])
+        .find((f) => f.id === 'email');
+      expect(emailField?.validation).toEqual(
+        expect.arrayContaining([expect.objectContaining({ type: 'required' })])
+      );
+      expect(state.globalDescriptor?.blocks.some((b) => (b.fields ?? []).some((f) => f.id === 'id_card'))).toBe(
+        true
+      );
+    });
+  });
 
   describe('loadDataSource action', () => {
     test('given data source data, should cache it in dataSourceCache', () => {
@@ -240,6 +341,7 @@ describe('form-dux', () => {
 
         expect(newState.globalDescriptor).toEqual(descriptor);
         expect(newState.mergedDescriptor).toEqual(descriptor);
+        expect(newState.lastRulesObject).toBeNull();
       });
     });
 
@@ -270,6 +372,7 @@ describe('form-dux', () => {
         const newState = reducer(stateWithDescriptor, action);
 
         expect(newState.mergedDescriptor).toBeDefined();
+        expect(newState.lastRulesObject).toEqual(rulesObject);
         expect(newState.isRehydrating).toBe(false);
       });
 

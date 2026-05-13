@@ -15,6 +15,7 @@ import { ClientOnlyDevTool } from '@/components/client-only-devtool';
 import type { GlobalFormDescriptor, BlockDescriptor, FieldDescriptor, FormData, CaseContext } from '@/types/form-descriptor';
 import { useFormDescriptor } from '@/hooks/use-form-descriptor';
 import { useDebouncedRehydration } from '@/hooks/use-debounced-rehydration';
+import { useDebouncedDocumentsRehydration } from '@/hooks/use-debounced-documents-rehydration';
 import { useDraftSave } from '@/hooks/use-draft-save';
 import {
   getVisibleBlocks,
@@ -186,11 +187,16 @@ export default function FormContainer() {
   const visibleBlocks = useSelector((state: RootState) => getVisibleBlocks(state));
   const visibleFields = useSelector((state: RootState) => getVisibleFields(state));
 
-  // Use debounced rehydration hook
+  // Use debounced rehydration hooks (rules + dynamic documents)
   const { mutate: debouncedRehydrate, isPending: isRehydratingFromHook } = useDebouncedRehydration();
+  const {
+    mutate: debouncedDocumentsRehydrate,
+    isPending: isDocumentsRehydratingFromHook,
+  } = useDebouncedDocumentsRehydration();
 
   // Combine rehydration states - use hook state if available, fallback to Redux
-  const isRehydrating = isRehydratingFromHook || isRehydratingFromRedux;
+  const isRehydrating =
+    isRehydratingFromHook || isDocumentsRehydratingFromHook || isRehydratingFromRedux;
 
   // Create callbacks for dispatching actions
   const syncFormData = useCallback(
@@ -202,10 +208,10 @@ export default function FormContainer() {
 
   const rehydrate = useCallback(
     (caseContext: CaseContext) => {
-      // Use debounced rehydration hook instead of thunk
       debouncedRehydrate(caseContext);
+      debouncedDocumentsRehydrate(caseContext);
     },
-    [debouncedRehydrate]
+    [debouncedRehydrate, debouncedDocumentsRehydrate]
   );
 
   const loadDataSource = useCallback(

@@ -19,6 +19,9 @@ import type {
 } from '@/types/form-descriptor';
 import { mergeDescriptorWithRules } from '@/utils/descriptor-merger';
 import { initializeCaseContext } from '@/utils/context-extractor';
+import type { CaseDocumentsEntry } from '@/utils/document-card-builder';
+import type { ApplyDocumentsToDescriptorOptions } from '@/utils/documents-rehydration-merge';
+import { applyDocumentsRehydrationMerge } from '@/utils/documents-rehydration-merge';
 import {
   fetchGlobalDescriptorThunk,
   rehydrateRulesThunk,
@@ -30,6 +33,8 @@ export const slice = 'form' as const;
 export interface FormState {
   globalDescriptor: GlobalFormDescriptor | null;
   mergedDescriptor: GlobalFormDescriptor | null;
+  /** Last rules payload replayed after a documents surgical merge (mergedDescriptor = merge(global, lastRules)). */
+  lastRulesObject: RulesObject | null;
   formData: Partial<FormData>;
   caseContext: CaseContext;
   isRehydrating: boolean;
@@ -49,6 +54,7 @@ export interface ActionObject<T = unknown> {
 export const initialState: FormState = {
   globalDescriptor: null,
   mergedDescriptor: null,
+  lastRulesObject: null,
   formData: {},
   caseContext: {},
   isRehydrating: false,
@@ -80,6 +86,17 @@ export const applyRulesUpdate = ({
 }: { rulesObject?: RulesObject | null } = {}): ActionObject<{ rulesObject: RulesObject | null }> => ({
   type: `${slice}/applyRulesUpdate`,
   payload: { rulesObject },
+});
+
+export const applyDocumentsUpdate = ({
+  documents = [],
+  mergeOptions,
+}: {
+  documents?: CaseDocumentsEntry[];
+  mergeOptions?: ApplyDocumentsToDescriptorOptions;
+} = {}): ActionObject<{ documents: CaseDocumentsEntry[]; mergeOptions?: ApplyDocumentsToDescriptorOptions }> => ({
+  type: `${slice}/applyDocumentsUpdate`,
+  payload: { documents, mergeOptions },
 });
 
 
@@ -143,6 +160,7 @@ export const reducer = (state: FormState = initialState, action: ActionObject | 
       ...state,
       globalDescriptor: descriptor,
       mergedDescriptor: descriptor,
+      lastRulesObject: null,
     };
   }
 
@@ -171,6 +189,7 @@ export const reducer = (state: FormState = initialState, action: ActionObject | 
     return {
       ...state,
       mergedDescriptor: updatedMergedDescriptor,
+      lastRulesObject: rulesObject,
       isRehydrating: false,
     };
   }
@@ -204,6 +223,7 @@ export const reducer = (state: FormState = initialState, action: ActionObject | 
         ...state,
         globalDescriptor: descriptor,
         mergedDescriptor: descriptor,
+        lastRulesObject: null,
       };
     }
 
@@ -223,24 +243,52 @@ export const reducer = (state: FormState = initialState, action: ActionObject | 
     }
 
     case applyRulesUpdate().type: {
-      // Deep merge rules into mergedDescriptor
+      // Deep merge rules into globalDescriptor (canonical shape incl. dynamic documents)
       const { rulesObject } = action.payload as { rulesObject: RulesObject | null };
-      
+
       if (!rulesObject || !state.globalDescriptor) {
-        // If no rules or no global descriptor, just preserve existing state
         return {
           ...state,
           isRehydrating: false,
         };
       }
-      
-      // Merge rules into the global descriptor to create updated merged descriptor
+
       const updatedMergedDescriptor = mergeDescriptorWithRules(state.globalDescriptor, rulesObject);
-      
+
       return {
         ...state,
         mergedDescriptor: updatedMergedDescriptor,
+        lastRulesObject: rulesObject,
         isRehydrating: false,
+      };
+    }
+
+    case applyDocumentsUpdate().type: {
+      const { documents, mergeOptions } = action.payload as {
+        documents: CaseDocumentsEntry[];
+        mergeOptions?: ApplyDocumentsToDescriptorOptions;
+      };
+
+      if (!state.globalDescriptor) {
+        return state;
+      }
+
+      const { descriptor: nextGlobal, formData: nextFormData } = applyDocumentsRehydrationMerge({
+        descriptor: state.globalDescriptor,
+        formData: state.formData,
+        documents,
+        options: mergeOptions,
+      });
+
+      const nextMerged = state.lastRulesObject
+        ? mergeDescriptorWithRules(nextGlobal, state.lastRulesObject)
+        : nextGlobal;
+
+      return {
+        ...state,
+        globalDescriptor: nextGlobal,
+        mergedDescriptor: nextMerged,
+        formData: nextFormData,
       };
     }
 
