@@ -11,6 +11,10 @@ import type {
   DocumentCardSlotData,
   UploadedFileMeta,
 } from '@/types/form-descriptor';
+import {
+  buildAcceptAttributeFromFormats,
+  fileMatchesAcceptedFormats,
+} from '@/utils/accepted-file-formats';
 
 /** Discriminates root card value (`DocumentCardData`) from per-prospect map keys. */
 export type DocumentSlotKind = 'root' | 'prospects';
@@ -135,30 +139,21 @@ export function prospectConfigIdsKey(prospects: DocumentCardProspectConfig[] | u
   return (prospects ?? []).map((p) => p.id).join('\u0001');
 }
 
-/** Normalised extension tokens (no dot) derived from descriptor `acceptedFormats`. */
-export const getAcceptedFormats = (config: DocumentCardConfig): string[] =>
-  config.file?.acceptedFormats?.map((format) => format.replace(/^\./, '').toLowerCase()) ?? [];
-
-/** Value for `<input accept="…">` (comma-separated `.{ext}`) or `undefined` if unrestricted. */
-export const getAcceptAttribute = (config: DocumentCardConfig): string | undefined => {
-  const formats = getAcceptedFormats(config);
-  return formats.length === 0 ? undefined : formats.map((format) => `.${format}`).join(',');
-};
-
-const getFileExtension = (fileName: string): string =>
-  fileName.split('.').pop()?.toLowerCase() ?? '';
+/** Value for `<input accept="…">` (MIME types and/or `.{ext}`) or `undefined` if unrestricted. */
+export const getAcceptAttribute = (config: DocumentCardConfig): string | undefined =>
+  buildAcceptAttributeFromFormats(config.file?.acceptedFormats ?? []);
 
 /** Client-side guard before POST; returns first violation message or `null` when all files pass. */
 export const validateSelectedFiles = (files: File[], config: DocumentCardConfig): string | null => {
   const maxSizeBytes = config.file?.maxSizeBytes;
-  const acceptedFormats = getAcceptedFormats(config);
+  const acceptedFormats = config.file?.acceptedFormats ?? [];
 
   return files
     .map((file) => {
       if (maxSizeBytes !== undefined && file.size > maxSizeBytes) {
         return `File exceeds the maximum size of ${maxSizeBytes} bytes`;
       }
-      if (acceptedFormats.length > 0 && !acceptedFormats.includes(getFileExtension(file.name))) {
+      if (acceptedFormats.length > 0 && !fileMatchesAcceptedFormats(file, acceptedFormats)) {
         return `File format must be one of: ${acceptedFormats.join(', ')}`;
       }
       return null;

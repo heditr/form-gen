@@ -14,6 +14,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import {
+  buildAcceptAttributeFromFormats,
+  fileMatchesAcceptedFormats,
+} from '@/utils/accepted-file-formats';
 
 export interface FileFieldProps {
   field: FieldDescriptor;
@@ -29,16 +33,7 @@ function getAcceptedFormats(field: FieldDescriptor): string[] {
 }
 
 function getAcceptAttribute(field: FieldDescriptor): string | undefined {
-  const formats = getAcceptedFormats(field);
-  if (formats.length === 0) {
-    return undefined;
-  }
-  return formats.map((format) => `.${format.replace(/^\./, '')}`).join(',');
-}
-
-function getFileExtension(fileName: string): string {
-  const parts = fileName.split('.');
-  return parts.length > 1 ? parts[parts.length - 1].toLowerCase() : '';
+  return buildAcceptAttributeFromFormats(getAcceptedFormats(field));
 }
 
 function validateSelectedFile(file: File, field: FieldDescriptor): string | null {
@@ -47,10 +42,8 @@ function validateSelectedFile(file: File, field: FieldDescriptor): string | null
     return `File exceeds the maximum size of ${maxSizeBytes} bytes`;
   }
 
-  const acceptedFormats = getAcceptedFormats(field).map((format) =>
-    format.replace(/^\./, '').toLowerCase()
-  );
-  if (acceptedFormats.length > 0 && !acceptedFormats.includes(getFileExtension(file.name))) {
+  const acceptedFormats = getAcceptedFormats(field);
+  if (acceptedFormats.length > 0 && !fileMatchesAcceptedFormats(file, acceptedFormats)) {
     return `File format must be one of: ${acceptedFormats.join(', ')}`;
   }
 

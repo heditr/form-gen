@@ -657,6 +657,38 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
           ],
         },
         {
+          id: 'document-card-demo',
+          title: 'Document card (upload popin)',
+          description:
+            'Opens uploads in a dialog so session state survives form remounts when rules or context change. Uses demo POST /api/upload.',
+          fields: [
+            {
+              id: 'demo_proof_of_identity',
+              type: 'document',
+              label: 'Proof of identity',
+              description:
+                'Click **Manage uploads** to open the popin. Choose PDF or images; **Validate** commits files to the form (demo stores data URLs).',
+              validation: [],
+              document: {
+                docType: 'demo_proof_of_identity',
+                category: 'uploadableByProspect',
+                layout: 'single',
+                requestedDefault: true,
+                allowOptional: true,
+                allowComment: true,
+                allowClientConfirmation: true,
+                allowFrontOfficeName: true,
+                file: {
+                  acceptedFormats: ['application/pdf', 'image/png', 'image/jpeg'],
+                  maxSizeBytes: 5 * 1024 * 1024,
+                  multiple: true,
+                  uploadUrl: '/api/upload',
+                },
+              },
+            },
+          ],
+        },
+        {
           id: 'additional-info',
           title: 'Additional Information',
           description: 'Optional additional details',
