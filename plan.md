@@ -2,6 +2,8 @@
 
 ## Active Epics
 
+- [Document Upload Popin Epic](tasks/document-upload-popin-epic.md) - 📋 PLANNED
+
 - [Multiselect Field Epic](tasks/multiselect-field-epic.md) - 📋 PLANNED
 
 - [Backend Validation Epic](tasks/backend-validation-epic.md) - 📋 PLANNED

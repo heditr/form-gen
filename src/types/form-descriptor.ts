@@ -235,6 +235,7 @@ export interface FieldLayoutConfig {
  * @property multiple - Whether the field accepts multiple uploaded files
  * @property uploadUrl - Endpoint used to persist selected files immediately
  * @property deleteUrl - Endpoint used when clearing or replacing persisted files
+ * @property metadataPatchUrl - Optional JSON PATCH URL for document file metadata (e.g. confirmation flag, front-office title). May contain `{id}` for the file id.
  */
 export interface FileFieldConfig {
   acceptedFormats?: string[];
@@ -242,6 +243,7 @@ export interface FileFieldConfig {
   multiple?: boolean;
   uploadUrl?: string;
   deleteUrl?: string;
+  metadataPatchUrl?: string;
 }
 
 /**

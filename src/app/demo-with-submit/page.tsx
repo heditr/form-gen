@@ -27,6 +27,7 @@ import { Button } from '@/components/ui/button';
 import FormPresentation from '@/components/form-presentation';
 import FormValuesWatcher from '@/components/form-values-watcher';
 import { PopinManagerProvider } from '@/components/popin-manager';
+import { DocumentPopinProvider, DocumentMainFormBinder } from '@/components/document-popin-provider';
 
 interface SubmissionState {
   payload: string | null;
@@ -461,36 +462,39 @@ function FormContainerWithSubmissionComponent({
   );
 
   return (
-    <FormValuesWatcher
-      form={form}
-      caseContext={caseContext}
-      descriptor={mergedDescriptor}
-      onDiscriminantChange={handleDiscriminantChange}
-      onFormChange={saveDraft}
-    >
-      {(formContext) => (
-        <PopinManagerProvider
-          mergedDescriptor={demoDescriptor}
-          form={form}
-          formContext={formContext}
-          caseContext={caseContext}
-          onLoadDataSource={loadDataSource}
-          dataSourceCache={dataSourceCache}
-        >
-          <FormPresentation {...presentationProps} formContext={formContext} />
-          {demoDescriptor && (
-            <div className="mt-6">
-              <SubmitButton
-                form={form}
-                descriptor={demoDescriptor}
-                isRehydrating={isRehydrating}
-                onSubmit={handleSubmitWithTracking}
-              />
-            </div>
-          )}
-        </PopinManagerProvider>
-      )}
-    </FormValuesWatcher>
+    <DocumentPopinProvider mergedDescriptor={demoDescriptor}>
+      <FormValuesWatcher
+        form={form}
+        caseContext={caseContext}
+        descriptor={mergedDescriptor}
+        onDiscriminantChange={handleDiscriminantChange}
+        onFormChange={saveDraft}
+      >
+        {(formContext) => (
+          <PopinManagerProvider
+            mergedDescriptor={demoDescriptor}
+            form={form}
+            formContext={formContext}
+            caseContext={caseContext}
+            onLoadDataSource={loadDataSource}
+            dataSourceCache={dataSourceCache}
+          >
+            <DocumentMainFormBinder form={form} />
+            <FormPresentation {...presentationProps} formContext={formContext} />
+            {demoDescriptor && (
+              <div className="mt-6">
+                <SubmitButton
+                  form={form}
+                  descriptor={demoDescriptor}
+                  isRehydrating={isRehydrating}
+                  onSubmit={handleSubmitWithTracking}
+                />
+              </div>
+            )}
+          </PopinManagerProvider>
+        )}
+      </FormValuesWatcher>
+    </DocumentPopinProvider>
   );
 }
 

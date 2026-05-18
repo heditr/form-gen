@@ -33,6 +33,7 @@ import { serializeFormValues } from '@/utils/submission-orchestrator';
 import FormPresentation from './form-presentation';
 import FormValuesWatcher from './form-values-watcher';
 import { PopinManagerProvider } from './popin-manager';
+import { DocumentPopinProvider, DocumentMainFormBinder } from './document-popin-provider';
 
 /**
  * Props passed to presentation component
@@ -156,6 +157,7 @@ function FormInner({
           onLoadDataSource={loadDataSource}
           dataSourceCache={dataSourceCache}
         >
+          <DocumentMainFormBinder form={form} />
           <FormPresentation {...presentationProps} formContext={formContext} />
           <ClientOnlyDevTool control={form.control} />
         </PopinManagerProvider>
@@ -263,18 +265,20 @@ export default function FormContainer() {
   // This ensures the form is re-created with the new Zod schema when rules are updated
   // Pass formData to restore values when form remounts
   return (
-    <FormInner
-      key={formKey}
-      mergedDescriptor={mergedDescriptor}
-      visibleBlocks={visibleBlocks}
-      visibleFields={visibleFields}
-      isRehydrating={isRehydrating}
-      caseContext={caseContext}
-      formData={formData}
-      syncFormData={syncFormData}
-      rehydrate={rehydrate}
-      loadDataSource={loadDataSource}
-      dataSourceCache={dataSourceCache}
-    />
+    <DocumentPopinProvider mergedDescriptor={mergedDescriptor}>
+      <FormInner
+        key={formKey}
+        mergedDescriptor={mergedDescriptor}
+        visibleBlocks={visibleBlocks}
+        visibleFields={visibleFields}
+        isRehydrating={isRehydrating}
+        caseContext={caseContext}
+        formData={formData}
+        syncFormData={syncFormData}
+        rehydrate={rehydrate}
+        loadDataSource={loadDataSource}
+        dataSourceCache={dataSourceCache}
+      />
+    </DocumentPopinProvider>
   );
 }

@@ -3,11 +3,13 @@
  */
 
 import { beforeEach, describe, test, expect, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { useMemo } from 'react';
 import { useForm, useWatch, type FieldValues } from 'react-hook-form';
 import DocumentCard from './document-card';
-import type { DocumentCardData, FieldDescriptor } from '@/types/form-descriptor';
+import { DocumentPopinProvider, DocumentMainFormBinder } from './document-popin-provider';
+import type { DocumentCardData, FieldDescriptor, GlobalFormDescriptor } from '@/types/form-descriptor';
 
 describe('DocumentCard', () => {
   beforeEach(() => {
@@ -44,6 +46,19 @@ describe('DocumentCard', () => {
     ...overrides,
   });
 
+  const buildDescriptor = (field: FieldDescriptor): GlobalFormDescriptor => ({
+    version: '1',
+    blocks: [
+      {
+        id: 'doc-block',
+        title: 'Documents',
+        layout: 'stack',
+        fields: [field],
+      },
+    ],
+    submission: {},
+  });
+
   const renderDocumentCard = ({
     field = createDocumentField(),
     defaultValue,
@@ -60,12 +75,14 @@ describe('DocumentCard', () => {
         },
       });
       const value = useWatch({ control: form.control, name: field.id });
+      const mergedDescriptor = useMemo(() => buildDescriptor(field), [field]);
 
       return (
-        <>
+        <DocumentPopinProvider mergedDescriptor={mergedDescriptor}>
+          <DocumentMainFormBinder form={form} />
           <DocumentCard field={field} form={form} isDisabled={isDisabled} />
           <output data-testid="document-value">{JSON.stringify(value)}</output>
-        </>
+        </DocumentPopinProvider>
       );
     };
 
@@ -117,17 +134,21 @@ describe('DocumentCard', () => {
     expect(value.comment).toBe('Ask for a certified copy');
   });
 
-  test('given uploadable document config, should render constrained file inputs for each slot', () => {
-    const { container } = renderDocumentCard();
+  test('given uploadable document config, should expose file picker in manage popin', async () => {
+    const user = userEvent.setup();
+    renderDocumentCard();
 
-    const fileInputs = container.querySelectorAll('input[type="file"]');
+    await user.click(screen.getByRole('button', { name: /manage uploads/i }));
+
+    const dialog = await screen.findByRole('dialog');
+    const fileInputs = dialog.querySelectorAll('input[type="file"]');
 
     expect(fileInputs).toHaveLength(1);
     expect(fileInputs[0]).toHaveAttribute('accept', '.pdf,.png');
     expect(fileInputs[0]).toHaveAttribute('multiple');
   });
 
-  test('given a selected document file, should upload and store file metadata in the matching slot', async () => {
+  test('given a selected document file in popin, should upload and commit file metadata on validate', async () => {
     const user = userEvent.setup();
     vi.stubGlobal('fetch', vi.fn(async () => ({
       ok: true,
@@ -138,16 +159,24 @@ describe('DocumentCard', () => {
         uploadedAt: '2026-05-07T10:00:00.000Z',
       }),
     })));
-    const { container } = renderDocumentCard();
-    const firstFileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
 
-    await user.upload(firstFileInput, new File(['document'], 'uploaded.pdf', { type: 'application/pdf' }));
+    renderDocumentCard();
+
+    await user.click(screen.getByRole('button', { name: /manage uploads/i }));
+
+    const dialog = await screen.findByRole('dialog');
+    const dialogFileInput = dialog.querySelector('input[type="file"]') as HTMLInputElement;
+
+    await user.upload(dialogFileInput, new File(['document'], 'uploaded.pdf', { type: 'application/pdf' }));
+
+    await user.click(within(dialog).getByRole('button', { name: /^validate$/i }));
 
     await waitFor(() => {
       const value = JSON.parse(screen.getByTestId('document-value').textContent ?? '{}') as DocumentCardData;
       expect(value.files.some((file) => file.id === 'uploaded-1')).toBe(true);
     });
     expect(fetch).toHaveBeenCalledWith('/api/upload', expect.objectContaining({ method: 'POST' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
   test('given a per-prospect document card, should render and store choices by prospect id', async () => {
