@@ -15,6 +15,7 @@ import type { FormContext } from '@/utils/template-evaluator';
 import { resolveBlockById } from '@/utils/block-resolver';
 import { loadPopinData } from '@/utils/popin-load-loader';
 import { evaluatePayloadTemplate, type BackendErrorResponse } from '@/utils/submission-orchestrator';
+import { invalidateConfiguredQueryKeys } from '@/utils/invalidate-query-keys';
 import type { BackendError } from '@/utils/form-descriptor-integration';
 import { useFormDescriptor } from '@/hooks/use-form-descriptor';
 import { isRepeatableBlock, groupFieldsByRepeatableGroupId } from '@/utils/form-descriptor-integration';
@@ -476,9 +477,18 @@ export function PopinManagerProvider({
       });
 
       if (response.ok) {
-        // On success, invalidate queries to refresh original form values
-        queryClient.invalidateQueries({ queryKey: ['form', 'data-source'] });
-        // Close popin
+        // Default: refresh dynamic field data sources used by the main form
+        await queryClient.invalidateQueries({ queryKey: ['form', 'data-source'] });
+        await invalidateConfiguredQueryKeys({
+          queryClient,
+          queryKeys: block.popinSubmit.invalidateQueryKeys,
+          formContext: {
+            ...allFormValues,
+            ...initialFormContext,
+            caseContext: caseContext as unknown as FormContext,
+            formData: allFormValues,
+          },
+        });
         closePopin();
         return;
       }
@@ -513,7 +523,7 @@ export function PopinManagerProvider({
       } finally {
         setIsSubmittingPopin(false);
       }
-    }, [resolvedBlock, popinForm, mainForm, closePopin, queryClient, popinEditContext]);
+    }, [resolvedBlock, popinForm, mainForm, closePopin, queryClient, popinEditContext, initialFormContext, caseContext]);
 
   // Context value
   const contextValue = useMemo(() => ({

@@ -431,6 +431,8 @@ export interface PopinLoadConfig {
  * @property method - HTTP method (POST, PUT, PATCH)
  * @property payloadTemplate - Optional Handlebars template for transforming form data
  * @property auth - Optional authentication configuration
+ * @property invalidateQueryKeys - Optional TanStack Query keys (or prefixes) to invalidate after a successful submit.
+ *   Each segment may be a Handlebars template evaluated with formContext. Prefix matching is used (no exact match).
  */
 export interface PopinSubmitConfig {
   url: string;
@@ -443,6 +445,7 @@ export interface PopinSubmitConfig {
     username?: string;
     password?: string;
   };
+  invalidateQueryKeys?: Array<Array<string | number>>;
 }
 
 /**

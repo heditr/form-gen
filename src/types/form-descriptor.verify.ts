@@ -289,6 +289,7 @@ const popinSubmitConfig: PopinSubmitConfig = {
     type: 'bearer',
     token: 'token123',
   },
+  invalidateQueryKeys: [['case', '{{caseContext.caseId}}'], ['form', 'data-source']],
 };
 
 // Verify GlobalFormDescriptor

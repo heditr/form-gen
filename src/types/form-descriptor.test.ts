@@ -578,6 +578,28 @@ describe('form-descriptor types', () => {
       expect(block.popinSubmit?.auth?.type).toBe('apikey');
       expect(block.popinSubmit?.auth?.headerName).toBe('X-API-Key');
     });
+
+    test('given a popin block with popinSubmit invalidateQueryKeys, should support query key prefixes and templates', () => {
+      const block: BlockDescriptor = {
+        id: 'contact-info',
+        title: 'Contact Information',
+        fields: [],
+        popin: true,
+        popinSubmit: {
+          url: '/api/contact/{{entityId}}',
+          method: 'POST',
+          invalidateQueryKeys: [
+            ['case', '{{caseContext.caseId}}'],
+            ['form', 'data-source'],
+          ],
+        },
+      };
+
+      expect(block.popinSubmit?.invalidateQueryKeys).toEqual([
+        ['case', '{{caseContext.caseId}}'],
+        ['form', 'data-source'],
+      ]);
+    });
   });
 
   describe('GlobalFormDescriptor', () => {

@@ -1125,4 +1125,160 @@ describe('PopinManager', () => {
       expect(form.clearErrors).toHaveBeenCalledWith('contactEmail');
     });
   });
+
+  describe('query invalidation on popinSubmit', () => {
+    const openAndValidate = async ({
+      popinSubmit,
+      caseContext,
+    }: {
+      popinSubmit: BlockDescriptor['popinSubmit'];
+      caseContext?: CaseContext;
+    }) => {
+      const block = createMockBlock({
+        id: 'contact-info',
+        title: 'Contact Information',
+        popinSubmit,
+      });
+      const descriptor = createMockDescriptor([block]);
+      const form = createMockForm();
+
+      mockResolveBlockById.mockReturnValue({
+        block,
+        isHidden: false,
+        isDisabled: false,
+      });
+
+      renderWithQueryClient(
+        <PopinManagerProvider
+          mergedDescriptor={descriptor}
+          form={form}
+          formContext={createMockFormContext()}
+          caseContext={createMockCaseContext(caseContext)}
+          onLoadDataSource={vi.fn()}
+          dataSourceCache={{}}
+        >
+          <TestComponent blockId="contact-info" />
+        </PopinManagerProvider>
+      );
+
+      await userEvent.click(screen.getByTestId('trigger-button'));
+      await waitFor(() => {
+        expect(screen.getByTestId('dialog')).toBeInTheDocument();
+      });
+
+      await userEvent.click(screen.getByText('Validate'));
+    };
+
+    test('given successful submit with invalidateQueryKeys, should invalidate default and configured keys', async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ success: true }),
+      });
+
+      await openAndValidate({
+        popinSubmit: {
+          url: '/api/popin-submit',
+          method: 'POST',
+          invalidateQueryKeys: [
+            ['case', '{{caseContext.caseId}}'],
+            ['form', 'data-source'],
+          ],
+        },
+        caseContext: { caseId: 'case-42' },
+      });
+
+      await waitFor(() => {
+        expect(screen.queryByTestId('dialog')).not.toBeInTheDocument();
+      });
+
+      expect(mockInvalidateQueries).toHaveBeenCalledWith({ queryKey: ['form', 'data-source'] });
+      expect(mockInvalidateQueries).toHaveBeenCalledWith({ queryKey: ['case', 'case-42'] });
+    });
+
+    test('given successful submit without invalidateQueryKeys, should only invalidate form data-source', async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ success: true }),
+      });
+
+      await openAndValidate({
+        popinSubmit: {
+          url: '/api/popin-submit',
+          method: 'POST',
+        },
+      });
+
+      await waitFor(() => {
+        expect(screen.queryByTestId('dialog')).not.toBeInTheDocument();
+      });
+
+      expect(mockInvalidateQueries).toHaveBeenCalledTimes(1);
+      expect(mockInvalidateQueries).toHaveBeenCalledWith({ queryKey: ['form', 'data-source'] });
+    });
+
+    test('given 4xx submit, should not invalidate queries', async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 400,
+        json: async () => ({ error: 'Invalid' }),
+      });
+
+      await openAndValidate({
+        popinSubmit: {
+          url: '/api/popin-submit',
+          method: 'POST',
+          invalidateQueryKeys: [['case']],
+        },
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('dialog')).toBeInTheDocument();
+      });
+
+      expect(mockInvalidateQueries).not.toHaveBeenCalled();
+    });
+
+    test('given network error on submit, should not invalidate queries', async () => {
+      global.fetch = vi.fn().mockRejectedValue(new Error('network'));
+
+      await openAndValidate({
+        popinSubmit: {
+          url: '/api/popin-submit',
+          method: 'POST',
+          invalidateQueryKeys: [['case']],
+        },
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('dialog')).toBeInTheDocument();
+      });
+
+      expect(mockInvalidateQueries).not.toHaveBeenCalled();
+    });
+
+    test('given prefix key, should invalidate without exact match', async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ success: true }),
+      });
+
+      await openAndValidate({
+        popinSubmit: {
+          url: '/api/popin-submit',
+          method: 'POST',
+          invalidateQueryKeys: [['case']],
+        },
+      });
+
+      await waitFor(() => {
+        expect(screen.queryByTestId('dialog')).not.toBeInTheDocument();
+      });
+
+      const prefixCall = mockInvalidateQueries.mock.calls.find(
+        (call) => JSON.stringify(call[0]?.queryKey) === JSON.stringify(['case'])
+      );
+      expect(prefixCall).toBeDefined();
+      expect(prefixCall?.[0]?.exact).toBeUndefined();
+    });
+  });
 });

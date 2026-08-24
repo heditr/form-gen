@@ -236,6 +236,7 @@ interface PopinSubmitConfig {
     username?: string;
     password?: string;
   };
+  invalidateQueryKeys?: Array<Array<string | number>>;  // Optional TanStack Query keys/prefixes to invalidate on success
 }
 
 interface FieldDescriptor {
@@ -436,7 +437,7 @@ Popin blocks have **Cancel** and **Validate** buttons in the dialog footer. The 
   - Calls endpoint with `popinSubmit.method` (POST/PUT/PATCH)
   - If `payloadTemplate` is provided, transforms form data using Handlebars template
   - Uses `popinSubmit.auth` for authentication
-  - **If endpoint succeeds (2xx)**: Popin closes, form field changes are kept
+  - **If endpoint succeeds (2xx)**: Configured query keys are invalidated (plus the engine default `['form', 'data-source']`), then the popin closes
   - **If endpoint fails (4xx/5xx)**: Popin stays open, error message displayed to user
 - When user clicks **Cancel** button:
   - Popin closes immediately
@@ -476,6 +477,34 @@ Popin blocks have **Cancel** and **Validate** buttons in the dialog footer. The 
 - Loading state shown on Validate button while submit endpoint is being called
 - User can click Cancel to close without validation if needed
 
+## Query invalidation after popin submit
+
+When `popinSubmit` succeeds, the engine always invalidates `['form', 'data-source']` so dropdowns and other dynamic field sources refresh. Use `invalidateQueryKeys` to also stale host queries such as case context.
+
+TanStack Query **prefix matching** is the pattern: `["case"]` invalidates `["case", caseId, "context"]`. Each key segment may be a Handlebars template evaluated with the same form context used for `popinSubmit.url`. Failed submits and Cancel do not invalidate extra keys.
+
+```typescript
+{
+  id: 'contact-info',
+  title: 'Contact Information',
+  popin: true,
+  popinSubmit: {
+    url: '/api/contacts/validate',
+    method: 'POST',
+    payloadTemplate: '{"email": "{{formData.contactEmail}}"}',
+    invalidateQueryKeys: [
+      ['case', '{{caseContext.caseId}}'],
+      ['form', 'data-source'],
+    ],
+  },
+  fields: [
+    { id: 'contactEmail', type: 'text', label: 'Email', validation: [...] },
+  ]
+}
+```
+
+The form engine and the host `caseContext` query must share the same `QueryClientProvider`. After refetch, the host should keep syncing query data into Redux (for example `initializeCaseContextFromPrefill`) so the main form remounts with updated context.
+
 ## User Flow
 
 1. User sees form with inline blocks and button fields that can trigger popins
@@ -488,7 +517,7 @@ Popin blocks have **Cancel** and **Validate** buttons in the dialog footer. The 
    - If popin has `popinSubmit` config:
      - System shows loading indicator on Validate button
      - Calls submit endpoint with form data
-     - **If endpoint succeeds (2xx)**: Popin closes, form field changes are kept
+     - **If endpoint succeeds (2xx)**: Configured query keys are invalidated, then the popin closes
      - **If endpoint fails (4xx/5xx)**: Popin stays open, error message displayed
    - If popin has no `popinSubmit` config: Popin closes immediately
 8. User clicks **Cancel** button (or X, escape, backdrop):
