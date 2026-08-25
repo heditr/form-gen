@@ -236,7 +236,11 @@ interface PopinSubmitConfig {
     username?: string;
     password?: string;
   };
-  invalidateQueryKeys?: Array<Array<string | number>>;  // Optional TanStack Query keys/prefixes to invalidate on success
+}
+
+interface GlobalFormDescriptor {
+  // ...
+  queryInvalidation?: Record<string, Array<Array<string | number>>>;
 }
 
 interface FieldDescriptor {
@@ -437,7 +441,7 @@ Popin blocks have **Cancel** and **Validate** buttons in the dialog footer. The 
   - Calls endpoint with `popinSubmit.method` (POST/PUT/PATCH)
   - If `payloadTemplate` is provided, transforms form data using Handlebars template
   - Uses `popinSubmit.auth` for authentication
-  - **If endpoint succeeds (2xx)**: Configured query keys are invalidated (plus the engine default `['form', 'data-source']`), then the popin closes
+  - **If endpoint succeeds (2xx)**: Block query keys are invalidated (plus engine default `['form', 'data-source']` for popinSubmit), then the popin closes
   - **If endpoint fails (4xx/5xx)**: Popin stays open, error message displayed to user
 - When user clicks **Cancel** button:
   - Popin closes immediately
@@ -477,29 +481,50 @@ Popin blocks have **Cancel** and **Validate** buttons in the dialog footer. The 
 - Loading state shown on Validate button while submit endpoint is being called
 - User can click Cancel to close without validation if needed
 
-## Query invalidation after popin submit
+## Query invalidation by block id
 
-When `popinSubmit` succeeds, the engine always invalidates `['form', 'data-source']` so dropdowns and other dynamic field sources refresh. Use `invalidateQueryKeys` to also stale host queries such as case context.
+Configure query invalidation on the root descriptor with `queryInvalidation`, keyed by **block id** (popin or repeatable block). When that block mutates, only its configured keys are invalidated.
 
-TanStack Query **prefix matching** is the pattern: `["case"]` invalidates `["case", caseId, "context"]`. Each key segment may be a Handlebars template evaluated with the same form context used for `popinSubmit.url`. Failed submits and Cancel do not invalidate extra keys.
+TanStack Query **prefix matching** is the pattern: `["case"]` invalidates `["case", caseId, "context"]`. Each key segment may be a Handlebars template evaluated with current form context. Failed submits and Cancel do not invalidate extra keys.
+
+After a successful standalone `popinSubmit` HTTP call, the engine also always invalidates `['form', 'data-source']` in addition to that block's configured keys.
+
+**Triggers wired today:**
+- Popin with `popinSubmit`: Validate succeeds (2xx)
+- Repeatable popin: Validate create/edit (local array merge)
+- Repeatable inline or popin summary: Remove instance
 
 ```typescript
 {
-  id: 'contact-info',
-  title: 'Contact Information',
-  popin: true,
-  popinSubmit: {
-    url: '/api/contacts/validate',
-    method: 'POST',
-    payloadTemplate: '{"email": "{{formData.contactEmail}}"}',
-    invalidateQueryKeys: [
+  queryInvalidation: {
+    'contact-info': [
       ['case', '{{caseContext.caseId}}'],
       ['form', 'data-source'],
     ],
+    'addresses-block': [['case', '{{caseContext.caseId}}']],
   },
-  fields: [
-    { id: 'contactEmail', type: 'text', label: 'Email', validation: [...] },
-  ]
+  blocks: [
+    {
+      id: 'contact-info',
+      title: 'Contact Information',
+      popin: true,
+      popinSubmit: {
+        url: '/api/contacts/validate',
+        method: 'POST',
+        payloadTemplate: '{"email": "{{formData.contactEmail}}"}',
+      },
+      fields: [
+        { id: 'contactEmail', type: 'text', label: 'Email', validation: [...] },
+      ],
+    },
+    {
+      id: 'addresses-block',
+      title: 'Addresses',
+      repeatable: true,
+      repeatablePopin: true,
+      fields: [...],
+    },
+  ],
 }
 ```
 

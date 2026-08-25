@@ -579,30 +579,31 @@ describe('form-descriptor types', () => {
       expect(block.popinSubmit?.auth?.headerName).toBe('X-API-Key');
     });
 
-    test('given a popin block with popinSubmit invalidateQueryKeys, should support query key prefixes and templates', () => {
-      const block: BlockDescriptor = {
-        id: 'contact-info',
-        title: 'Contact Information',
-        fields: [],
-        popin: true,
-        popinSubmit: {
-          url: '/api/contact/{{entityId}}',
-          method: 'POST',
-          invalidateQueryKeys: [
-            ['case', '{{caseContext.caseId}}'],
-            ['form', 'data-source'],
-          ],
-        },
-      };
-
-      expect(block.popinSubmit?.invalidateQueryKeys).toEqual([
-        ['case', '{{caseContext.caseId}}'],
-        ['form', 'data-source'],
-      ]);
-    });
   });
 
   describe('GlobalFormDescriptor', () => {
+    test('given queryInvalidation map, should map block ids to query key prefixes and templates', () => {
+      const descriptor: GlobalFormDescriptor = {
+        version: '1.0.0',
+        blocks: [],
+        submission: { url: '/api/submit', method: 'POST' },
+        queryInvalidation: {
+          'contact-info': [
+            ['case', '{{caseContext.caseId}}'],
+            ['form', 'data-source'],
+          ],
+          'addresses-block': [['case', '{{caseContext.caseId}}']],
+        },
+      };
+
+      expect(descriptor.queryInvalidation?.['contact-info']).toEqual([
+        ['case', '{{caseContext.caseId}}'],
+        ['form', 'data-source'],
+      ]);
+      expect(descriptor.queryInvalidation?.['addresses-block']).toEqual([
+        ['case', '{{caseContext.caseId}}'],
+      ]);
+    });
     test('given a form descriptor structure, should define blocks, fields, and submission config', () => {
       const descriptor: GlobalFormDescriptor = {
         id: 'kyc-form-v1',

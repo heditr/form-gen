@@ -148,12 +148,16 @@ describe('PopinManager', () => {
     ...overrides,
   });
 
-  const createMockDescriptor = (blocks: BlockDescriptor[]): GlobalFormDescriptor => ({
+  const createMockDescriptor = (
+    blocks: BlockDescriptor[],
+    queryInvalidation?: GlobalFormDescriptor['queryInvalidation']
+  ): GlobalFormDescriptor => ({
     blocks,
     submission: {
       url: '/api/submit',
       method: 'POST',
     },
+    queryInvalidation,
   });
 
   const createMockForm = (overrides?: Partial<UseFormReturn<FieldValues>>): UseFormReturn<FieldValues> => {
@@ -1126,12 +1130,14 @@ describe('PopinManager', () => {
     });
   });
 
-  describe('query invalidation on popinSubmit', () => {
+  describe('query invalidation by block id', () => {
     const openAndValidate = async ({
       popinSubmit,
+      queryInvalidation,
       caseContext,
     }: {
       popinSubmit: BlockDescriptor['popinSubmit'];
+      queryInvalidation?: GlobalFormDescriptor['queryInvalidation'];
       caseContext?: CaseContext;
     }) => {
       const block = createMockBlock({
@@ -1139,7 +1145,7 @@ describe('PopinManager', () => {
         title: 'Contact Information',
         popinSubmit,
       });
-      const descriptor = createMockDescriptor([block]);
+      const descriptor = createMockDescriptor([block], queryInvalidation);
       const form = createMockForm();
 
       mockResolveBlockById.mockReturnValue({
@@ -1169,7 +1175,7 @@ describe('PopinManager', () => {
       await userEvent.click(screen.getByText('Validate'));
     };
 
-    test('given successful submit with invalidateQueryKeys, should invalidate default and configured keys', async () => {
+    test('given successful submit with queryInvalidation for block id, should invalidate default and configured keys', async () => {
       global.fetch = vi.fn().mockResolvedValue({
         ok: true,
         json: async () => ({ success: true }),
@@ -1179,7 +1185,9 @@ describe('PopinManager', () => {
         popinSubmit: {
           url: '/api/popin-submit',
           method: 'POST',
-          invalidateQueryKeys: [
+        },
+        queryInvalidation: {
+          'contact-info': [
             ['case', '{{caseContext.caseId}}'],
             ['form', 'data-source'],
           ],
@@ -1195,7 +1203,7 @@ describe('PopinManager', () => {
       expect(mockInvalidateQueries).toHaveBeenCalledWith({ queryKey: ['case', 'case-42'] });
     });
 
-    test('given successful submit without invalidateQueryKeys, should only invalidate form data-source', async () => {
+    test('given successful submit without queryInvalidation for block id, should only invalidate form data-source', async () => {
       global.fetch = vi.fn().mockResolvedValue({
         ok: true,
         json: async () => ({ success: true }),
@@ -1227,7 +1235,9 @@ describe('PopinManager', () => {
         popinSubmit: {
           url: '/api/popin-submit',
           method: 'POST',
-          invalidateQueryKeys: [['case']],
+        },
+        queryInvalidation: {
+          'contact-info': [['case']],
         },
       });
 
@@ -1245,7 +1255,9 @@ describe('PopinManager', () => {
         popinSubmit: {
           url: '/api/popin-submit',
           method: 'POST',
-          invalidateQueryKeys: [['case']],
+        },
+        queryInvalidation: {
+          'contact-info': [['case']],
         },
       });
 
@@ -1266,7 +1278,9 @@ describe('PopinManager', () => {
         popinSubmit: {
           url: '/api/popin-submit',
           method: 'POST',
-          invalidateQueryKeys: [['case']],
+        },
+        queryInvalidation: {
+          'contact-info': [['case']],
         },
       });
 
@@ -1279,6 +1293,68 @@ describe('PopinManager', () => {
       );
       expect(prefixCall).toBeDefined();
       expect(prefixCall?.[0]?.exact).toBeUndefined();
+    });
+
+    test('given repeatable popin validate, should invalidate keys for that block id', async () => {
+      const repeatableBlock = createMockBlock({
+        id: 'emergency-contacts-block',
+        title: 'Emergency Contacts',
+        repeatable: true,
+        fields: [
+          { id: 'emergency-contacts.emergencyName', type: 'text', label: 'Name', repeatableGroupId: 'emergency-contacts', validation: [] },
+        ],
+      });
+      const descriptor = createMockDescriptor([repeatableBlock], {
+        'emergency-contacts-block': [['case', '{{caseContext.caseId}}']],
+      });
+      const form = createMockForm();
+      (form.getValues as ReturnType<typeof vi.fn>).mockReturnValue({
+        'emergency-contacts': [{ emergencyName: 'Jane Doe' }],
+      });
+      (mockPopinFormInstance.getValues as ReturnType<typeof vi.fn>).mockReturnValue({
+        emergencyName: 'Jane Updated',
+      });
+
+      mockResolveBlockById.mockReturnValue({
+        block: repeatableBlock,
+        isHidden: false,
+        isDisabled: false,
+      });
+
+      const TestComponentWithOptions = () => {
+        const { openPopin } = usePopinManager();
+        return (
+          <button onClick={() => openPopin('emergency-contacts-block', { groupId: 'emergency-contacts', index: 0 })} data-testid="trigger-button">
+            Edit Contact
+          </button>
+        );
+      };
+
+      renderWithQueryClient(
+        <PopinManagerProvider
+          mergedDescriptor={descriptor}
+          form={form}
+          formContext={createMockFormContext()}
+          caseContext={createMockCaseContext({ caseId: 'case-99' })}
+          onLoadDataSource={vi.fn()}
+          dataSourceCache={{}}
+        >
+          <TestComponentWithOptions />
+        </PopinManagerProvider>
+      );
+
+      await userEvent.click(screen.getByTestId('trigger-button'));
+      await waitFor(() => {
+        expect(screen.getByTestId('dialog')).toBeInTheDocument();
+      });
+
+      await userEvent.click(screen.getByText('Validate'));
+
+      await waitFor(() => {
+        expect(screen.queryByTestId('dialog')).not.toBeInTheDocument();
+      });
+
+      expect(mockInvalidateQueries).toHaveBeenCalledWith({ queryKey: ['case', 'case-99'] });
     });
   });
 });

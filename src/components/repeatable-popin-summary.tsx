@@ -10,7 +10,7 @@ import type { BlockDescriptor, FieldDescriptor } from '@/types/form-descriptor';
 import type { UseFormReturn, FieldValues } from 'react-hook-form';
 import type { FormContext } from '@/utils/template-evaluator';
 import { evaluateTemplate } from '@/utils/template-evaluator';
-import { usePopinManager } from './popin-manager';
+import { usePopinManager, useInvalidateQueriesForBlock } from './popin-manager';
 import { Button } from '@/components/ui/button';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -37,6 +37,7 @@ export default function RepeatablePopinSummary({
   formContext,
 }: RepeatablePopinSummaryProps) {
   const { openPopin } = usePopinManager();
+  const invalidateQueriesForBlock = useInvalidateQueriesForBlock();
   const { fields: fieldArrayFields, remove } = useFieldArray({
     control: form.control,
     name: groupId,
@@ -49,8 +50,9 @@ export default function RepeatablePopinSummary({
     openPopin(block.id, { groupId });
   };
 
-  const handleRemove = (index: number) => {
+  const handleRemove = async (index: number) => {
     remove(index);
+    await invalidateQueriesForBlock(block.id);
   };
 
   const canRemove = (): boolean => {

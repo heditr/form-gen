@@ -1,11 +1,12 @@
 /**
- * Invalidate descriptor-configured TanStack Query keys after a successful popin submit.
+ * Invalidate descriptor-configured TanStack Query keys after a block mutation.
  *
  * Query keys use prefix matching (exact is not set). String segments may be Handlebars
  * templates evaluated with formContext; number segments are passed through.
  */
 
 import type { QueryClient } from '@tanstack/react-query';
+import type { GlobalFormDescriptor } from '@/types/form-descriptor';
 import { evaluateTemplate, type FormContext } from './template-evaluator';
 
 export type QueryKeySegment = string | number;
@@ -18,6 +19,16 @@ function evaluateQueryKeySegment(
     return segment;
   }
   return evaluateTemplate(segment, formContext);
+}
+
+export function getQueryInvalidationKeys(
+  descriptor: GlobalFormDescriptor | null | undefined,
+  blockId: string
+): Array<Array<QueryKeySegment>> | undefined {
+  if (!descriptor?.queryInvalidation) {
+    return undefined;
+  }
+  return descriptor.queryInvalidation[blockId];
 }
 
 export async function invalidateConfiguredQueryKeys({

@@ -41,6 +41,12 @@ vi.mock('./field-wrapper', () => ({
     fieldWrapperMock(props),
 }));
 
+const mockInvalidateQueriesForBlock = vi.fn().mockResolvedValue(undefined);
+
+vi.mock('./popin-manager', () => ({
+  useInvalidateQueriesForBlock: () => mockInvalidateQueriesForBlock,
+}));
+
 describe('RepeatableFieldGroup', () => {
   beforeAll(() => {
     registerHandlebarsHelpers();
@@ -427,6 +433,45 @@ describe('RepeatableFieldGroup', () => {
     const remainingInstances = screen.getAllByTestId(/^repeatable-instance-addresses-\d+$/);
     expect(remainingInstances.length).toBe(1);
     expect(remainingInstances[0]).toHaveAttribute('data-testid', 'repeatable-instance-addresses-0');
+  });
+
+  test('given remove button, should invalidate queries configured for block id', async () => {
+    const user = userEvent.setup();
+    const block = createMockBlock();
+    mockInvalidateQueriesForBlock.mockClear();
+
+    const Wrapper = () => {
+      const form = useForm({
+        defaultValues: {
+          addresses: [
+            { street: '123 Main St', city: 'New York' },
+            { street: '456 Oak Ave', city: 'Los Angeles' },
+          ],
+        },
+      }) as unknown as UseFormReturn<FieldValues>;
+      return (
+        <FormProvider {...form}>
+          <RepeatableFieldGroup
+            block={block}
+            groupId="addresses"
+            fields={block.fields}
+            isDisabled={false}
+            isHidden={false}
+            form={form}
+            formContext={mockFormContext}
+            onLoadDataSource={mockOnLoadDataSource}
+            dataSourceCache={mockDataSourceCache}
+          />
+        </FormProvider>
+      );
+    };
+
+    render(<Wrapper />);
+
+    const removeButtons = screen.getAllByRole('button', { name: /remove/i });
+    await user.click(removeButtons[0]);
+
+    expect(mockInvalidateQueriesForBlock).toHaveBeenCalledWith('addresses-block');
   });
 
   test('given minInstances, should disable remove button when at minimum', () => {

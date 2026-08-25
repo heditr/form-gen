@@ -15,7 +15,7 @@ import type { FormContext } from '@/utils/template-evaluator';
 import { resolveBlockById } from '@/utils/block-resolver';
 import { loadPopinData } from '@/utils/popin-load-loader';
 import { evaluatePayloadTemplate, type BackendErrorResponse } from '@/utils/submission-orchestrator';
-import { invalidateConfiguredQueryKeys } from '@/utils/invalidate-query-keys';
+import { invalidateConfiguredQueryKeys, getQueryInvalidationKeys } from '@/utils/invalidate-query-keys';
 import type { BackendError } from '@/utils/form-descriptor-integration';
 import { useFormDescriptor } from '@/hooks/use-form-descriptor';
 import { isRepeatableBlock, groupFieldsByRepeatableGroupId } from '@/utils/form-descriptor-integration';
@@ -41,6 +41,7 @@ export interface OpenPopinOptions {
  */
 interface PopinManagerContextValue {
   openPopin: (blockId: string, options?: OpenPopinOptions) => void;
+  invalidateQueriesForBlock: (blockId: string) => Promise<void>;
 }
 
 const PopinManagerContext = createContext<PopinManagerContextValue | null>(null);
@@ -54,6 +55,14 @@ export function usePopinManager(): PopinManagerContextValue {
     throw new Error('usePopinManager must be used within PopinManagerProvider');
   }
   return context;
+}
+
+/**
+ * Safe hook to invalidate queries for a block id; no-ops outside PopinManagerProvider.
+ */
+export function useInvalidateQueriesForBlock(): (blockId: string) => Promise<void> {
+  const context = useContext(PopinManagerContext);
+  return context?.invalidateQueriesForBlock ?? (async () => {});
 }
 
 /**
@@ -375,6 +384,27 @@ export function PopinManagerProvider({
     setPopinEditContext(null);
   }, [resolvedBlock, popinForm, popinDescriptor, mainForm]);
 
+  const invalidateQueriesForBlock = useCallback(async (blockId: string) => {
+    const queryKeys = getQueryInvalidationKeys(mergedDescriptor, blockId);
+    if (!queryKeys?.length) {
+      return;
+    }
+
+    const currentMainFormValues = mainForm.getValues();
+    const formContextForInvalidation: FormContext = {
+      ...currentMainFormValues,
+      ...initialFormContext,
+      caseContext: caseContext as unknown as FormContext,
+      formData: currentMainFormValues,
+    };
+
+    await invalidateConfiguredQueryKeys({
+      queryClient,
+      queryKeys,
+      formContext: formContextForInvalidation,
+    });
+  }, [mergedDescriptor, mainForm, initialFormContext, caseContext, queryClient]);
+
   // Handle validate button click
   const handleValidate = useCallback(async () => {
     if (!resolvedBlock) return;
@@ -404,6 +434,7 @@ export function PopinManagerProvider({
         shouldValidate: true,
       });
 
+      await invalidateQueriesForBlock(block.id);
       closePopin();
       return;
     }
@@ -479,16 +510,7 @@ export function PopinManagerProvider({
       if (response.ok) {
         // Default: refresh dynamic field data sources used by the main form
         await queryClient.invalidateQueries({ queryKey: ['form', 'data-source'] });
-        await invalidateConfiguredQueryKeys({
-          queryClient,
-          queryKeys: block.popinSubmit.invalidateQueryKeys,
-          formContext: {
-            ...allFormValues,
-            ...initialFormContext,
-            caseContext: caseContext as unknown as FormContext,
-            formData: allFormValues,
-          },
-        });
+        await invalidateQueriesForBlock(block.id);
         closePopin();
         return;
       }
@@ -523,12 +545,13 @@ export function PopinManagerProvider({
       } finally {
         setIsSubmittingPopin(false);
       }
-    }, [resolvedBlock, popinForm, mainForm, closePopin, queryClient, popinEditContext, initialFormContext, caseContext]);
+    }, [resolvedBlock, popinForm, mainForm, closePopin, queryClient, popinEditContext, invalidateQueriesForBlock]);
 
   // Context value
   const contextValue = useMemo(() => ({
     openPopin,
-  }), [openPopin]);
+    invalidateQueriesForBlock,
+  }), [openPopin, invalidateQueriesForBlock]);
 
   // Determine if dialog should be open
   const isDialogOpen = openBlockId !== null && resolvedBlock !== null;

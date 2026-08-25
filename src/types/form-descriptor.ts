@@ -431,8 +431,6 @@ export interface PopinLoadConfig {
  * @property method - HTTP method (POST, PUT, PATCH)
  * @property payloadTemplate - Optional Handlebars template for transforming form data
  * @property auth - Optional authentication configuration
- * @property invalidateQueryKeys - Optional TanStack Query keys (or prefixes) to invalidate after a successful submit.
- *   Each segment may be a Handlebars template evaluated with formContext. Prefix matching is used (no exact match).
  */
 export interface PopinSubmitConfig {
   url: string;
@@ -445,8 +443,14 @@ export interface PopinSubmitConfig {
     username?: string;
     password?: string;
   };
-  invalidateQueryKeys?: Array<Array<string | number>>;
 }
+
+/**
+ * Map of block id to TanStack Query keys (or prefixes) to invalidate when that block mutates.
+ * Each key segment may be a Handlebars template evaluated with formContext.
+ * Prefix matching is used (no exact match).
+ */
+export type QueryInvalidationMap = Record<string, Array<Array<string | number>>>;
 
 /**
  * Block descriptor definition
@@ -550,6 +554,7 @@ export interface DraftConfig extends SubmissionConfig {
  * @property blocks - Array of block descriptors (may include blocks with subFormRef)
  * @property submission - Submission configuration
  * @property files - Optional descriptor-level defaults for primitive file fields
+ * @property queryInvalidation - Optional map of block id to query keys to invalidate when that block mutates
  */
 export interface GlobalFormDescriptor {
   id?: string;
@@ -559,6 +564,7 @@ export interface GlobalFormDescriptor {
   submission: SubmissionConfig;
   draft?: DraftConfig;
   files?: FileFieldConfig;
+  queryInvalidation?: QueryInvalidationMap;
 }
 
 /**
@@ -577,6 +583,7 @@ export interface GlobalFormDescriptor {
  * @property version - Required version identifier for the sub-form
  * @property blocks - Array of block descriptors within this sub-form
  * @property submission - Optional submission configuration (only needed if sub-form has its own submission)
+ * @property queryInvalidation - Optional map of block id to query keys to invalidate when that block mutates
  */
 export interface SubFormDescriptor {
   id: string;
@@ -585,6 +592,7 @@ export interface SubFormDescriptor {
   blocks: BlockDescriptor[];
   submission?: SubmissionConfig;
   draft?: DraftConfig;
+  queryInvalidation?: QueryInvalidationMap;
 }
 
 /**

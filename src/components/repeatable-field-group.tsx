@@ -14,6 +14,7 @@ import { evaluateHiddenStatus, evaluateDisabledStatus } from '@/utils/template-e
 import { evaluateDefaultValue } from '@/utils/default-value-evaluator';
 import { buildAutoFillPatchFromSelection } from '@/utils/form-descriptor-integration';
 import { buildBlockLayoutRows } from '@/utils/block-layout';
+import { useInvalidateQueriesForBlock } from './popin-manager';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Plus, Trash2 } from 'lucide-react';
@@ -53,6 +54,7 @@ export default function RepeatableFieldGroup({
     control: form.control,
     name: groupId,
   });
+  const invalidateQueriesForBlock = useInvalidateQueriesForBlock();
 
   // Build default values for a new instance using base field id (no groupId prefix)
   const getDefaultInstanceValues = (): Record<string, unknown> => {
@@ -109,8 +111,9 @@ export default function RepeatableFieldGroup({
   };
 
   // Handle removing an instance
-  const handleRemove = (index: number) => {
+  const handleRemove = async (index: number) => {
     remove(index);
+    await invalidateQueriesForBlock(block.id);
   };
 
   // Check if remove should be disabled (at minInstances)

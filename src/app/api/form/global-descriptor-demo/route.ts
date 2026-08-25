@@ -841,7 +841,6 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
             // - Provide fallback "[]" so payload stays valid JSON when group is empty/undefined
             // - Use lookup helper to access 'emergency-contacts' (with hyphen) to match the repeatableGroupId
             payloadTemplate: '{"contactEmail":"{{formData.contactEmail}}","contactPhone":"{{formData.contactPhone}}","contactAlternateEmail":"{{formData.contactAlternateEmail}}","emergencyContacts":{{~json (lookup formData "emergency-contacts") "[]"~}}}',
-            invalidateQueryKeys: [['case']],
           },
           fields: [
             // Regular fields (no repeatableGroupId) — laid out in a 2-column grid
@@ -944,6 +943,13 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
           maxInstances: 5, // Maximum emergency contacts
         },
       ],
+      queryInvalidation: {
+        'contact-info': [
+          ['case'],
+          ['form', 'data-source'],
+        ],
+        'addresses-block': [['case']],
+      },
       submission: {
         url: '/api/submit',
         method: 'POST',
