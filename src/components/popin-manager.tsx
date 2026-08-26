@@ -42,6 +42,7 @@ export interface OpenPopinOptions {
 interface PopinManagerContextValue {
   openPopin: (blockId: string, options?: OpenPopinOptions) => void;
   invalidateQueriesForBlock: (blockId: string) => Promise<void>;
+  flushDraftSave: () => Promise<void>;
 }
 
 const PopinManagerContext = createContext<PopinManagerContextValue | null>(null);
@@ -66,6 +67,14 @@ export function useInvalidateQueriesForBlock(): (blockId: string) => Promise<voi
 }
 
 /**
+ * Safe hook to flush draft save; no-ops outside PopinManagerProvider.
+ */
+export function useFlushDraftSave(): () => Promise<void> {
+  const context = useContext(PopinManagerContext);
+  return context?.flushDraftSave ?? (async () => {});
+}
+
+/**
  * Props for PopinManagerProvider
  */
 export interface PopinManagerProviderProps {
@@ -76,6 +85,8 @@ export interface PopinManagerProviderProps {
   caseContext: CaseContext;
   onLoadDataSource: (fieldPath: string, url: string, auth?: { type: 'bearer' | 'apikey'; token?: string; headerName?: string }) => void;
   dataSourceCache: Record<string, unknown>;
+  /** Optional: flush pending draft before query invalidation after mutations */
+  flushDraftSave?: () => Promise<void>;
 }
 
 /**
@@ -92,8 +103,12 @@ export function PopinManagerProvider({
   caseContext,
   onLoadDataSource,
   dataSourceCache,
+  flushDraftSave: flushDraftSaveProp,
 }: PopinManagerProviderProps) {
   const queryClient = useQueryClient();
+  const flushDraftSave = useCallback(async () => {
+    await flushDraftSaveProp?.();
+  }, [flushDraftSaveProp]);
   const [openBlockId, setOpenBlockId] = useState<string | null>(null);
   const [popinEditContext, setPopinEditContext] = useState<{ groupId: string; index: number } | null>(null);
   const [popinLoadData, setPopinLoadData] = useState<Record<string, unknown> | null>(null);
@@ -405,6 +420,12 @@ export function PopinManagerProvider({
     });
   }, [mergedDescriptor, mainForm, initialFormContext, caseContext, queryClient]);
 
+  /** Persist draft first, then invalidate host queries for the block. */
+  const flushDraftThenInvalidate = useCallback(async (blockId: string) => {
+    await flushDraftSave();
+    await invalidateQueriesForBlock(blockId);
+  }, [flushDraftSave, invalidateQueriesForBlock]);
+
   // Handle validate button click
   const handleValidate = useCallback(async () => {
     if (!resolvedBlock) return;
@@ -434,7 +455,7 @@ export function PopinManagerProvider({
         shouldValidate: true,
       });
 
-      await invalidateQueriesForBlock(block.id);
+      await flushDraftThenInvalidate(block.id);
       closePopin();
       return;
     }
@@ -510,7 +531,7 @@ export function PopinManagerProvider({
       if (response.ok) {
         // Default: refresh dynamic field data sources used by the main form
         await queryClient.invalidateQueries({ queryKey: ['form', 'data-source'] });
-        await invalidateQueriesForBlock(block.id);
+        await flushDraftThenInvalidate(block.id);
         closePopin();
         return;
       }
@@ -545,13 +566,14 @@ export function PopinManagerProvider({
       } finally {
         setIsSubmittingPopin(false);
       }
-    }, [resolvedBlock, popinForm, mainForm, closePopin, queryClient, popinEditContext, invalidateQueriesForBlock]);
+    }, [resolvedBlock, popinForm, mainForm, closePopin, queryClient, popinEditContext, flushDraftThenInvalidate]);
 
   // Context value
   const contextValue = useMemo(() => ({
     openPopin,
     invalidateQueriesForBlock,
-  }), [openPopin, invalidateQueriesForBlock]);
+    flushDraftSave,
+  }), [openPopin, invalidateQueriesForBlock, flushDraftSave]);
 
   // Determine if dialog should be open
   const isDialogOpen = openBlockId !== null && resolvedBlock !== null;

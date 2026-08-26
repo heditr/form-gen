@@ -1131,14 +1131,18 @@ describe('PopinManager', () => {
   });
 
   describe('query invalidation by block id', () => {
+    const mockFlushDraftSave = vi.fn().mockResolvedValue(undefined);
+
     const openAndValidate = async ({
       popinSubmit,
       queryInvalidation,
       caseContext,
+      flushDraftSave = mockFlushDraftSave,
     }: {
       popinSubmit: BlockDescriptor['popinSubmit'];
       queryInvalidation?: GlobalFormDescriptor['queryInvalidation'];
       caseContext?: CaseContext;
+      flushDraftSave?: () => Promise<void>;
     }) => {
       const block = createMockBlock({
         id: 'contact-info',
@@ -1162,6 +1166,7 @@ describe('PopinManager', () => {
           caseContext={createMockCaseContext(caseContext)}
           onLoadDataSource={vi.fn()}
           dataSourceCache={{}}
+          flushDraftSave={flushDraftSave}
         >
           <TestComponent blockId="contact-info" />
         </PopinManagerProvider>
@@ -1174,6 +1179,10 @@ describe('PopinManager', () => {
 
       await userEvent.click(screen.getByText('Validate'));
     };
+
+    beforeEach(() => {
+      mockFlushDraftSave.mockClear();
+    });
 
     test('given successful submit with queryInvalidation for block id, should invalidate default and configured keys', async () => {
       global.fetch = vi.fn().mockResolvedValue({
@@ -1201,6 +1210,14 @@ describe('PopinManager', () => {
 
       expect(mockInvalidateQueries).toHaveBeenCalledWith({ queryKey: ['form', 'data-source'] });
       expect(mockInvalidateQueries).toHaveBeenCalledWith({ queryKey: ['case', 'case-42'] });
+      expect(mockFlushDraftSave).toHaveBeenCalled();
+      const flushOrder = mockFlushDraftSave.mock.invocationCallOrder[0];
+      const caseInvalidateOrder = mockInvalidateQueries.mock.invocationCallOrder.find(
+        (_: number, index: number) =>
+          JSON.stringify(mockInvalidateQueries.mock.calls[index]?.[0]?.queryKey) ===
+          JSON.stringify(['case', 'case-42'])
+      );
+      expect(flushOrder).toBeLessThan(caseInvalidateOrder!);
     });
 
     test('given successful submit without queryInvalidation for block id, should only invalidate form data-source', async () => {
@@ -1295,7 +1312,7 @@ describe('PopinManager', () => {
       expect(prefixCall?.[0]?.exact).toBeUndefined();
     });
 
-    test('given repeatable popin validate, should invalidate keys for that block id', async () => {
+    test('given repeatable popin validate, should flush draft before invalidating keys', async () => {
       const repeatableBlock = createMockBlock({
         id: 'emergency-contacts-block',
         title: 'Emergency Contacts',
@@ -1338,6 +1355,7 @@ describe('PopinManager', () => {
           caseContext={createMockCaseContext({ caseId: 'case-99' })}
           onLoadDataSource={vi.fn()}
           dataSourceCache={{}}
+          flushDraftSave={mockFlushDraftSave}
         >
           <TestComponentWithOptions />
         </PopinManagerProvider>
@@ -1354,7 +1372,11 @@ describe('PopinManager', () => {
         expect(screen.queryByTestId('dialog')).not.toBeInTheDocument();
       });
 
+      expect(mockFlushDraftSave).toHaveBeenCalled();
       expect(mockInvalidateQueries).toHaveBeenCalledWith({ queryKey: ['case', 'case-99'] });
+      expect(mockFlushDraftSave.mock.invocationCallOrder[0]).toBeLessThan(
+        mockInvalidateQueries.mock.invocationCallOrder[0]
+      );
     });
   });
 });

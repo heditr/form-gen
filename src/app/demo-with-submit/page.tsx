@@ -330,7 +330,7 @@ function FormContainerWithSubmissionComponent({
 
   // Create submission orchestrator
   const orchestrator = useMemo(() => createSubmissionOrchestrator(), []);
-  const { saveDraft } = useDraftSave({
+  const { saveDraft, flushDraftSave } = useDraftSave({
     form,
     draftConfig: demoDescriptor?.draft,
     caseContext,
@@ -478,6 +478,7 @@ function FormContainerWithSubmissionComponent({
             caseContext={caseContext}
             onLoadDataSource={loadDataSource}
             dataSourceCache={dataSourceCache}
+            flushDraftSave={flushDraftSave}
           >
             <DocumentMainFormBinder form={form} />
             <FormPresentation {...presentationProps} formContext={formContext} />

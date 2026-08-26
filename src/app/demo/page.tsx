@@ -436,7 +436,7 @@ function FormContainerWithSubmissionComponent({
     formData: savedFormData,
   });
 
-  const { saveDraft } = useDraftSave({
+  const { saveDraft, flushDraftSave } = useDraftSave({
     form,
     draftConfig: mergedDescriptor?.draft,
     caseContext,
@@ -575,6 +575,7 @@ function FormContainerWithSubmissionComponent({
             caseContext={caseContext}
             onLoadDataSource={loadDataSource}
             dataSourceCache={dataSourceCache}
+            flushDraftSave={flushDraftSave}
           >
             <DocumentMainFormBinder form={form} />
             <FormPresentation {...presentationProps} formContext={formContext} />

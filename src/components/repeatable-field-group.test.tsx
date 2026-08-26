@@ -42,9 +42,11 @@ vi.mock('./field-wrapper', () => ({
 }));
 
 const mockInvalidateQueriesForBlock = vi.fn().mockResolvedValue(undefined);
+const mockFlushDraftSave = vi.fn().mockResolvedValue(undefined);
 
 vi.mock('./popin-manager', () => ({
   useInvalidateQueriesForBlock: () => mockInvalidateQueriesForBlock,
+  useFlushDraftSave: () => mockFlushDraftSave,
 }));
 
 describe('RepeatableFieldGroup', () => {
@@ -435,10 +437,11 @@ describe('RepeatableFieldGroup', () => {
     expect(remainingInstances[0]).toHaveAttribute('data-testid', 'repeatable-instance-addresses-0');
   });
 
-  test('given remove button, should invalidate queries configured for block id', async () => {
+  test('given remove button, should flush draft before invalidating queries for block id', async () => {
     const user = userEvent.setup();
     const block = createMockBlock();
     mockInvalidateQueriesForBlock.mockClear();
+    mockFlushDraftSave.mockClear();
 
     const Wrapper = () => {
       const form = useForm({
@@ -471,7 +474,11 @@ describe('RepeatableFieldGroup', () => {
     const removeButtons = screen.getAllByRole('button', { name: /remove/i });
     await user.click(removeButtons[0]);
 
+    expect(mockFlushDraftSave).toHaveBeenCalled();
     expect(mockInvalidateQueriesForBlock).toHaveBeenCalledWith('addresses-block');
+    expect(mockFlushDraftSave.mock.invocationCallOrder[0]).toBeLessThan(
+      mockInvalidateQueriesForBlock.mock.invocationCallOrder[0]
+    );
   });
 
   test('given minInstances, should disable remove button when at minimum', () => {

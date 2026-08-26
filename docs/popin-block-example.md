@@ -494,6 +494,7 @@ After a successful standalone `popinSubmit` HTTP call, the engine also always in
 - Repeatable popin: Validate create/edit (local array merge)
 - Repeatable inline or popin summary: Remove instance
 
+When draft autosave is configured, these mutations **flush draft first** (awaited, no debounce), then invalidate queries, so the server persists form state before caseContext refetch.
 ```typescript
 {
   queryInvalidation: {

@@ -14,10 +14,12 @@ import RepeatablePopinSummary from './repeatable-popin-summary';
 
 const mockOpenPopin = vi.fn();
 const mockInvalidateQueriesForBlock = vi.fn().mockResolvedValue(undefined);
+const mockFlushDraftSave = vi.fn().mockResolvedValue(undefined);
 
 vi.mock('./popin-manager', () => ({
   usePopinManager: () => ({ openPopin: mockOpenPopin }),
   useInvalidateQueriesForBlock: () => mockInvalidateQueriesForBlock,
+  useFlushDraftSave: () => mockFlushDraftSave,
 }));
 
 describe('RepeatablePopinSummary', () => {
@@ -41,10 +43,11 @@ describe('RepeatablePopinSummary', () => {
     ],
   });
 
-  test('given remove on summary row, should invalidate queries for block id', async () => {
+  test('given remove on summary row, should flush draft before invalidating queries for block id', async () => {
     const user = userEvent.setup();
     const block = createMockBlock();
     mockInvalidateQueriesForBlock.mockClear();
+    mockFlushDraftSave.mockClear();
 
     const Wrapper = () => {
       const form = useForm({
@@ -76,6 +79,10 @@ describe('RepeatablePopinSummary', () => {
     const removeButtons = screen.getAllByRole('button', { name: /remove/i });
     await user.click(removeButtons[0]);
 
+    expect(mockFlushDraftSave).toHaveBeenCalled();
     expect(mockInvalidateQueriesForBlock).toHaveBeenCalledWith('addresses-block');
+    expect(mockFlushDraftSave.mock.invocationCallOrder[0]).toBeLessThan(
+      mockInvalidateQueriesForBlock.mock.invocationCallOrder[0]
+    );
   });
 });

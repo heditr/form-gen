@@ -14,6 +14,9 @@
  * parent forces a remount when discriminants change validation), the pending
  * save is flushed immediately so the draft request is not dropped.
  *
+ * flushDraftSave cancels any pending debounce, reads form.getValues(), and
+ * awaits attemptDraftSave immediately (used before query invalidation).
+ *
  * The hook is a no-op when draftConfig is undefined.
  */
 
@@ -66,6 +69,8 @@ export interface UseDraftSaveOptions {
 
 export interface UseDraftSaveReturn {
   saveDraft: (formValues: Partial<DescriptorFormData>) => void;
+  /** Cancel debounce and submit draft immediately using current form values. */
+  flushDraftSave: () => Promise<void>;
 }
 
 export function useDraftSave({
@@ -169,5 +174,17 @@ export function useDraftSave({
     [attemptDraftSave]
   );
 
-  return { saveDraft };
+  const flushDraftSave = useCallback(async () => {
+    if (!draftConfigRef.current) return;
+
+    if (timeoutRef.current !== null) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+
+    latestValuesRef.current = formRef.current.getValues() as Partial<DescriptorFormData>;
+    await attemptDraftSave();
+  }, [attemptDraftSave]);
+
+  return { saveDraft, flushDraftSave };
 }

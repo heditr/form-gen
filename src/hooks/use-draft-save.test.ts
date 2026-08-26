@@ -254,6 +254,75 @@ describe('useDraftSave', () => {
     );
     expect(submitDraft).toHaveBeenCalledTimes(1);
   });
+
+  test('given flushDraftSave, should cancel debounce and submit immediately', async () => {
+    const form = createMockForm({ values: { email: 'flush@example.com' } });
+    const draftConfig: DraftConfig = { url: '/api/draft', method: 'POST' };
+
+    const { result } = renderHook(() => useDraftSave({ form, draftConfig }));
+
+    await act(async () => {
+      result.current.saveDraft({ email: 'pending@example.com' } as Partial<FormData>);
+    });
+
+    expect(submitDraft).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await result.current.flushDraftSave();
+    });
+
+    expect(submitDraft).toHaveBeenCalledTimes(1);
+    expect(submitDraft).toHaveBeenCalledWith(
+      expect.objectContaining({
+        formValues: { email: 'flush@example.com' },
+      })
+    );
+
+    await act(async () => {
+      vi.advanceTimersByTime(1100);
+    });
+    expect(submitDraft).toHaveBeenCalledTimes(1);
+  });
+
+  test('given flushDraftSave without draftConfig, should be a no-op', async () => {
+    const form = createMockForm();
+
+    const { result } = renderHook(() => useDraftSave({ form, draftConfig: undefined }));
+
+    await act(async () => {
+      await result.current.flushDraftSave();
+    });
+
+    expect(submitDraft).not.toHaveBeenCalled();
+  });
+
+  test('given flushDraftSave when form is not dirty, should skip submitDraft', async () => {
+    const form = createMockForm({ isDirty: false, dirtyFields: {} });
+    const draftConfig: DraftConfig = { url: '/api/draft', method: 'POST' };
+
+    const { result } = renderHook(() => useDraftSave({ form, draftConfig }));
+
+    await act(async () => {
+      await result.current.flushDraftSave();
+    });
+
+    expect(form.trigger).not.toHaveBeenCalled();
+    expect(submitDraft).not.toHaveBeenCalled();
+  });
+
+  test('given flushDraftSave when form is invalid, should skip submitDraft', async () => {
+    const form = createMockForm({ triggerResult: false });
+    const draftConfig: DraftConfig = { url: '/api/draft', method: 'POST' };
+
+    const { result } = renderHook(() => useDraftSave({ form, draftConfig }));
+
+    await act(async () => {
+      await result.current.flushDraftSave();
+    });
+
+    expect(form.trigger).toHaveBeenCalled();
+    expect(submitDraft).not.toHaveBeenCalled();
+  });
 });
 
 describe('flattenDirtyFields', () => {
