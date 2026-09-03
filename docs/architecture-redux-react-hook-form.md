@@ -1,5 +1,7 @@
 # Architecture: Redux + react-hook-form Integration
 
+> **Architecture update:** `formKey` remounting and per-keystroke Redux `formData` mirroring have been removed. See **[thin-center-form-engine.md](./thin-center-form-engine.md)** for the current design.
+
 ## Overview
 
 This document explains how Redux and react-hook-form work together in the KYC Form Engine, following a hybrid state management architecture where each library manages its appropriate concerns.

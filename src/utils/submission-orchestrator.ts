@@ -12,7 +12,6 @@
 
 import type { UseFormReturn, FieldErrors } from 'react-hook-form';
 import { evaluateTemplate } from './template-evaluator';
-import { evaluateHiddenStatus } from './template-evaluator';
 import {
   isRepeatableBlock,
   groupFieldsByRepeatableGroupId,
@@ -372,52 +371,7 @@ export interface SubmissionOrchestrator {
   ) => (e?: React.BaseSyntheticEvent) => Promise<void>;
 }
 
-function getActiveValidationTargets(
-  descriptor: GlobalFormDescriptor,
-  formValues: Partial<DescriptorFormData>
-): string[] {
-  const context: FormContext = {
-    ...formValues,
-    formData: formValues,
-  };
-  const targets = new Set<string>();
-
-  for (const block of descriptor.blocks) {
-    if (block.includeInMainValidation === false || evaluateHiddenStatus(block, context)) {
-      continue;
-    }
-
-    if (isRepeatableBlock(block)) {
-      const groups = groupFieldsByRepeatableGroupId(block.fields);
-      for (const [groupId, fields] of Object.entries(groups)) {
-        const hasVisibleField = fields.some(
-          (field) =>
-            field.type !== 'button' &&
-            !isSubmitSkippedFieldType(field.type) &&
-            !evaluateHiddenStatus(field, context)
-        );
-        if (hasVisibleField) {
-          targets.add(groupId);
-        }
-      }
-      continue;
-    }
-
-    for (const field of block.fields) {
-      if (
-        field.type === 'button' ||
-        isSubmitSkippedFieldType(field.type) ||
-        field.repeatableGroupId ||
-        evaluateHiddenStatus(field, context)
-      ) {
-        continue;
-      }
-      targets.add(field.id);
-    }
-  }
-
-  return [...targets];
-}
+import { getActiveValidationTargetIds } from '@/utils/schema-fingerprint';
 
 function collectErrorPaths(errors: unknown, prefix: string = ''): string[] {
   if (!errors || typeof errors !== 'object') {
@@ -564,9 +518,11 @@ export function createSubmissionOrchestrator(): SubmissionOrchestrator {
       submitValidData,
       // onInvalid - called when validation fails
       async (errors: FieldErrors<T>) => {
-        const activeTargets = getActiveValidationTargets(
+        const activeTargets = getActiveValidationTargetIds(
           descriptor,
-          form.getValues() as Partial<DescriptorFormData>
+          form.getValues() as Partial<DescriptorFormData>,
+          'main',
+          caseContext
         );
         const errorPaths = collectErrorPaths(errors);
         const hasActiveErrors = errorPaths.some((path) => isPathActive(path, activeTargets));

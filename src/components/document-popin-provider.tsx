@@ -1,10 +1,10 @@
 'use client';
 
 /**
- * React context for opening the document upload dialog **above** the keyed `FormInner` tree.
+ * React context for opening the document upload dialog above the main form tree.
  *
- * Keeps in-dialog upload session and working file list stable across RHF remounts driven by
- * `formKey`; `DocumentMainFormBinder` wires each new `useForm` instance to the same ref container.
+ * `DocumentMainFormBinder` wires the current RHF instance to the provider so Validate
+ * can call `setValue` on the live form without remounting.
  */
 
 import {

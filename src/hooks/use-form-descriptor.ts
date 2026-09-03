@@ -1,29 +1,29 @@
 /**
  * useFormDescriptor Hook - Integrate react-hook-form with form descriptor system
- * 
+ *
  * Custom hook that manages react-hook-form integration with the form descriptor,
- * including field registration, validation rule updates, and Redux synchronization.
+ * including field registration, validation rule updates, and live Zod resolver.
  */
 
 import { useEffect, useMemo, useCallback, useRef } from 'react';
 import { useForm, type UseFormReturn, type FieldValues } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
 import type { GlobalFormDescriptor, FormData, CaseContext } from '@/types/form-descriptor';
 import {
   extractDefaultValues,
   mapBackendErrorsToForm,
   identifyDiscriminantFields,
-  buildZodSchemaFromDescriptor,
 } from '@/utils/form-descriptor-integration';
 import { identifyFieldsWithTemplateDefaults } from '@/utils/field-descriptor-utils';
 import type { FormContext } from '@/utils/template-evaluator';
+import { useLiveZodResolver, useFormMembershipSync } from '@/hooks/use-live-zod-resolver';
 
 export interface UseFormDescriptorOptions {
   onDiscriminantChange?: (formData: Partial<FormData>) => void;
-  savedFormData?: Partial<FormData>; // Form data from Redux to restore on remount
-  caseContext?: CaseContext; // Case context for template evaluation
-  formData?: Partial<FormData>; // Current form data for template evaluation
-  validationScope?: 'main' | 'popin'; // Validation/default extraction scope
+  savedFormData?: Partial<FormData>;
+  caseContext?: CaseContext;
+  /** Initial form values for template default evaluation at mount only (not live schema deps) */
+  formData?: Partial<FormData>;
+  validationScope?: 'main' | 'popin';
 }
 
 export interface UseFormDescriptorReturn {
@@ -35,13 +35,6 @@ export interface UseFormDescriptorReturn {
   getDiscriminantFields: () => string[];
 }
 
-/**
- * Custom hook to integrate react-hook-form with form descriptor system
- * 
- * @param descriptor - Global form descriptor (can be null during loading)
- * @param options - Optional configuration including callbacks
- * @returns Form hook and utility methods
- */
 export function useFormDescriptor(
   descriptor: GlobalFormDescriptor | null,
   options: UseFormDescriptorOptions = {}
@@ -49,140 +42,113 @@ export function useFormDescriptor(
   const {
     savedFormData,
     caseContext = {},
-    formData: contextFormData = {},
+    formData: initialFormData = {},
     validationScope = 'main',
   } = options;
 
-  // Build form context for template evaluation
-  const formContext: FormContext = useMemo(() => ({
-    caseContext: caseContext as unknown as FormContext,
-    formData: contextFormData,
-    ...contextFormData, // Also allow direct access to form values
-  }), [caseContext, contextFormData]);
-
-  // Extract default values from descriptor with context for template evaluation
-  const defaultValues = useMemo(
-    () => extractDefaultValues(descriptor, formContext, validationScope),
-    [descriptor, formContext, validationScope]
+  const initFormContext: FormContext = useMemo(
+    () => ({
+      caseContext: caseContext as unknown as FormContext,
+      formData: { ...initialFormData, ...(savedFormData ?? {}) },
+      ...initialFormData,
+      ...(savedFormData ?? {}),
+    }),
+    [caseContext, initialFormData, savedFormData]
   );
 
-  // Identify fields with template defaultValues (need to be re-evaluated when context changes)
+  const defaultValues = useMemo(
+    () => extractDefaultValues(descriptor, initFormContext, validationScope),
+    [descriptor, initFormContext, validationScope]
+  );
+
   const fieldsWithTemplateDefaults = useMemo(
     () => identifyFieldsWithTemplateDefaults(descriptor),
     [descriptor]
   );
 
-  // Merge saved form data with defaults to preserve values on remount
-  // For template fields: preserve user-entered values if they differ from the new default
-  // This ensures user changes are preserved while allowing defaults to update when context changes
-  // IMPORTANT: Always ensure all values are defined (never undefined) to prevent uncontrolled input warnings
   const initialValues = useMemo(() => {
     if (!savedFormData || Object.keys(savedFormData).length === 0) {
       return defaultValues;
     }
-    
-    // Merge saved data with defaults
-    // Start with defaults to ensure all fields have defined values
+
     const merged: Partial<FormData> = { ...defaultValues };
-    
+
     for (const [key, savedValue] of Object.entries(savedFormData)) {
       const fieldId = key as keyof FormData;
       const newDefault = defaultValues[fieldId];
-      
-      // Skip undefined/null values to prevent uncontrolled input warnings
+
       if (savedValue === undefined || savedValue === null) {
         continue;
       }
-      
+
       if (fieldsWithTemplateDefaults.has(key)) {
-        // For template fields: preserve saved value if it differs from new default
-        // This handles two cases:
-        // 1. User changed the field -> preserve their change
-        // 2. Context changed but saved value differs -> preserve (likely user change)
-        // If saved value matches new default, use new default (allows context updates)
         const valuesDiffer = JSON.stringify(savedValue) !== JSON.stringify(newDefault);
         if (valuesDiffer) {
-          // Values differ - user likely changed it, preserve their value
           merged[fieldId] = savedValue as FormData[keyof FormData];
         }
-        // If values match, use new default (already in merged) - allows context updates
       } else {
-        // For non-template fields: always preserve saved value (if defined)
         merged[fieldId] = savedValue as FormData[keyof FormData];
       }
     }
-    
+
     return merged;
   }, [defaultValues, savedFormData, fieldsWithTemplateDefaults]);
 
-  // Build Zod schema from descriptor
-  const zodSchema = useMemo(
-    () => buildZodSchemaFromDescriptor(descriptor, formContext, validationScope),
-    [descriptor, formContext, validationScope]
+  const defaultValuesByFieldId = useMemo(
+    () => defaultValues as Record<string, unknown>,
+    [defaultValues]
   );
 
-  // Initialize react-hook-form with Zod resolver
-  const form = useForm<FieldValues>({
-    defaultValues: initialValues,
-    resolver: zodResolver(zodSchema),
-    mode: 'onChange', // Validate on change for immediate feedback
+  const { resolver, applyMembershipChanges, refreshSchemaFromDescriptor } = useLiveZodResolver({
+    descriptor,
+    caseContext,
+    validationScope,
+    defaultValuesByFieldId,
   });
 
-  // Track registered fields (for compatibility, but not needed with Zod)
+  const form = useForm<FieldValues>({
+    defaultValues: initialValues,
+    resolver,
+    mode: 'onChange',
+  });
+
+  useFormMembershipSync(
+    form,
+    descriptor,
+    applyMembershipChanges,
+    refreshSchemaFromDescriptor
+  );
+
   const registeredFields = useRef(new Set<string>());
 
-  // Get discriminant fields
   const discriminantFields = useMemo(
     () => (descriptor ? identifyDiscriminantFields(descriptor) : []),
     [descriptor]
   );
 
-  // Register a field (kept for API compatibility, but Zod handles validation)
   const registerField = useCallback(
     (fieldId: string) => {
       if (!descriptor || registeredFields.current.has(fieldId)) {
         return;
       }
-      // With Zod resolver, fields are automatically validated
-      // This is kept for API compatibility but doesn't need to do anything
       registeredFields.current.add(fieldId);
     },
     [descriptor]
   );
 
-  // Unregister a field (kept for API compatibility)
-  const unregisterField = useCallback(
-    (fieldId: string) => {
-      if (registeredFields.current.has(fieldId)) {
-        registeredFields.current.delete(fieldId);
-      }
-    },
-    []
-  );
+  const unregisterField = useCallback((fieldId: string) => {
+    if (registeredFields.current.has(fieldId)) {
+      registeredFields.current.delete(fieldId);
+    }
+  }, []);
 
-  // Update validation rules when descriptor changes
-  // Note: react-hook-form doesn't support changing the resolver after initialization.
-  // When validation rules change (e.g., during re-hydration), the form needs to be
-  // remounted with a new resolver. This is typically handled at the container level
-  // by using a key that changes when the descriptor changes significantly.
   const updateValidationRules = useCallback(
-    (updatedDescriptor: GlobalFormDescriptor) => {
-      if (!updatedDescriptor) {
-        return;
-      }
-
-      // Clear existing errors - new validation will occur on next user interaction
-      // The schema is memoized and will update, but the resolver won't change until remount
-      form.clearErrors();
-      
-      // Trigger re-validation of all fields with current values
-      // This helps catch any new validation errors immediately
-      form.trigger();
+    (_updatedDescriptor: GlobalFormDescriptor) => {
+      refreshSchemaFromDescriptor(form);
     },
-    [form]
+    [form, refreshSchemaFromDescriptor]
   );
 
-  // Map and set backend validation errors
   const setBackendErrors = useCallback(
     (errors: Array<{ field: string; message: string }>) => {
       const mappedErrors = mapBackendErrorsToForm(errors);
@@ -193,12 +159,6 @@ export function useFormDescriptor(
     [form]
   );
 
-  // Note: useWatch and onDiscriminantChange sync moved to FormValuesWatcher component.
-  // Keeping useWatch in the parent caused "Cannot update component while rendering Controller"
-  // - only the child (FormValuesWatcher) should re-render when form values change.
-
-  // Auto-register all fields from descriptor on mount/update
-  // With Zod resolver, this is mainly for tracking purposes
   useEffect(() => {
     if (!descriptor) {
       return;

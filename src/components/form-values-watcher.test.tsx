@@ -37,17 +37,14 @@ function Wrapper({
       <FormValuesWatcher
         form={form}
         caseContext={{}}
-        descriptor={minimalDescriptor}
+        discriminantFields={minimalDescriptor.blocks[0].fields.filter((f) => f.isDiscriminant)}
         onDiscriminantChange={onDiscriminantChange}
         onFormChange={onFormChange}
-      >
-        {() => (
-          <input
-            data-testid="name-input"
-            {...form.register('name')}
-          />
-        )}
-      </FormValuesWatcher>
+      />
+      <input
+        data-testid="name-input"
+        {...form.register('name')}
+      />
     </FormProvider>
   );
 }
@@ -94,8 +91,8 @@ describe('FormValuesWatcher', () => {
       await new Promise((r) => setTimeout(r, 50));
     });
 
-    // onDiscriminantChange should fire for the initial values
-    expect(onDiscriminantChange).toHaveBeenCalled();
+    // onDiscriminantChange fires only when discriminant values differ from caseContext
+    expect(onDiscriminantChange).not.toHaveBeenCalled();
     expect(onFormChange).toHaveBeenCalled();
   });
 });

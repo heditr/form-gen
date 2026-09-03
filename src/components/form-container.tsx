@@ -11,7 +11,6 @@
 import { useMemo, useCallback } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import type { UseFormReturn, FieldValues } from 'react-hook-form';
-import { ClientOnlyDevTool } from '@/components/client-only-devtool';
 import type { GlobalFormDescriptor, BlockDescriptor, FieldDescriptor, FormData, CaseContext } from '@/types/form-descriptor';
 import { useFormDescriptor } from '@/hooks/use-form-descriptor';
 import { useDebouncedRehydration } from '@/hooks/use-debounced-rehydration';
@@ -20,7 +19,11 @@ import { useDraftSave } from '@/hooks/use-draft-save';
 import {
   getVisibleBlocks,
   getVisibleFields,
-  getFormState,
+  getMergedDescriptor,
+  getCaseContext,
+  getIsRehydrating,
+  getDataSourceCache,
+  getFormData,
   syncFormDataToContext,
   type RootState,
 } from '@/store/form-dux';
@@ -28,10 +31,10 @@ import { fetchDataSourceThunk } from '@/store/form-thunks';
 import type { AppDispatch } from '@/store/store';
 import { updateCaseContext, identifyDiscriminantFields, haveDiscriminantFieldsChanged } from '@/utils/context-extractor';
 import type { FormContext } from '@/utils/template-evaluator';
-import { evaluateValidationArrayTemplate } from '@/utils/array-template-evaluator';
 import { serializeFormValues } from '@/utils/submission-orchestrator';
 import FormPresentation from './form-presentation';
 import FormValuesWatcher from './form-values-watcher';
+import { FormStatusProvider } from '@/context/form-status-context';
 import { PopinManagerProvider } from './popin-manager';
 import { DocumentPopinProvider, DocumentMainFormBinder } from './document-popin-provider';
 
@@ -40,7 +43,7 @@ import { DocumentPopinProvider, DocumentMainFormBinder } from './document-popin-
  */
 export interface FormPresentationProps {
   form: UseFormReturn<FieldValues>;
-  formContext: FormContext;
+  formContext?: FormContext;
   visibleBlocks: BlockDescriptor[];
   visibleFields: FieldDescriptor[];
   isRehydrating: boolean;
@@ -50,8 +53,8 @@ export interface FormPresentationProps {
 }
 
 /**
- * Inner form component that creates the form instance
- * This component is keyed to force remount when validation rules change
+ * Inner form component that creates the form instance.
+ * Uses live Zod resolver — no remount on rules/context changes.
  */
 function FormInner({
   mergedDescriptor,
@@ -76,46 +79,32 @@ function FormInner({
   loadDataSource: (fieldPath: string, url: string, auth?: { type: 'bearer' | 'apikey'; token?: string; headerName?: string }) => void;
   dataSourceCache: Record<string, unknown>;
 }) {
+  const discriminantFields = useMemo(
+    () => (mergedDescriptor ? identifyDiscriminantFields(visibleFields) : []),
+    [mergedDescriptor, visibleFields]
+  );
+
   const handleDiscriminantChange = useCallback(
     (newFormData: Partial<FormData>) => {
-      // Sync form data to Redux
-      syncFormData(newFormData);
-
-      // Extract discriminant fields from descriptor
-      const discriminantFields = mergedDescriptor
-        ? identifyDiscriminantFields(visibleFields)
-        : [];
-
       if (discriminantFields.length === 0) {
         return;
       }
 
-      // Optimization: Check if any discriminant fields actually changed before doing full context update
-      // This avoids unnecessary work when non-discriminant fields change
       if (!haveDiscriminantFieldsChanged(caseContext, newFormData, discriminantFields)) {
         return;
       }
 
-      // Update case context from form data
-      // Note: If haveDiscriminantFieldsChanged returned true, we know a discriminant field changed,
-      // so updateCaseContext will produce a different context. No need to double-check with hasContextChanged.
+      syncFormData(newFormData);
       const updatedContext = updateCaseContext(caseContext, newFormData, discriminantFields);
-
-      // Trigger re-hydration with updated context
-      // Note: Task 7 will replace this with a debounced TanStack Query mutation hook
       rehydrate(updatedContext);
     },
-    [mergedDescriptor, visibleFields, caseContext, syncFormData, rehydrate]
+    [discriminantFields, caseContext, syncFormData, rehydrate]
   );
 
-  // Initialize useFormDescriptor hook - this will create a new form instance
-  // when this component remounts (due to key change)
-  // Pass savedFormData to restore form values from Redux
-  // Pass caseContext and formData for template evaluation in default values
+  // Initialize useFormDescriptor with live resolver (no remount on rules/context change)
   const { form } = useFormDescriptor(mergedDescriptor, {
     savedFormData,
     caseContext,
-    formData: savedFormData,
   });
 
   const { saveDraft, flushDraftSave } = useDraftSave({
@@ -141,29 +130,28 @@ function FormInner({
   // FormValuesWatcher re-renders, not FormInner (avoids "Cannot update component
   // while rendering Controller")
   return (
-    <FormValuesWatcher
-      form={form}
-      caseContext={caseContext}
-      descriptor={mergedDescriptor}
-      onDiscriminantChange={handleDiscriminantChange}
-      onFormChange={saveDraft}
-    >
-      {(formContext) => (
+    <>
+      <FormValuesWatcher
+        form={form}
+        caseContext={caseContext}
+        discriminantFields={discriminantFields}
+        onDiscriminantChange={handleDiscriminantChange}
+        onFormChange={saveDraft}
+      />
+      <FormStatusProvider form={form} caseContext={caseContext} descriptor={mergedDescriptor}>
         <PopinManagerProvider
           mergedDescriptor={mergedDescriptor}
           form={form}
-          formContext={formContext}
           caseContext={caseContext}
           onLoadDataSource={loadDataSource}
           dataSourceCache={dataSourceCache}
           flushDraftSave={flushDraftSave}
         >
           <DocumentMainFormBinder form={form} />
-          <FormPresentation {...presentationProps} formContext={formContext} />
-          <ClientOnlyDevTool control={form.control} />
+          <FormPresentation {...presentationProps} />
         </PopinManagerProvider>
-      )}
-    </FormValuesWatcher>
+      </FormStatusProvider>
+    </>
   );
 }
 
@@ -174,17 +162,13 @@ function FormInner({
  * Initializes react-hook-form and syncs discriminant fields to Redux.
  */
 export default function FormContainer() {
-  // Use hooks to access Redux state
-  const formState = useSelector((state: RootState) => getFormState(state));
   const dispatch = useDispatch<AppDispatch>();
 
-  const {
-    mergedDescriptor,
-    caseContext,
-    isRehydrating: isRehydratingFromRedux,
-    formData,
-    dataSourceCache,
-  } = formState;
+  const mergedDescriptor = useSelector((state: RootState) => getMergedDescriptor(state));
+  const caseContext = useSelector((state: RootState) => getCaseContext(state));
+  const isRehydratingFromRedux = useSelector((state: RootState) => getIsRehydrating(state));
+  const formData = useSelector((state: RootState) => getFormData(state));
+  const dataSourceCache = useSelector((state: RootState) => getDataSourceCache(state));
 
   // Get visible blocks and fields using selectors
   const visibleBlocks = useSelector((state: RootState) => getVisibleBlocks(state));
@@ -219,56 +203,14 @@ export default function FormContainer() {
 
   const loadDataSource = useCallback(
     (fieldPath: string, url: string, auth?: { type: 'bearer' | 'apikey'; token?: string; headerName?: string }) => {
-      // Dispatch thunk for data source loading
-      // Note: This could be replaced with useDataSource hook in the future,
-      // but the current pattern of callback-based loading works well for dynamic fields
-      dispatch(fetchDataSourceThunk({ fieldPath, url, auth }));
+      dispatch(fetchDataSourceThunk({ fieldPath, url, auth, templateContext: undefined }));
     },
     [dispatch]
   );
 
-  // Create a key based on validation rules and caseContext to force form remount
-  // This ensures the Zod resolver is re-initialized with updated validation rules
-  // and default values are re-evaluated when caseContext changes
-  const formKey = useMemo(() => {
-    if (!mergedDescriptor) {
-      return 'no-descriptor';
-    }
-    // Create a hash of field IDs and their validation rule types
-    // This will change when validation rules are updated (e.g., during re-hydration)
-    const validationHash = mergedDescriptor.blocks
-      .flatMap((block) => block.fields)
-      .map((field) => {
-        const evaluatedRules = evaluateValidationArrayTemplate(
-          field.validation,
-          { caseContext: caseContext as unknown as FormContext } as FormContext
-        );
-        const ruleTypes = evaluatedRules.map((r) => {
-          if (r.type === 'pattern') {
-            // Include pattern value in hash to detect pattern changes
-            const patternValue = typeof r.value === 'string' ? r.value : r.value.toString();
-            return `${r.type}:${patternValue}`;
-          }
-          return `${r.type}:${'value' in r ? r.value : ''}`;
-        }).join(',') || 'none';
-        return `${field.id}:${ruleTypes}`;
-      })
-      .join('|');
-    
-    // Include caseContext in the key so form remounts when context changes
-    // This allows default values to be re-evaluated with new context
-    const contextHash = JSON.stringify(caseContext);
-    
-    return `form-${validationHash}-ctx-${contextHash}`;
-  }, [mergedDescriptor, caseContext]);
-
-  // Render inner form component with key to force remount when validation rules change
-  // This ensures the form is re-created with the new Zod schema when rules are updated
-  // Pass formData to restore values when form remounts
   return (
     <DocumentPopinProvider mergedDescriptor={mergedDescriptor}>
       <FormInner
-        key={formKey}
         mergedDescriptor={mergedDescriptor}
         visibleBlocks={visibleBlocks}
         visibleFields={visibleFields}

@@ -7,7 +7,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Controller } from 'react-hook-form';
 import type { DocumentCardData, FieldDescriptor } from '@/types/form-descriptor';
 import type { UseFormReturn, FieldValues } from 'react-hook-form';
-import { getErrorByPath } from '@/utils/form-errors';
+import { useFieldError } from '@/hooks/use-field-error';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import {
@@ -43,7 +43,7 @@ export default function DocumentCard({
   required = false,
 }: DocumentCardProps) {
   const config = field.document;
-  const error = getErrorByPath(form.formState.errors, field.id) ?? form.formState.errors[field.id];
+  const error = useFieldError(form, field.id);
   const errorMessage = error?.message as string | undefined;
   const [documentError, setDocumentError] = useState<string | null>(null);
   const { openDocumentPopin } = useDocumentPopin();

@@ -8,6 +8,26 @@ import Handlebars from 'handlebars';
 import type { BlockDescriptor, FieldDescriptor } from '@/types/form-descriptor';
 import { ensureHandlebarsHelpersRegistered } from './handlebars-helpers';
 
+const templateCompileCache = new Map<string, Handlebars.TemplateDelegate>();
+
+/**
+ * Clear the Handlebars compile cache (for tests).
+ */
+export function clearTemplateCompileCache(): void {
+  templateCompileCache.clear();
+}
+
+function getCompiledTemplate(template: string): Handlebars.TemplateDelegate {
+  const cached = templateCompileCache.get(template);
+  if (cached) {
+    return cached;
+  }
+  ensureHandlebarsHelpersRegistered();
+  const compiled = Handlebars.compile(template);
+  templateCompileCache.set(template, compiled);
+  return compiled;
+}
+
 /**
  * Type for values that can be used in Handlebars templates
  */
@@ -44,8 +64,7 @@ export function evaluateTemplate(template: string | undefined, context: FormCont
   }
 
   try {
-    ensureHandlebarsHelpersRegistered();
-    const compiled = Handlebars.compile(template);
+    const compiled = getCompiledTemplate(template);
     const result = compiled(context);
     return result;
   } catch (error) {

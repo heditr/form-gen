@@ -11,21 +11,20 @@ import { useState, useCallback, useMemo } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import SubmitButton from '@/components/submit-button';
 import { useGlobalDescriptor } from '@/hooks/use-form-query';
-import { getFormState, getVisibleBlocks, getVisibleFields, syncFormDataToContext, type RootState } from '@/store/form-dux';
+import { getMergedDescriptor, getCaseContext, getIsRehydrating, getFormData, getDataSourceCache, getVisibleBlocks, getVisibleFields, syncFormDataToContext, type RootState, getFormState } from '@/store/form-dux';
 import { fetchDataSourceThunk } from '@/store/form-thunks';
 import { useDebouncedRehydration } from '@/hooks/use-debounced-rehydration';
 import { useDebouncedDocumentsRehydration } from '@/hooks/use-debounced-documents-rehydration';
 import { useDraftSave } from '@/hooks/use-draft-save';
 import type { AppDispatch } from '@/store/store';
-import { updateCaseContext, identifyDiscriminantFields, hasContextChanged } from '@/utils/context-extractor';
+import { updateCaseContext, identifyDiscriminantFields, haveDiscriminantFieldsChanged } from '@/utils/context-extractor';
 import { useFormDescriptor } from '@/hooks/use-form-descriptor';
 import { createSubmissionOrchestrator, evaluatePayloadTemplate, constructSubmissionRequest, serializeFormValues } from '@/utils/submission-orchestrator';
 import type { GlobalFormDescriptor, FormData, CaseContext, BlockDescriptor, FieldDescriptor } from '@/types/form-descriptor';
-import { evaluateValidationArrayTemplate } from '@/utils/array-template-evaluator';
-import type { FormContext } from '@/utils/template-evaluator';
 import { Button } from '@/components/ui/button';
 import FormPresentation from '@/components/form-presentation';
 import FormValuesWatcher from '@/components/form-values-watcher';
+import { FormStatusProvider } from '@/context/form-status-context';
 import { PopinManagerProvider } from '@/components/popin-manager';
 import { DocumentPopinProvider, DocumentMainFormBinder } from '@/components/document-popin-provider';
 
@@ -303,29 +302,31 @@ function FormContainerWithSubmissionComponent({
 }: FormContainerWithSubmissionComponentProps) {
   const demoDescriptor = useMemo(() => withTemplateDemoDescriptor(mergedDescriptor), [mergedDescriptor]);
 
-  // Initialize react-hook-form with descriptor
+  const discriminantFields = useMemo(
+    () => (mergedDescriptor ? identifyDiscriminantFields(visibleFields) : []),
+    [mergedDescriptor, visibleFields]
+  );
+
   const handleDiscriminantChange = useCallback(
     (newFormData: Partial<FormData>) => {
-      syncFormData(newFormData);
-      const discriminantFields = mergedDescriptor
-        ? identifyDiscriminantFields(visibleFields)
-        : [];
       if (discriminantFields.length === 0) {
         return;
       }
-      const updatedContext = updateCaseContext(caseContext, newFormData, discriminantFields);
-      if (hasContextChanged(caseContext, updatedContext)) {
-        rehydrate(updatedContext);
+
+      if (!haveDiscriminantFieldsChanged(caseContext, newFormData, discriminantFields)) {
+        return;
       }
+
+      syncFormData(newFormData);
+      const updatedContext = updateCaseContext(caseContext, newFormData, discriminantFields);
+      rehydrate(updatedContext);
     },
-    [mergedDescriptor, visibleFields, caseContext, syncFormData, rehydrate]
+    [discriminantFields, caseContext, syncFormData, rehydrate]
   );
 
-  // Initialize useFormDescriptor hook
   const { form } = useFormDescriptor(demoDescriptor, {
     savedFormData: _formData,
     caseContext,
-    formData: _formData,
   });
 
   // Create submission orchestrator
@@ -466,35 +467,33 @@ function FormContainerWithSubmissionComponent({
       <FormValuesWatcher
         form={form}
         caseContext={caseContext}
-        descriptor={mergedDescriptor}
+        discriminantFields={discriminantFields}
         onDiscriminantChange={handleDiscriminantChange}
         onFormChange={saveDraft}
-      >
-        {(formContext) => (
-          <PopinManagerProvider
-            mergedDescriptor={demoDescriptor}
-            form={form}
-            formContext={formContext}
-            caseContext={caseContext}
-            onLoadDataSource={loadDataSource}
-            dataSourceCache={dataSourceCache}
-            flushDraftSave={flushDraftSave}
-          >
-            <DocumentMainFormBinder form={form} />
-            <FormPresentation {...presentationProps} formContext={formContext} />
-            {demoDescriptor && (
-              <div className="mt-6">
-                <SubmitButton
-                  form={form}
-                  descriptor={demoDescriptor}
-                  isRehydrating={isRehydrating}
-                  onSubmit={handleSubmitWithTracking}
-                />
-              </div>
-            )}
-          </PopinManagerProvider>
-        )}
-      </FormValuesWatcher>
+      />
+      <FormStatusProvider form={form} caseContext={caseContext} descriptor={demoDescriptor}>
+        <PopinManagerProvider
+          mergedDescriptor={demoDescriptor}
+          form={form}
+          caseContext={caseContext}
+          onLoadDataSource={loadDataSource}
+          dataSourceCache={dataSourceCache}
+          flushDraftSave={flushDraftSave}
+        >
+          <DocumentMainFormBinder form={form} />
+          <FormPresentation {...presentationProps} />
+          {demoDescriptor && (
+            <div className="mt-6">
+              <SubmitButton
+                form={form}
+                descriptor={demoDescriptor}
+                isRehydrating={isRehydrating}
+                onSubmit={handleSubmitWithTracking}
+              />
+            </div>
+          )}
+        </PopinManagerProvider>
+      </FormStatusProvider>
     </DocumentPopinProvider>
   );
 }
@@ -507,7 +506,11 @@ function FormContainerWithSubmissionWithHook({
   onSubmissionStateChange: (state: SubmissionState) => void;
 }) {
   const dispatch = useDispatch<AppDispatch>();
-  const formState = useSelector((state: RootState) => getFormState(state));
+  const mergedDescriptor = useSelector((state: RootState) => getMergedDescriptor(state));
+  const caseContext = useSelector((state: RootState) => getCaseContext(state));
+  const isRehydratingFromRedux = useSelector((state: RootState) => getIsRehydrating(state));
+  const formData = useSelector((state: RootState) => getFormData(state));
+  const dataSourceCache = useSelector((state: RootState) => getDataSourceCache(state));
   const visibleBlocks = useSelector((state: RootState) => getVisibleBlocks(state));
   const visibleFields = useSelector((state: RootState) => getVisibleFields(state));
   const { mutate: debouncedRehydrate, isPending: isRehydratingFromHook } = useDebouncedRehydration();
@@ -516,44 +519,8 @@ function FormContainerWithSubmissionWithHook({
     isPending: isDocumentsRehydratingFromHook,
   } = useDebouncedDocumentsRehydration();
 
-  const {
-    mergedDescriptor,
-    caseContext,
-    isRehydrating: isRehydratingFromRedux,
-    formData,
-    dataSourceCache,
-  } = formState;
-
   const isRehydrating =
     isRehydratingFromHook || isDocumentsRehydratingFromHook || isRehydratingFromRedux;
-
-  // Force form remount when validation rules change so RHF picks up fresh resolver rules.
-  // Avoid remounting on every context update because it can cancel pending debounced draft saves.
-  const formKey = useMemo(() => {
-    if (!mergedDescriptor) {
-      return 'no-descriptor';
-    }
-    const validationHash = mergedDescriptor.blocks
-      .flatMap((block) => block.fields)
-      .map((field) => {
-        const evaluatedRules = evaluateValidationArrayTemplate(
-          field.validation,
-          { caseContext: caseContext as unknown as FormContext } as FormContext
-        );
-        const ruleTypes = evaluatedRules
-          .map((rule) => {
-            if (rule.type === 'pattern') {
-              const patternValue = typeof rule.value === 'string' ? rule.value : rule.value.toString();
-              return `${rule.type}:${patternValue}`;
-            }
-            return `${rule.type}:${'value' in rule ? rule.value : ''}`;
-          })
-          .join(',') || 'none';
-        return `${field.id}:${ruleTypes}`;
-      })
-      .join('|');
-    return `form-${validationHash}`;
-  }, [mergedDescriptor, caseContext]);
 
   const syncFormData = useCallback(
     (formData: Partial<FormData>) => {
@@ -579,7 +546,6 @@ function FormContainerWithSubmissionWithHook({
 
   return (
     <FormContainerWithSubmissionComponent
-      key={formKey}
       mergedDescriptor={mergedDescriptor}
       visibleBlocks={visibleBlocks}
       visibleFields={visibleFields}

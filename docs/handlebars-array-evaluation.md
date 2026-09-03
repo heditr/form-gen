@@ -1,3 +1,5 @@
+> **Architecture update:** SSR `formKey` mismatch workarounds are obsolete. See **[thin-center-form-engine.md](./thin-center-form-engine.md)**.
+
 ## Goal
 
 Allow `FieldDescriptor.validation` (validation rules array) and `FieldDescriptor.items` (static option arrays for `dropdown` / `autocomplete` / `radio`) to be **expressible as Handlebars templates** so the descriptor can dynamically add/remove rules or items based on context.

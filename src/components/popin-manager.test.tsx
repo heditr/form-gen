@@ -15,6 +15,15 @@ import type { FormContext } from '@/utils/template-evaluator';
 import { registerHandlebarsHelpers } from '@/utils/handlebars-helpers';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
+// Mock useWatch for PopinFormSession live context
+vi.mock('react-hook-form', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('react-hook-form')>();
+  return {
+    ...actual,
+    useWatch: vi.fn(() => ({})),
+  };
+});
+
 // Mock Block component
 vi.mock('./block', () => ({
   default: ({ block, isDisabled }: { block: BlockDescriptor; isDisabled: boolean }) => (
@@ -167,7 +176,7 @@ describe('PopinManager', () => {
       getFieldState: vi.fn(),
       _formState: {},
       _subjects: {
-        values: { next: vi.fn() },
+        values: { next: vi.fn(), subscribe: vi.fn(() => ({ unsubscribe: vi.fn() })) },
         array: { next: vi.fn() },
         state: { next: vi.fn() },
       },
@@ -203,7 +212,7 @@ describe('PopinManager', () => {
       clearErrors: vi.fn(),
       reset: vi.fn(),
       resetField: vi.fn(),
-      trigger: vi.fn(),
+      trigger: vi.fn().mockResolvedValue(true),
       unregister: vi.fn(),
       getFieldState: vi.fn(),
       setFocus: vi.fn(),

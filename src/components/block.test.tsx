@@ -93,7 +93,7 @@ describe('Block', () => {
     const props = createProps();
     // Component should be defined
     expect(Block).toBeDefined();
-    expect(typeof Block).toBe('function');
+    expect(Block).toHaveProperty('type');
   });
 
   test('given hidden status, should not render block', () => {

@@ -54,6 +54,7 @@ export default function RepeatableFieldGroup({
     control: form.control,
     name: groupId,
   });
+  const groupArray = form.watch(groupId) as unknown[] | undefined;
   const invalidateQueriesForBlock = useInvalidateQueriesForBlock();
   const flushDraftSave = useFlushDraftSave();
 
@@ -181,10 +182,7 @@ export default function RepeatableFieldGroup({
         ) : (
           <>
             {fieldArrayFields.map((fieldArrayField, index) => {
-              // Get current instance values from form
-              const groupArray = form.watch(groupId) as unknown[] | undefined;
               const currentInstance = groupArray?.[index] as Record<string, unknown> | undefined;
-              
               // Build instance-specific form context for template evaluation
               // This allows templates to reference current instance data and index
               const first = index === 0;

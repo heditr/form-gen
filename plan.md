@@ -1,5 +1,9 @@
 # Project Plan
 
+## Completed Epics
+
+- [Form Engine Performance (Thin Center)](docs/thin-center-form-engine.md) - ✅ COMPLETE — live Zod resolver, no `formKey` remount, status map, lazy popin session
+
 ## Active Epics
 
 - [Document Upload Popin Epic](tasks/document-upload-popin-epic.md) - 📋 PLANNED
@@ -21,7 +25,3 @@
 - [Repeatable Fields Epic](tasks/repeatable-fields-epic.md) - 📋 PLANNED
 - [Repeatable Popin Epic](tasks/repeatable-popin-epic.md) - 📋 PLANNED
 - [Manual-Triggered Lookup Autofill Epic](tasks/manual-triggered-lookup-autofill-epic.md) - 📋 PLANNED
-
-## Completed Epics
-
-_None yet_

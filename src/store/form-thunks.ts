@@ -127,22 +127,26 @@ export const rehydrateRulesThunk = createAsyncThunk<
  * Uses getState to access form state (mergedDescriptor, formData) for template evaluation.
  */
 export const fetchDataSourceThunk = createAsyncThunk<
-  unknown, // Return type (the data items)
-  { fieldPath: string; url: string; auth?: AuthConfig }, // Argument type (url and auth kept for backward compatibility, but not used)
-  { state: RootState; rejectValue: string } // Reject value type
+  unknown,
+  {
+    fieldPath: string;
+    url: string;
+    auth?: AuthConfig;
+    templateContext?: Partial<FormData>;
+  },
+  { state: RootState; rejectValue: string }
 >(
   'form/fetchDataSource',
-  async ({ fieldPath }, { getState, dispatch, rejectWithValue }) => {
+  async ({ fieldPath, templateContext }, { getState, dispatch, rejectWithValue }) => {
     try {
       const state = getState();
       const formState = getFormState(state);
-      const { mergedDescriptor, formData } = formState;
-      
+      const { mergedDescriptor, formData: reduxFormData } = formState;
+
       if (!mergedDescriptor) {
         return rejectWithValue('No merged descriptor available for data source loading');
       }
-      
-      // Find the field descriptor to get the full DataSourceConfig
+
       let fieldDescriptor = null;
       for (const block of mergedDescriptor.blocks || []) {
         fieldDescriptor = block.fields?.find((field) => field.id === fieldPath);
@@ -150,28 +154,21 @@ export const fetchDataSourceThunk = createAsyncThunk<
           break;
         }
       }
-      
+
       if (!fieldDescriptor || !fieldDescriptor.dataSource) {
         return rejectWithValue(`Field ${fieldPath} not found or has no dataSource config`);
       }
-      
-      // Build form context for template evaluation
+
+      const liveFormData = templateContext ?? reduxFormData;
       const formContext: FormContext = {
-        ...formData,
-        formData, // Also include as nested property for template access
+        ...liveFormData,
+        formData: liveFormData,
       };
-      
-      // Use the data-source-loader utility which handles:
-      // - URL template evaluation
-      // - Authentication (via proxy if dataSourceId is present, or direct if auth is provided)
-      // - API calls
-      // - Response transformation using itemsTemplate
-      // - Caching
+
       const items = await loadDataSourceUtil(fieldDescriptor.dataSource, formContext, fieldPath);
-      
-      // Dispatch action to store in Redux cache
+
       dispatch(loadDataSource({ fieldPath, data: items }));
-      
+
       return items;
     } catch (error) {
       return rejectWithValue(error instanceof Error ? error.message : 'Unknown error');

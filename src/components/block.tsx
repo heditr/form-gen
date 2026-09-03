@@ -5,7 +5,7 @@
  * Handles visibility and disabled states with smooth animations.
  */
 
-import { useEffect, useState, useRef, useMemo } from 'react';
+import { useEffect, useState, useRef, useMemo, memo } from 'react';
 import type { BlockDescriptor, GlobalFormDescriptor, FormData } from '@/types/form-descriptor';
 import type { UseFormReturn, FieldValues } from 'react-hook-form';
 import type { FormContext } from '@/utils/template-evaluator';
@@ -38,7 +38,7 @@ export interface BlockProps {
  * Renders a block with its fields. Handles visibility and disabled states
  * with smooth fade/slide animations.
  */
-export default function Block({
+function Block({
   block,
   isDisabled,
   isHidden,
@@ -317,3 +317,5 @@ export default function Block({
     </div>
   );
 }
+
+export default memo(Block);

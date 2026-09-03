@@ -1,36 +1,29 @@
 /**
- * FormValuesWatcher Component
- *
- * Isolates useWatch in a child component to prevent "Cannot update a component
- * while rendering a different component (Controller)" - when useWatch runs in
- * the parent, its setState triggers a parent re-render during Controller's
- * render; moving useWatch here ensures only this component re-renders.
+ * Form Values Watcher — side effects only (discriminant detection, draft save).
  */
 
-import { useEffect, useMemo, useRef } from 'react';
-import { useWatch } from 'react-hook-form';
+import { useEffect, useRef } from 'react';
 import type { UseFormReturn, FieldValues } from 'react-hook-form';
-import type { GlobalFormDescriptor, FormData, CaseContext } from '@/types/form-descriptor';
-import type { FormContext } from '@/utils/template-evaluator';
+import type { FormData, CaseContext, FieldDescriptor } from '@/types/form-descriptor';
+import { haveDiscriminantFieldsChanged } from '@/utils/context-extractor';
+import { useDeferredFormValues } from '@/hooks/use-deferred-form-values';
 
 export interface FormValuesWatcherProps {
   form: UseFormReturn<FieldValues>;
   caseContext: CaseContext;
-  descriptor: GlobalFormDescriptor | null;
+  discriminantFields?: FieldDescriptor[];
   onDiscriminantChange?: (formData: Partial<FormData>) => void;
   onFormChange?: (formData: Partial<FormData>) => void;
-  children: (formContext: FormContext) => React.ReactNode;
 }
 
 export default function FormValuesWatcher({
   form,
   caseContext,
-  descriptor,
+  discriminantFields = [],
   onDiscriminantChange,
   onFormChange,
-  children,
 }: FormValuesWatcherProps) {
-  const watchedValues = useWatch({ control: form.control });
+  const watchedValues = useDeferredFormValues(form);
   const previousValuesRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -44,29 +37,23 @@ export default function FormValuesWatcher({
     previousValuesRef.current = currentValuesString;
     const formData = currentValues as Partial<FormData>;
 
-    if (descriptor && onDiscriminantChange) {
-      const id = setTimeout(() => onDiscriminantChange(formData), 0);
-      // eslint-disable-next-line consistent-return
-      return () => clearTimeout(id);
+    if (discriminantFields.length === 0 || !onDiscriminantChange) {
+      return;
     }
-  }, [descriptor, watchedValues, onDiscriminantChange]);
+
+    if (!haveDiscriminantFieldsChanged(caseContext, formData, discriminantFields)) {
+      return;
+    }
+
+    const id = setTimeout(() => onDiscriminantChange(formData), 0);
+    // eslint-disable-next-line consistent-return
+    return () => clearTimeout(id);
+  }, [watchedValues, onDiscriminantChange, caseContext, discriminantFields]);
 
   useEffect(() => {
     if (!onFormChange) return;
-
-    const currentValues = watchedValues ?? {};
-    const formData = currentValues as Partial<FormData>;
-    onFormChange(formData);
+    onFormChange((watchedValues ?? {}) as Partial<FormData>);
   }, [watchedValues, onFormChange]);
 
-  const formContext: FormContext = useMemo(
-    () => ({
-      ...(watchedValues ?? {}),
-      caseContext,
-      formData: (watchedValues ?? {}) as Partial<FormData>,
-    }),
-    [watchedValues, caseContext]
-  );
-
-  return <>{children(formContext)}</>;
+  return null;
 }

@@ -337,13 +337,27 @@ export const reducer = (state: FormState = initialState, action: ActionObject | 
 // Selectors
 export const getFormState = (state: RootState): FormState => state[slice];
 
+export const getMergedDescriptor = (state: RootState): GlobalFormDescriptor | null =>
+  state[slice].mergedDescriptor;
+
+export const getCaseContext = (state: RootState): CaseContext =>
+  state[slice].caseContext;
+
+export const getIsRehydrating = (state: RootState): boolean =>
+  state[slice].isRehydrating;
+
+export const getDataSourceCache = (state: RootState): Record<string, unknown> =>
+  state[slice].dataSourceCache;
+
+export const getFormData = (state: RootState): Partial<FormData> =>
+  state[slice].formData;
+
 // Memoized selector for visible blocks
 // Returns the same array reference if mergedDescriptor.blocks hasn't changed
 export const getVisibleBlocks = createSelector(
-  [getFormState],
-  (formState): BlockDescriptor[] => {
-    const mergedDescriptor = formState.mergedDescriptor;
-    if (!mergedDescriptor || !mergedDescriptor.blocks) {
+  [getMergedDescriptor],
+  (mergedDescriptor): BlockDescriptor[] => {
+    if (!mergedDescriptor?.blocks) {
       return [];
     }
     // Note: Status template evaluation will be implemented in a later task

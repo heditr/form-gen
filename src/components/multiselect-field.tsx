@@ -21,7 +21,7 @@ import { Controller } from 'react-hook-form';
 import type { FieldDescriptor, FieldItem } from '@/types/form-descriptor';
 import type { UseFormReturn, FieldValues } from 'react-hook-form';
 import type { FormContext } from '@/utils/template-evaluator';
-import { getErrorByPath } from '@/utils/form-errors';
+import { useFieldError } from '@/hooks/use-field-error';
 import { evaluateItemsArrayTemplate } from '@/utils/array-template-evaluator';
 import { useDataSource } from '@/hooks/use-form-query';
 import { Label } from '@/components/ui/label';
@@ -56,7 +56,7 @@ export default function MultiselectField({
   onLoadDataSource,
   dataSourceCache = {},
 }: MultiselectFieldProps) {
-  const error = getErrorByPath(form.formState.errors, field.id) ?? form.formState.errors[field.id];
+  const error = useFieldError(form, field.id);
   const errorMessage = error?.message as string | undefined;
 
   const [isOpen, setIsOpen] = useState(false);
