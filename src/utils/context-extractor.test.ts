@@ -294,191 +294,174 @@ describe('context extractor', () => {
   });
 
   describe('haveDiscriminantFieldsChanged', () => {
-    test('given discriminant field changed in form data, should return true', () => {
-      const currentContext: CaseContext = {
+    const jurisdictionField: FieldDescriptor = {
+      id: 'jurisdiction',
+      type: 'dropdown',
+      label: 'Jurisdiction',
+      validation: [],
+      isDiscriminant: true,
+    };
+    const entityTypeField: FieldDescriptor = {
+      id: 'entityType',
+      type: 'dropdown',
+      label: 'Entity Type',
+      validation: [],
+      isDiscriminant: true,
+    };
+    const onboardingCountriesField: FieldDescriptor = {
+      id: 'onboardingCountries',
+      type: 'multiselect',
+      label: 'Onboarding Countries',
+      validation: [],
+      isDiscriminant: true,
+    };
+
+    test('given discriminant field changed between form snapshots, should return true', () => {
+      const previousFormData = {
         jurisdiction: 'US',
         entityType: 'individual',
+        email: 'test@example.com',
+      };
+      const nextFormData = {
+        jurisdiction: 'CA',
+        entityType: 'individual',
+        email: 'test@example.com',
       };
 
-      const formData = {
-        jurisdiction: 'CA', // Changed
-        entityType: 'individual', // Same
-        email: 'test@example.com', // Not discriminant
-      };
-
-      const discriminantFields: FieldDescriptor[] = [
-        {
-          id: 'jurisdiction',
-          type: 'dropdown',
-          label: 'Jurisdiction',
-          validation: [],
-          isDiscriminant: true,
-        },
-        {
-          id: 'entityType',
-          type: 'dropdown',
-          label: 'Entity Type',
-          validation: [],
-          isDiscriminant: true,
-        },
-      ];
-
-      const hasChanged = haveDiscriminantFieldsChanged(currentContext, formData, discriminantFields);
+      const hasChanged = haveDiscriminantFieldsChanged(
+        previousFormData,
+        nextFormData,
+        [jurisdictionField, entityTypeField],
+      );
 
       expect(hasChanged).toBe(true);
     });
 
-    test('given no discriminant fields changed, should return false', () => {
-      const currentContext: CaseContext = {
+    test('given only non-discriminant fields changed, should return false', () => {
+      const previousFormData = {
         jurisdiction: 'US',
         entityType: 'individual',
+        email: 'old@example.com',
+      };
+      const nextFormData = {
+        jurisdiction: 'US',
+        entityType: 'individual',
+        email: 'new@example.com',
       };
 
-      const formData = {
-        jurisdiction: 'US', // Same
-        entityType: 'individual', // Same
-        email: 'new@example.com', // Changed but not discriminant
-      };
-
-      const discriminantFields: FieldDescriptor[] = [
-        {
-          id: 'jurisdiction',
-          type: 'dropdown',
-          label: 'Jurisdiction',
-          validation: [],
-          isDiscriminant: true,
-        },
-        {
-          id: 'entityType',
-          type: 'dropdown',
-          label: 'Entity Type',
-          validation: [],
-          isDiscriminant: true,
-        },
-      ];
-
-      const hasChanged = haveDiscriminantFieldsChanged(currentContext, formData, discriminantFields);
+      const hasChanged = haveDiscriminantFieldsChanged(
+        previousFormData,
+        nextFormData,
+        [jurisdictionField, entityTypeField],
+      );
 
       expect(hasChanged).toBe(false);
     });
 
-    test('given discriminant field not in form data, should skip it', () => {
-      const currentContext: CaseContext = {
+    test('given discriminant value clears to undefined, should return true', () => {
+      const previousFormData = {
         jurisdiction: 'US',
         entityType: 'individual',
       };
-
-      const formData = {
-        // jurisdiction missing - field wasn't changed
-        email: 'test@example.com', // Changed but not discriminant
+      const nextFormData = {
+        entityType: 'individual',
       };
 
-      const discriminantFields: FieldDescriptor[] = [
-        {
-          id: 'jurisdiction',
-          type: 'dropdown',
-          label: 'Jurisdiction',
-          validation: [],
-          isDiscriminant: true,
-        },
-        {
-          id: 'entityType',
-          type: 'dropdown',
-          label: 'Entity Type',
-          validation: [],
-          isDiscriminant: true,
-        },
-      ];
+      const hasChanged = haveDiscriminantFieldsChanged(
+        previousFormData,
+        nextFormData,
+        [jurisdictionField, entityTypeField],
+      );
 
-      const hasChanged = haveDiscriminantFieldsChanged(currentContext, formData, discriminantFields);
-
-      expect(hasChanged).toBe(false);
+      expect(hasChanged).toBe(true);
     });
 
     test('given array discriminant field changed, should detect change', () => {
-      const currentContext: CaseContext = {
+      const previousFormData = {
         onboardingCountries: ['US', 'CA'],
       };
-
-      const formData = {
-        onboardingCountries: ['US', 'CA', 'MX'], // Changed
+      const nextFormData = {
+        onboardingCountries: ['US', 'CA', 'MX'],
       };
 
-      const discriminantFields: FieldDescriptor[] = [
-        {
-          id: 'onboardingCountries',
-          type: 'multiselect',
-          label: 'Onboarding Countries',
-          validation: [],
-          isDiscriminant: true,
-        },
-      ];
-
-      const hasChanged = haveDiscriminantFieldsChanged(currentContext, formData, discriminantFields);
+      const hasChanged = haveDiscriminantFieldsChanged(
+        previousFormData,
+        nextFormData,
+        [onboardingCountriesField],
+      );
 
       expect(hasChanged).toBe(true);
     });
 
     test('given array discriminant field unchanged, should return false', () => {
-      const currentContext: CaseContext = {
+      const previousFormData = {
+        onboardingCountries: ['US', 'CA'],
+      };
+      const nextFormData = {
         onboardingCountries: ['US', 'CA'],
       };
 
-      const formData = {
-        onboardingCountries: ['US', 'CA'], // Same
-      };
-
-      const discriminantFields: FieldDescriptor[] = [
-        {
-          id: 'onboardingCountries',
-          type: 'multiselect',
-          label: 'Onboarding Countries',
-          validation: [],
-          isDiscriminant: true,
-        },
-      ];
-
-      const hasChanged = haveDiscriminantFieldsChanged(currentContext, formData, discriminantFields);
+      const hasChanged = haveDiscriminantFieldsChanged(
+        previousFormData,
+        nextFormData,
+        [onboardingCountriesField],
+      );
 
       expect(hasChanged).toBe(false);
     });
 
     test('given null to value change, should detect change', () => {
-      const currentContext: CaseContext = {
+      const previousFormData = {
         jurisdiction: null,
       };
-
-      const formData = {
-        jurisdiction: 'US', // Changed from null
+      const nextFormData = {
+        jurisdiction: 'US',
       };
 
-      const discriminantFields: FieldDescriptor[] = [
-        {
-          id: 'jurisdiction',
-          type: 'dropdown',
-          label: 'Jurisdiction',
-          validation: [],
-          isDiscriminant: true,
-        },
-      ];
-
-      const hasChanged = haveDiscriminantFieldsChanged(currentContext, formData, discriminantFields);
+      const hasChanged = haveDiscriminantFieldsChanged(
+        previousFormData,
+        nextFormData,
+        [jurisdictionField],
+      );
 
       expect(hasChanged).toBe(true);
     });
 
     test('given empty discriminant fields array, should return false', () => {
-      const currentContext: CaseContext = {
+      const previousFormData = {
         jurisdiction: 'US',
       };
-
-      const formData = {
+      const nextFormData = {
         jurisdiction: 'CA',
       };
 
-      const hasChanged = haveDiscriminantFieldsChanged(currentContext, formData, []);
+      const hasChanged = haveDiscriminantFieldsChanged(previousFormData, nextFormData, []);
 
       expect(hasChanged).toBe(false);
+    });
+
+    test('given nested discriminant field path changed, should return true', () => {
+      const nestedField: FieldDescriptor = {
+        id: 'personalInfo.jurisdiction',
+        type: 'dropdown',
+        label: 'Jurisdiction',
+        validation: [],
+        isDiscriminant: true,
+      };
+      const previousFormData = {
+        personalInfo: { jurisdiction: 'US' },
+      };
+      const nextFormData = {
+        personalInfo: { jurisdiction: 'CA' },
+      };
+
+      const hasChanged = haveDiscriminantFieldsChanged(
+        previousFormData,
+        nextFormData,
+        [nestedField],
+      );
+
+      expect(hasChanged).toBe(true);
     });
   });
 });

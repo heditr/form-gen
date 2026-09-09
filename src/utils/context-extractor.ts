@@ -136,35 +136,24 @@ function valuesHaveChanged(oldValue: unknown, newValue: unknown): boolean {
 }
 
 /**
- * Check if any discriminant fields have changed in the form data
- * This is an optimization to avoid unnecessary context updates when non-discriminant fields change
- * 
- * @param currentContext - Current CaseContext
- * @param formData - New form data
+ * Check if any discriminant fields have changed between form value snapshots.
+ * Compares previous vs next form values by field id — not against CaseContext.
+ *
+ * @param previousFormData - Previous form values
+ * @param nextFormData - New form values
  * @param discriminantFields - Array of discriminant field descriptors
  * @returns true if any discriminant field value has changed, false otherwise
  */
 export function haveDiscriminantFieldsChanged(
-  currentContext: CaseContext,
-  formData: Partial<FormData>,
+  previousFormData: Partial<FormData>,
+  nextFormData: Partial<FormData>,
   discriminantFields: FieldDescriptor[]
 ): boolean {
-  for (const field of discriminantFields) {
-    const newValue = extractFieldValue(formData, field.id);
-    const currentValue = currentContext[field.id];
-
-    // If value is undefined in formData, skip (field wasn't changed)
-    if (newValue === undefined) {
-      continue;
-    }
-
-    // Compare values using shared comparison logic
-    if (valuesHaveChanged(currentValue, newValue)) {
-      return true;
-    }
-  }
-
-  return false;
+  return discriminantFields.some((field) => {
+    const previousValue = extractFieldValue(previousFormData, field.id);
+    const nextValue = extractFieldValue(nextFormData, field.id);
+    return valuesHaveChanged(previousValue, nextValue);
+  });
 }
 
 /**

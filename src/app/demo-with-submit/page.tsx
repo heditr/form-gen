@@ -17,7 +17,7 @@ import { useDebouncedRehydration } from '@/hooks/use-debounced-rehydration';
 import { useDebouncedDocumentsRehydration } from '@/hooks/use-debounced-documents-rehydration';
 import { useDraftSave } from '@/hooks/use-draft-save';
 import type { AppDispatch } from '@/store/store';
-import { updateCaseContext, identifyDiscriminantFields, haveDiscriminantFieldsChanged } from '@/utils/context-extractor';
+import { updateCaseContext, identifyDiscriminantFields } from '@/utils/context-extractor';
 import { useFormDescriptor } from '@/hooks/use-form-descriptor';
 import { createSubmissionOrchestrator, evaluatePayloadTemplate, constructSubmissionRequest, serializeFormValues } from '@/utils/submission-orchestrator';
 import type { GlobalFormDescriptor, FormData, CaseContext, BlockDescriptor, FieldDescriptor } from '@/types/form-descriptor';
@@ -307,35 +307,31 @@ function FormContainerWithSubmissionComponent({
     [mergedDescriptor, visibleFields]
   );
 
-  const handleDiscriminantChange = useCallback(
-    (newFormData: Partial<FormData>) => {
-      if (discriminantFields.length === 0) {
-        return;
-      }
-
-      if (!haveDiscriminantFieldsChanged(caseContext, newFormData, discriminantFields)) {
-        return;
-      }
-
-      syncFormData(newFormData);
-      const updatedContext = updateCaseContext(caseContext, newFormData, discriminantFields);
-      rehydrate(updatedContext);
-    },
-    [discriminantFields, caseContext, syncFormData, rehydrate]
-  );
-
   const { form } = useFormDescriptor(demoDescriptor, {
     savedFormData: _formData,
     caseContext,
   });
 
-  // Create submission orchestrator
   const orchestrator = useMemo(() => createSubmissionOrchestrator(), []);
   const { saveDraft, flushDraftSave } = useDraftSave({
     form,
     draftConfig: demoDescriptor?.draft,
     caseContext,
   });
+
+  const handleDiscriminantChange = useCallback(
+    async (newFormData: Partial<FormData>) => {
+      if (discriminantFields.length === 0) {
+        return;
+      }
+
+      await flushDraftSave();
+      syncFormData(newFormData);
+      const updatedContext = updateCaseContext(caseContext, newFormData, discriminantFields);
+      rehydrate(updatedContext);
+    },
+    [discriminantFields, caseContext, syncFormData, rehydrate, flushDraftSave]
+  );
 
   // Create submit handler with payload/response tracking
   const handleSubmitWithTracking = useCallback(async (e?: React.BaseSyntheticEvent) => {
@@ -466,7 +462,6 @@ function FormContainerWithSubmissionComponent({
     <DocumentPopinProvider mergedDescriptor={demoDescriptor}>
       <FormValuesWatcher
         form={form}
-        caseContext={caseContext}
         discriminantFields={discriminantFields}
         onDiscriminantChange={handleDiscriminantChange}
         onFormChange={saveDraft}

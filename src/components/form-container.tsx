@@ -29,7 +29,7 @@ import {
 } from '@/store/form-dux';
 import { fetchDataSourceThunk } from '@/store/form-thunks';
 import type { AppDispatch } from '@/store/store';
-import { updateCaseContext, identifyDiscriminantFields, haveDiscriminantFieldsChanged } from '@/utils/context-extractor';
+import { updateCaseContext, identifyDiscriminantFields } from '@/utils/context-extractor';
 import type { FormContext } from '@/utils/template-evaluator';
 import { serializeFormValues } from '@/utils/submission-orchestrator';
 import FormPresentation from './form-presentation';
@@ -84,23 +84,6 @@ function FormInner({
     [mergedDescriptor, visibleFields]
   );
 
-  const handleDiscriminantChange = useCallback(
-    (newFormData: Partial<FormData>) => {
-      if (discriminantFields.length === 0) {
-        return;
-      }
-
-      if (!haveDiscriminantFieldsChanged(caseContext, newFormData, discriminantFields)) {
-        return;
-      }
-
-      syncFormData(newFormData);
-      const updatedContext = updateCaseContext(caseContext, newFormData, discriminantFields);
-      rehydrate(updatedContext);
-    },
-    [discriminantFields, caseContext, syncFormData, rehydrate]
-  );
-
   // Initialize useFormDescriptor with live resolver (no remount on rules/context change)
   const { form } = useFormDescriptor(mergedDescriptor, {
     savedFormData,
@@ -112,6 +95,21 @@ function FormInner({
     draftConfig: mergedDescriptor?.draft,
     caseContext,
   });
+
+  const handleDiscriminantChange = useCallback(
+    async (newFormData: Partial<FormData>) => {
+      if (discriminantFields.length === 0) {
+        return;
+      }
+
+      // Persist draft before rules rehydration so the save is not raced/dropped
+      await flushDraftSave();
+      syncFormData(newFormData);
+      const updatedContext = updateCaseContext(caseContext, newFormData, discriminantFields);
+      rehydrate(updatedContext);
+    },
+    [discriminantFields, caseContext, syncFormData, rehydrate, flushDraftSave]
+  );
 
   const presentationProps = useMemo(
     () => ({
@@ -133,7 +131,6 @@ function FormInner({
     <>
       <FormValuesWatcher
         form={form}
-        caseContext={caseContext}
         discriminantFields={discriminantFields}
         onDiscriminantChange={handleDiscriminantChange}
         onFormChange={saveDraft}

@@ -21,7 +21,7 @@ import { createSubmissionOrchestrator, evaluatePayloadTemplate, serializeFormVal
 import { useDraftSave } from '@/hooks/use-draft-save';
 import type { FormData, GlobalFormDescriptor, BlockDescriptor, FieldDescriptor, CaseContext, CasePrefill } from '@/types/form-descriptor';
 import { useFormDescriptor } from '@/hooks/use-form-descriptor';
-import { updateCaseContext, identifyDiscriminantFields, haveDiscriminantFieldsChanged } from '@/utils/context-extractor';
+import { updateCaseContext, identifyDiscriminantFields } from '@/utils/context-extractor';
 import FormPresentation from '@/components/form-presentation';
 import FormValuesWatcher from '@/components/form-values-watcher';
 import { FormStatusProvider } from '@/context/form-status-context';
@@ -417,23 +417,6 @@ function FormContainerWithSubmissionComponent({
     [mergedDescriptor, visibleFields]
   );
 
-  const handleDiscriminantChange = useCallback(
-    (newFormData: Partial<FormData>) => {
-      if (discriminantFields.length === 0) {
-        return;
-      }
-
-      if (!haveDiscriminantFieldsChanged(caseContext, newFormData, discriminantFields)) {
-        return;
-      }
-
-      syncFormData(newFormData);
-      const updatedContext = updateCaseContext(caseContext, newFormData, discriminantFields);
-      rehydrate(updatedContext);
-    },
-    [discriminantFields, caseContext, syncFormData, rehydrate]
-  );
-
   const { form } = useFormDescriptor(mergedDescriptor, {
     savedFormData,
     caseContext,
@@ -444,6 +427,20 @@ function FormContainerWithSubmissionComponent({
     draftConfig: mergedDescriptor?.draft,
     caseContext,
   });
+
+  const handleDiscriminantChange = useCallback(
+    async (newFormData: Partial<FormData>) => {
+      if (discriminantFields.length === 0) {
+        return;
+      }
+
+      await flushDraftSave();
+      syncFormData(newFormData);
+      const updatedContext = updateCaseContext(caseContext, newFormData, discriminantFields);
+      rehydrate(updatedContext);
+    },
+    [discriminantFields, caseContext, syncFormData, rehydrate, flushDraftSave]
+  );
 
   const orchestrator = useMemo(() => createSubmissionOrchestrator(), []);
 
@@ -565,7 +562,6 @@ function FormContainerWithSubmissionComponent({
     <DocumentPopinProvider mergedDescriptor={mergedDescriptor}>
       <FormValuesWatcher
         form={form}
-        caseContext={caseContext}
         discriminantFields={discriminantFields}
         onDiscriminantChange={handleDiscriminantChange}
         onFormChange={saveDraft}

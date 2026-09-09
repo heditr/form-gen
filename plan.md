@@ -2,6 +2,7 @@
 
 ## Completed Epics
 
+- [Discriminant Form Values Compare](tasks/archive/2026-09-09-discriminant-form-values-compare-epic.md) - ✅ COMPLETED (2026-09-09)
 - [Form Engine Performance (Thin Center)](docs/thin-center-form-engine.md) - ✅ COMPLETE — live Zod resolver, no `formKey` remount, status map, lazy popin session
 
 ## Active Epics
