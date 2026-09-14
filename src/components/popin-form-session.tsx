@@ -16,6 +16,10 @@ import type { BackendError } from '@/utils/form-descriptor-integration';
 import { useFormDescriptor } from '@/hooks/use-form-descriptor';
 import { isRepeatableBlock, groupFieldsByRepeatableGroupId } from '@/utils/form-descriptor-integration';
 import { evaluateDefaultValue } from '@/utils/default-value-evaluator';
+import {
+  buildPopinFormContext,
+  getRepeatablePopinInstanceValues,
+} from '@/utils/popin-form-context';
 import { Button } from '@/components/ui/button';
 import Block from './block';
 
@@ -54,26 +58,45 @@ export default function PopinFormSession({
 }: PopinFormSessionProps) {
   const mainFormValues = useWatch({ control: mainForm.control }) as Record<string, unknown>;
 
+  const repeatableInstanceValues = useMemo(
+    () =>
+      getRepeatablePopinInstanceValues(
+        mainForm.getValues() as Record<string, unknown>,
+        popinEditContext
+      ),
+    [mainForm, popinEditContext]
+  );
+
   const { form: popinForm } = useFormDescriptor(popinDescriptor, {
     caseContext,
     formData: mainFormValues as Partial<DescriptorFormData>,
+    savedFormData: repeatableInstanceValues as Partial<DescriptorFormData> | undefined,
     validationScope: 'popin',
   });
 
   const watchedPopinValues = useWatch({ control: popinForm.control }) as Record<string, unknown>;
 
-  const popinFormContext = useMemo(() => {
-    const mergedValues = {
-      ...(mainFormValues ?? {}),
-      ...(watchedPopinValues ?? {}),
-    };
-    return {
-      ...mergedValues,
-      ...initialFormContext,
-      ...(popinLoadData ?? {}),
-      formData: mergedValues,
-    } as FormContext;
-  }, [mainFormValues, watchedPopinValues, initialFormContext, popinLoadData]);
+  const popinFormContext = useMemo(
+    () =>
+      buildPopinFormContext({
+        mainFormValues: mainFormValues ?? {},
+        popinValues: {
+          ...(repeatableInstanceValues ?? {}),
+          ...(watchedPopinValues ?? {}),
+        },
+        initialFormContext,
+        popinLoadData,
+        caseContext,
+      }),
+    [
+      mainFormValues,
+      repeatableInstanceValues,
+      watchedPopinValues,
+      initialFormContext,
+      popinLoadData,
+      caseContext,
+    ]
+  );
 
   // Template defaults for a new repeatable row — exclude live popin values so reset
   // does not feed back into this context and re-trigger the init effect.
@@ -106,7 +129,6 @@ export default function PopinFormSession({
     if (repeatableInitKeyRef.current === sessionKey) {
       return;
     }
-    repeatableInitKeyRef.current = sessionKey;
 
     const fieldGroups = groupFieldsByRepeatableGroupId(resolvedBlock.block.fields);
     const groupFields = fieldGroups[groupId];
@@ -115,14 +137,19 @@ export default function PopinFormSession({
     }
 
     if (typeof index === 'number' && index >= 0) {
-      const mainValues = mainForm.getValues() as Record<string, unknown>;
-      const groupArray = mainValues[groupId] as unknown[] | undefined;
-      const instanceData = Array.isArray(groupArray) ? groupArray[index] : undefined;
-      if (instanceData && typeof instanceData === 'object') {
-        popinForm.reset(instanceData as Record<string, unknown>);
+      const instanceData = getRepeatablePopinInstanceValues(
+        mainForm.getValues() as Record<string, unknown>,
+        popinEditContext
+      );
+      if (!instanceData) {
+        return;
       }
+      repeatableInitKeyRef.current = sessionKey;
+      popinForm.reset(instanceData);
       return;
     }
+
+    repeatableInitKeyRef.current = sessionKey;
 
     const defaultInstance: Record<string, unknown> = {};
     for (const field of groupFields) {

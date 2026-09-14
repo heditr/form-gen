@@ -339,6 +339,13 @@ describe('PopinManager', () => {
         expect(screen.getByTestId('dialog')).toBeInTheDocument();
         expect(screen.getByTestId('dialog-title')).toHaveTextContent('Emergency Contacts');
       });
+
+      await waitFor(() => {
+        expect(mockPopinFormInstance.reset).toHaveBeenCalledWith({
+          emergencyName: 'Jane Doe',
+          emergencyPhone: '+1-555-1234',
+        });
+      });
     });
 
     test('given block not found, should handle error gracefully without opening popin', async () => {

@@ -7,11 +7,11 @@
  * and shows backend validation responses.
  */
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import SubmitButton from '@/components/submit-button';
 import { useGlobalDescriptor } from '@/hooks/use-form-query';
-import { getMergedDescriptor, getCaseContext, getIsRehydrating, getFormData, getDataSourceCache, getVisibleBlocks, getVisibleFields, syncFormDataToContext, type RootState, getFormState } from '@/store/form-dux';
+import { getMergedDescriptor, getCaseContext, getIsRehydrating, getFormData, getDataSourceCache, getVisibleBlocks, getVisibleFields, syncFormDataToContext, type RootState, getFormState, initializeCaseContextFromPrefill } from '@/store/form-dux';
 import { fetchDataSourceThunk } from '@/store/form-thunks';
 import { useDebouncedRehydration } from '@/hooks/use-debounced-rehydration';
 import { useDebouncedDocumentsRehydration } from '@/hooks/use-debounced-documents-rehydration';
@@ -20,7 +20,7 @@ import type { AppDispatch } from '@/store/store';
 import { updateCaseContext, identifyDiscriminantFields } from '@/utils/context-extractor';
 import { useFormDescriptor } from '@/hooks/use-form-descriptor';
 import { createSubmissionOrchestrator, evaluatePayloadTemplate, constructSubmissionRequest, serializeFormValues } from '@/utils/submission-orchestrator';
-import type { GlobalFormDescriptor, FormData, CaseContext, BlockDescriptor, FieldDescriptor } from '@/types/form-descriptor';
+import type { GlobalFormDescriptor, FormData, CaseContext, BlockDescriptor, FieldDescriptor, CasePrefill } from '@/types/form-descriptor';
 import { Button } from '@/components/ui/button';
 import FormPresentation from '@/components/form-presentation';
 import FormValuesWatcher from '@/components/form-values-watcher';
@@ -53,11 +53,35 @@ export default function DemoWithSubmitPage() {
   const {
     mergedDescriptor,
     isRehydrating,
+    caseContext,
   } = formState;
 
   // Load global descriptor using TanStack Query hook
   // This automatically syncs to Redux state on success
   const { refetch: refetchDescriptor } = useGlobalDescriptor('/api/form/global-descriptor-demo');
+  const dispatch = useDispatch<AppDispatch>();
+
+  useEffect(() => {
+    if (Array.isArray(caseContext?.addresses)) {
+      return;
+    }
+
+    fetch('/api/demo/prefill')
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error('Prefill failed'))))
+      .then((body: { casePrefill?: CasePrefill }) => {
+        dispatch(initializeCaseContextFromPrefill({ casePrefill: body.casePrefill ?? {} }));
+      })
+      .catch(() => {
+        dispatch(initializeCaseContextFromPrefill({
+          casePrefill: {
+            incorporationCountry: 'US',
+            processType: 'standard',
+            needSignature: true,
+            addresses: [],
+          },
+        }));
+      });
+  }, [dispatch, caseContext]);
 
   // Reset form handler
   const handleReset = useCallback(() => {
@@ -83,6 +107,10 @@ export default function DemoWithSubmitPage() {
               <h1 className="text-4xl font-bold mb-2">Form Submission Demo</h1>
               <p className="text-gray-600 text-lg">
                 Interactive showcase of form submission with payload and response display
+              </p>
+              <p className="text-gray-500 text-sm mt-2">
+                Repeatable Addresses popin: click a summary to edit. Type and country on that row
+                control which fields appear (company name, VAT, state, attention to).
               </p>
             </div>
             <div className="flex gap-2">
@@ -126,9 +154,13 @@ export default function DemoWithSubmitPage() {
           <div>
             <div className="bg-white rounded-lg shadow-sm border p-6">
               <h2 className="text-xl font-semibold mb-4">Form</h2>
-              <FormContainerWithSubmissionWithHook
-                onSubmissionStateChange={setSubmissionState}
-              />
+              {Array.isArray(caseContext?.addresses) ? (
+                <FormContainerWithSubmissionWithHook
+                  onSubmissionStateChange={setSubmissionState}
+                />
+              ) : (
+                <p className="text-sm text-muted-foreground">Loading prefilled addresses…</p>
+              )}
             </div>
           </div>
 

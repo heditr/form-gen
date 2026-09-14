@@ -22,9 +22,40 @@ export async function GET(): Promise<NextResponse<DemoPrefillResponse | { error:
       processType: 'standard',
       needSignature: true,
       addresses: [
-        { street: '123 Main St', city: 'New York', zip: '10001' },
-        { street: '456 Oak Ave', city: 'Boston', zip: '02101' },
-        { street: '789 Harbor Dr', city: 'San Francisco', zip: '94102' },
+        {
+          addressType: 'residential',
+          country: 'US',
+          state: 'NY',
+          street: '123 Main St',
+          city: 'New York',
+          zip: '10001',
+        },
+        {
+          addressType: 'business',
+          country: 'US',
+          state: 'CA',
+          street: '1 Infinite Loop',
+          city: 'Cupertino',
+          zip: '95014',
+          companyName: 'Acme Holdings',
+        },
+        {
+          addressType: 'business',
+          country: 'UK',
+          street: '10 Downing St',
+          city: 'London',
+          zip: 'SW1A 2AA',
+          companyName: 'Acme UK Ltd',
+          vatNumber: 'GB123456789',
+        },
+        {
+          addressType: 'mailing',
+          country: 'FR',
+          street: '10 Rue de Rivoli',
+          city: 'Paris',
+          zip: '75001',
+          attentionTo: 'KYC Operations',
+        },
       ],
     };
 
