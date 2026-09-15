@@ -59,10 +59,7 @@ const resolveDocumentProspects = (
     return [];
   }
 
-  const key = config.prospectSource.includes('{{') && config.prospectSource.includes('}}')
-    ? evaluateTemplate(config.prospectSource, context).trim()
-    : config.prospectSource.trim();
-  const source = (context.caseContext as Record<string, unknown> | undefined)?.[key];
+  const source = resolveCaseContextPath(config.prospectSource, context);
 
   return Array.isArray(source)
     ? source.filter((item): item is DocumentCardProspectConfig =>
@@ -188,6 +185,28 @@ function getNestedValue(
   }
 
   return current;
+}
+
+/**
+ * Resolve a caseContext path from a static string or Handlebars template.
+ * Supports nested paths (e.g. "legalEntity.addresses").
+ */
+function resolveCaseContextPath(
+  sourceTemplate: string,
+  context: FormContext
+): unknown {
+  const path = sourceTemplate.includes('{{') && sourceTemplate.includes('}}')
+    ? evaluateTemplate(sourceTemplate, context).trim()
+    : sourceTemplate.trim();
+
+  if (!path) {
+    return undefined;
+  }
+
+  return getNestedValue(
+    context.caseContext as Record<string, unknown> | undefined,
+    path
+  );
 }
 
 /**
@@ -320,14 +339,10 @@ export function extractDefaultValues(
           continue;
         }
 
-        // Fill repeatable group from caseContext when repeatableDefaultSource is set (Handlebars template → key)
+        // Fill repeatable group from caseContext when repeatableDefaultSource is set (Handlebars template → path)
         const sourceTemplate = block.repeatableDefaultSource;
         if (sourceTemplate) {
-          const key = sourceTemplate.includes('{{') && sourceTemplate.includes('}}')
-            ? evaluateTemplate(sourceTemplate, context).trim()
-            : sourceTemplate.trim();
-          const caseCtx = context.caseContext as Record<string, unknown> | undefined;
-          const sourceArray = key && caseCtx && caseCtx[key];
+          const sourceArray = resolveCaseContextPath(sourceTemplate, context);
           if (Array.isArray(sourceArray) && sourceArray.length > 0) {
             const baseFieldId = (f: FieldDescriptor) =>
               f.id.startsWith(`${groupId}.`) ? f.id.slice(groupId.length + 1) : f.id;

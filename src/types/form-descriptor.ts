@@ -472,8 +472,9 @@ export type QueryInvalidationMap = Record<string, Array<Array<string | number>>>
  * @property minInstances - Optional minimum number of instances required for repeatable blocks
  * @property maxInstances - Optional maximum number of instances allowed for repeatable blocks
  * @property repeatableBlockRef - Optional ID of another block to reference and make repeatable (avoids duplicating block definitions)
- * @property repeatableDefaultSource - Optional Handlebars template that evaluates to a caseContext key (e.g. 'addresses').
- *   At initial load, the repeatable group is filled from caseContext[key] when it is an array of objects.
+ * @property repeatableDefaultSource - Optional Handlebars template that evaluates to a caseContext path
+ *   (e.g. 'addresses' or 'legalEntity.addresses'). At initial load, the repeatable group is filled from
+ *   that nested path when it is an array of objects.
  * @property repeatablePopin - If true with repeatable, each instance is edited via popin; summaries shown inline, click to edit
  * @property repeatableSummaryTemplate - Optional Handlebars template for summary text per instance (e.g. "{{name}} ({{role}})")
  */

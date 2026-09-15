@@ -1987,6 +1987,96 @@ describe('form descriptor integration', () => {
         },
       ]);
     });
+
+    test('given repeatable block with nested repeatableDefaultSource path, should fill group from nested caseContext array', () => {
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'addresses-block',
+            title: 'Addresses',
+            repeatable: true,
+            repeatableDefaultSource: 'legalEntity.addresses',
+            fields: [
+              {
+                id: 'street',
+                type: 'text',
+                label: 'Street',
+                repeatableGroupId: 'addresses',
+                validation: [],
+              },
+              {
+                id: 'city',
+                type: 'text',
+                label: 'City',
+                repeatableGroupId: 'addresses',
+                validation: [],
+              },
+            ],
+          },
+        ],
+        submission: {
+          url: '/api/submit',
+          method: 'POST',
+        },
+      };
+
+      const context: FormContext = {
+        caseContext: {
+          legalEntity: {
+            addresses: [
+              { street: '123 Main St', city: 'New York' },
+              { street: '456 Oak Ave', city: 'Boston' },
+            ],
+          },
+        },
+      };
+
+      const defaultValues = extractDefaultValues(descriptor, context);
+
+      expect(defaultValues.addresses).toEqual([
+        { street: '123 Main St', city: 'New York' },
+        { street: '456 Oak Ave', city: 'Boston' },
+      ]);
+    });
+
+    test('given repeatableDefaultSource template that evaluates to a nested path, should fill group from that path', () => {
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'addresses-block',
+            title: 'Addresses',
+            repeatable: true,
+            repeatableDefaultSource: '{{caseContext.sourcePath}}',
+            fields: [
+              {
+                id: 'street',
+                type: 'text',
+                label: 'Street',
+                repeatableGroupId: 'addresses',
+                validation: [],
+              },
+            ],
+          },
+        ],
+        submission: {
+          url: '/api/submit',
+          method: 'POST',
+        },
+      };
+
+      const context: FormContext = {
+        caseContext: {
+          sourcePath: 'legalEntity.addresses',
+          legalEntity: {
+            addresses: [{ street: '10 Downing St' }],
+          },
+        },
+      };
+
+      const defaultValues = extractDefaultValues(descriptor, context);
+
+      expect(defaultValues.addresses).toEqual([{ street: '10 Downing St' }]);
+    });
   });
 
   describe('buildAutoFillPatchFromSelection', () => {
