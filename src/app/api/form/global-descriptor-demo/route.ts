@@ -459,6 +459,158 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
           fields: [],
         },
         {
+          id: 'signatory-block',
+          title: 'Authorized Signatory',
+          description: 'A single authorized signatory. Hidden status depends on Entity Type and Country on the main form.',
+          includeInMainValidation: false,
+          status: {
+            hidden: 'true',
+          },
+          layout: {
+            mode: 'grid',
+            columns: 2,
+            gap: 'md',
+          },
+          fields: [
+            {
+              id: 'signatoryName',
+              type: 'text',
+              label: 'Signatory Name',
+              description: 'Legal name of the authorized signatory',
+              validation: [
+                {
+                  type: 'required',
+                  message: 'Signatory name is required',
+                },
+              ],
+            },
+            {
+              id: 'signatoryRole',
+              type: 'dropdown',
+              label: 'Role',
+              description: 'Options change with Entity Type on the main form',
+              items:
+                '{{#if (eq entityType "individual")}}' +
+                '[{"label":"Self","value":"self"},{"label":"Attorney","value":"attorney"}]' +
+                '{{else}}' +
+                '[{"label":"Director","value":"director"},{"label":"Officer","value":"officer"},{"label":"UBO","value":"ubo"}]' +
+                '{{/if}}',
+              validation: [
+                {
+                  type: 'required',
+                  message: 'Role is required',
+                },
+              ],
+              layout: {
+                width: 'half',
+              },
+            },
+            {
+              id: 'signatoryEmail',
+              type: 'text',
+              label: 'Signatory Email',
+              description: 'Pre-filled from the backend when you add a row',
+              validation: [
+                {
+                  type: 'required',
+                  message: 'Signatory email is required',
+                },
+                {
+                  type: 'pattern',
+                  value: '^[^@]+@[^@]+\\.[^@]+$',
+                  message: 'Please enter a valid email address',
+                },
+              ],
+              layout: {
+                width: 'half',
+              },
+            },
+            {
+              id: 'signatoryTitle',
+              type: 'text',
+              label: 'Job Title',
+              description: 'Visible when Entity Type is Corporation',
+              validation: [
+                {
+                  type: 'required',
+                  message: 'Job title is required for corporate signatories',
+                },
+              ],
+              status: {
+                hidden: '{{not (eq entityType "corporation")}}',
+              },
+            },
+            {
+              id: 'ownershipPercent',
+              type: 'number',
+              label: 'Ownership Percent',
+              description: 'Visible when Entity Type is Corporation',
+              validation: [
+                {
+                  type: 'required',
+                  message: 'Ownership percent is required for corporate signatories',
+                },
+              ],
+              status: {
+                hidden: '{{not (eq entityType "corporation")}}',
+              },
+              layout: {
+                width: 'half',
+              },
+            },
+            {
+              id: 'ssn',
+              type: 'text',
+              label: 'SSN',
+              description: 'Visible when Country on the main form is United States',
+              validation: [
+                {
+                  type: 'required',
+                  message: 'SSN is required for US cases',
+                },
+              ],
+              status: {
+                hidden: '{{not (eq country "US")}}',
+              },
+              layout: {
+                width: 'half',
+              },
+            },
+            {
+              id: 'nationalId',
+              type: 'text',
+              label: 'National ID',
+              description: 'Visible when Country on the main form is not United States',
+              validation: [
+                {
+                  type: 'required',
+                  message: 'National ID is required for non-US cases',
+                },
+              ],
+              status: {
+                hidden: '{{eq country "US"}}',
+              },
+            },
+          ],
+        },
+        {
+          id: 'signatories-block',
+          title: 'Authorized Signatories',
+          description:
+            'Add signatories in a popin. Hidden fields follow Entity Type and Country on the main form. New rows are filled from /api/demo/signatory-load.',
+          repeatable: true,
+          repeatablePopin: true,
+          repeatableSummaryTemplate:
+            '{{#if signatoryName}}{{signatoryName}}{{#if signatoryRole}} ({{signatoryRole}}){{/if}}{{else}}New signatory{{/if}}',
+          repeatableBlockRef: 'signatory-block',
+          minInstances: 0,
+          maxInstances: 5,
+          popinLoad: {
+            url: '/api/demo/signatory-load?entityType={{entityType}}&country={{country}}',
+          },
+          fields: [],
+        },
+        {
           id: 'corporation-details',
           title: 'Corporation Details',
           description: 'Additional information for corporations',
@@ -1059,6 +1211,7 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
           ['form', 'data-source'],
         ],
         'addresses-block': [['case']],
+        'signatories-block': [['case']],
       },
       submission: {
         url: '/api/submit',

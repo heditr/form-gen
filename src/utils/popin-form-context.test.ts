@@ -8,6 +8,7 @@ import { evaluateHiddenStatus } from './template-evaluator';
 import {
   getRepeatablePopinInstanceValues,
   buildPopinFormContext,
+  getPopinLoadFieldValues,
 } from './popin-form-context';
 import type { FieldDescriptor } from '@/types/form-descriptor';
 
@@ -114,5 +115,69 @@ describe('buildPopinFormContext', () => {
     });
 
     expect(evaluateHiddenStatus(stateField, context)).toBe(false);
+  });
+
+  test('given a hidden template that reads a main-form-only key, should hide from that main-form value', () => {
+    const ownershipField: FieldDescriptor = {
+      id: 'ownershipPercent',
+      type: 'text',
+      label: 'Ownership Percent',
+      validation: [],
+      status: {
+        hidden: '{{not (eq entityType "corporation")}}',
+      },
+    };
+
+    const hiddenForIndividual = buildPopinFormContext({
+      mainFormValues: { entityType: 'individual', country: 'US' },
+      popinValues: { signatoryName: 'Ada' },
+    });
+    const visibleForCorporation = buildPopinFormContext({
+      mainFormValues: { entityType: 'corporation', country: 'FR' },
+      popinValues: { signatoryName: 'Ada' },
+    });
+
+    expect(evaluateHiddenStatus(ownershipField, hiddenForIndividual)).toBe(true);
+    expect(evaluateHiddenStatus(ownershipField, visibleForCorporation)).toBe(false);
+  });
+});
+
+describe('getPopinLoadFieldValues', () => {
+  test('given create mode with prefixed group fields, should map load data onto base field ids', () => {
+    const values = getPopinLoadFieldValues({
+      fields: [
+        { id: 'signatories.signatoryName', repeatableGroupId: 'signatories' },
+        { id: 'signatories.signatoryRole', repeatableGroupId: 'signatories' },
+        { id: 'ignored.other', repeatableGroupId: 'ignored' },
+      ],
+      popinLoadData: {
+        signatoryName: 'Ada Lovelace',
+        signatoryRole: 'director',
+        extra: 'skip-me',
+      },
+      groupId: 'signatories',
+    });
+
+    expect(values).toEqual({
+      signatoryName: 'Ada Lovelace',
+      signatoryRole: 'director',
+    });
+  });
+
+  test('given standalone popin fields, should copy load data for non-repeatable field ids', () => {
+    const values = getPopinLoadFieldValues({
+      fields: [
+        { id: 'contactEmail' },
+        { id: 'emergency-contacts.emergencyName', repeatableGroupId: 'emergency-contacts' },
+      ],
+      popinLoadData: {
+        contactEmail: 'contact.demo@example.com',
+        'emergency-contacts': [{ emergencyName: 'Jane' }],
+      },
+    });
+
+    expect(values).toEqual({
+      contactEmail: 'contact.demo@example.com',
+    });
   });
 });

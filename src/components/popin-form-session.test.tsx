@@ -196,4 +196,205 @@ describe('PopinFormSession', () => {
     expect(screen.queryByLabelText('Company Name')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('State')).not.toBeInTheDocument();
   });
+
+  const signatoryBlock: BlockDescriptor = {
+    id: 'signatories-block',
+    title: 'Signatories',
+    repeatable: true,
+    repeatablePopin: true,
+    fields: [
+      {
+        id: 'signatories.signatoryName',
+        type: 'text',
+        label: 'Signatory Name',
+        repeatableGroupId: 'signatories',
+        validation: [],
+      },
+      {
+        id: 'signatories.signatoryRole',
+        type: 'text',
+        label: 'Signatory Role',
+        repeatableGroupId: 'signatories',
+        validation: [],
+      },
+      {
+        id: 'signatories.ownershipPercent',
+        type: 'text',
+        label: 'Ownership Percent',
+        repeatableGroupId: 'signatories',
+        validation: [],
+        status: { hidden: '{{not (eq entityType "corporation")}}' },
+      },
+      {
+        id: 'signatories.ssn',
+        type: 'text',
+        label: 'SSN',
+        repeatableGroupId: 'signatories',
+        validation: [],
+        status: { hidden: '{{not (eq country "US")}}' },
+      },
+      {
+        id: 'signatories.nationalId',
+        type: 'text',
+        label: 'National ID',
+        repeatableGroupId: 'signatories',
+        validation: [],
+        status: { hidden: '{{eq country "US"}}' },
+      },
+    ],
+  };
+
+  const signatoryPopinDescriptor: GlobalFormDescriptor = {
+    version: '1.0.0',
+    blocks: [
+      {
+        id: 'signatories-block-instance',
+        title: 'Signatories',
+        fields: [
+          { id: 'signatoryName', type: 'text', label: 'Signatory Name', validation: [] },
+          { id: 'signatoryRole', type: 'text', label: 'Signatory Role', validation: [] },
+          {
+            id: 'ownershipPercent',
+            type: 'text',
+            label: 'Ownership Percent',
+            validation: [],
+            status: { hidden: '{{not (eq entityType "corporation")}}' },
+          },
+          {
+            id: 'ssn',
+            type: 'text',
+            label: 'SSN',
+            validation: [],
+            status: { hidden: '{{not (eq country "US")}}' },
+          },
+          {
+            id: 'nationalId',
+            type: 'text',
+            label: 'National ID',
+            validation: [],
+            status: { hidden: '{{eq country "US"}}' },
+          },
+        ],
+      },
+    ],
+    submission: { url: '/api/submit', method: 'POST' },
+  };
+
+  const renderSignatorySession = ({
+    entityType,
+    country,
+    index,
+    signatories = [],
+    popinLoadData = null,
+  }: {
+    entityType: string;
+    country: string;
+    index: number;
+    signatories?: Array<Record<string, unknown>>;
+    popinLoadData?: Record<string, unknown> | null;
+  }) => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+
+    function Harness() {
+      const mainForm = useForm({
+        defaultValues: {
+          entityType,
+          country,
+          signatories,
+        },
+      });
+
+      return (
+        <PopinFormSession
+          resolvedBlock={{ block: signatoryBlock, isHidden: false, isDisabled: false }}
+          popinDescriptor={signatoryPopinDescriptor}
+          mainForm={mainForm}
+          initialFormContext={{ entityType, country }}
+          caseContext={{} as CaseContext}
+          popinEditContext={{ groupId: 'signatories', index }}
+          popinLoadData={popinLoadData}
+          isLoadingPopinData={false}
+          onLoadDataSource={() => {}}
+          dataSourceCache={{}}
+          onClose={() => {}}
+          onValidated={async () => {}}
+        />
+      );
+    }
+
+    return render(
+      <QueryClientProvider client={queryClient}>
+        <Harness />
+      </QueryClientProvider>
+    );
+  };
+
+  test('given create mode with popinLoadData, should fill matching popin fields', async () => {
+    renderSignatorySession({
+      entityType: 'corporation',
+      country: 'US',
+      index: -1,
+      popinLoadData: {
+        signatoryName: 'Ada Lovelace',
+        signatoryRole: 'director',
+      },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Signatory Name')).toHaveValue('Ada Lovelace');
+    });
+    expect(screen.getByLabelText('Signatory Role')).toHaveValue('director');
+  });
+
+  test('given edit mode with popinLoadData, should keep the existing row values', async () => {
+    renderSignatorySession({
+      entityType: 'corporation',
+      country: 'US',
+      index: 0,
+      signatories: [{ signatoryName: 'Existing Person', signatoryRole: 'officer' }],
+      popinLoadData: {
+        signatoryName: 'Ada Lovelace',
+        signatoryRole: 'director',
+      },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Signatory Name')).toHaveValue('Existing Person');
+    });
+    expect(screen.getByLabelText('Signatory Role')).toHaveValue('officer');
+  });
+
+  test('given a corporation in the US, should show ownership and SSN from main-form values', async () => {
+    renderSignatorySession({
+      entityType: 'corporation',
+      country: 'US',
+      index: 0,
+      signatories: [{ signatoryName: 'Ada Lovelace', ownershipPercent: '25', ssn: '123-45-6789' }],
+    });
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Signatory Name')).toHaveValue('Ada Lovelace');
+    });
+    expect(screen.getByLabelText('Ownership Percent')).toBeInTheDocument();
+    expect(screen.getByLabelText('SSN')).toBeInTheDocument();
+    expect(screen.queryByLabelText('National ID')).not.toBeInTheDocument();
+  });
+
+  test('given an individual outside the US, should hide corporation and US-only fields', async () => {
+    renderSignatorySession({
+      entityType: 'individual',
+      country: 'FR',
+      index: 0,
+      signatories: [{ signatoryName: 'Ada Lovelace', nationalId: 'AB123' }],
+    });
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Signatory Name')).toHaveValue('Ada Lovelace');
+    });
+    expect(screen.queryByLabelText('Ownership Percent')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('SSN')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('National ID')).toBeInTheDocument();
+  });
 });

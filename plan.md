@@ -7,6 +7,8 @@
 
 ## Active Epics
 
+- [Repeatable Popin Main-Form Status Demo Epic](tasks/repeatable-popin-main-form-status-demo-epic.md) - ✅ IMPLEMENTED (2026-09-16)
+
 - [Document Upload Popin Epic](tasks/document-upload-popin-epic.md) - 📋 PLANNED
 
 - [Multiselect Field Epic](tasks/multiselect-field-epic.md) - 📋 PLANNED

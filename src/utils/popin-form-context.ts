@@ -6,7 +6,7 @@
  * main form's colliding keys (e.g. main `country` vs address `country`).
  */
 
-import type { CaseContext } from '@/types/form-descriptor';
+import type { CaseContext, FormData } from '@/types/form-descriptor';
 import type { FormContext } from '@/utils/template-evaluator';
 
 export interface PopinEditContext {
@@ -20,6 +20,12 @@ export interface BuildPopinFormContextParams {
   initialFormContext?: FormContext;
   popinLoadData?: Record<string, unknown> | null;
   caseContext?: CaseContext;
+}
+
+export interface GetPopinLoadFieldValuesParams {
+  fields: Array<{ id: string; repeatableGroupId?: string }>;
+  popinLoadData?: Record<string, unknown> | null;
+  groupId?: string;
 }
 
 /**
@@ -53,6 +59,46 @@ export function getRepeatablePopinInstanceValues(
 }
 
 /**
+ * Map popinLoad response keys onto popin form field ids.
+ * Repeatable create uses base ids (group prefix stripped); standalone skips group fields.
+ */
+export function getPopinLoadFieldValues({
+  fields,
+  popinLoadData = null,
+  groupId,
+}: GetPopinLoadFieldValuesParams): Record<string, unknown> {
+  if (!popinLoadData) {
+    return {};
+  }
+
+  const values: Record<string, unknown> = {};
+
+  for (const field of fields) {
+    if (groupId) {
+      if (field.repeatableGroupId && field.repeatableGroupId !== groupId) {
+        continue;
+      }
+      const baseId = field.id.startsWith(`${groupId}.`)
+        ? field.id.slice(groupId.length + 1)
+        : field.id;
+      if (popinLoadData[baseId] !== undefined) {
+        values[baseId] = popinLoadData[baseId];
+      }
+      continue;
+    }
+
+    if (field.repeatableGroupId) {
+      continue;
+    }
+    if (popinLoadData[field.id] !== undefined) {
+      values[field.id] = popinLoadData[field.id];
+    }
+  }
+
+  return values;
+}
+
+/**
  * Build Handlebars/status context for a popin session.
  * Popin field values always win over main-form keys with the same name.
  */
@@ -66,7 +112,7 @@ export function buildPopinFormContext({
   const mergedValues = {
     ...mainFormValues,
     ...popinValues,
-  } as FormContext;
+  } as FormData;
 
   const resolvedCaseContext =
     (initialFormContext.caseContext as FormContext | undefined) ??

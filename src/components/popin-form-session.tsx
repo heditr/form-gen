@@ -19,6 +19,7 @@ import { evaluateDefaultValue } from '@/utils/default-value-evaluator';
 import {
   buildPopinFormContext,
   getRepeatablePopinInstanceValues,
+  getPopinLoadFieldValues,
 } from '@/utils/popin-form-context';
 import { Button } from '@/components/ui/button';
 import Block from './block';
@@ -169,11 +170,25 @@ export default function PopinFormSession({
       }
     }
 
-    popinForm.reset(defaultInstance);
-  }, [popinEditContext, resolvedBlock.block, mainForm, popinForm, defaultEvalContext]);
+    const loadedValues = getPopinLoadFieldValues({
+      fields: groupFields,
+      popinLoadData,
+      groupId,
+    });
+
+    popinForm.reset({
+      ...defaultInstance,
+      ...loadedValues,
+    });
+  }, [popinEditContext, resolvedBlock.block, mainForm, popinForm, defaultEvalContext, popinLoadData]);
 
   useEffect(() => {
-    if (popinEditContext || !popinLoadData) {
+    if (!popinLoadData) {
+      return;
+    }
+
+    const isRepeatableEdit = Boolean(popinEditContext && popinEditContext.index >= 0);
+    if (isRepeatableEdit) {
       return;
     }
 
@@ -183,16 +198,17 @@ export default function PopinFormSession({
     }
     loadDataInitKeyRef.current = loadKey;
 
-    const popinFieldValues: Record<string, unknown> = {};
-    for (const field of resolvedBlock.block.fields) {
-      if (field.repeatableGroupId) continue;
-      if (popinLoadData[field.id] !== undefined) {
-        popinFieldValues[field.id] = popinLoadData[field.id];
-      }
-    }
+    const popinFieldValues = getPopinLoadFieldValues({
+      fields: resolvedBlock.block.fields,
+      popinLoadData,
+      groupId: popinEditContext?.groupId,
+    });
 
     if (Object.keys(popinFieldValues).length > 0) {
-      popinForm.reset(popinFieldValues);
+      popinForm.reset({
+        ...popinForm.getValues(),
+        ...popinFieldValues,
+      });
     }
   }, [popinLoadData, resolvedBlock.block, popinForm, popinEditContext]);
 

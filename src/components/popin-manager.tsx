@@ -149,11 +149,9 @@ export function PopinManagerProvider({
   }, [resolvedBlock, mergedDescriptor, popinEditContext]);
 
   useEffect(() => {
-    if (!resolvedBlock || popinEditContext) {
-      if (!resolvedBlock) {
-        setPopinLoadData(null);
-        setIsLoadingPopinData(false);
-      }
+    if (!resolvedBlock) {
+      setPopinLoadData(null);
+      setIsLoadingPopinData(false);
       return;
     }
     if (!resolvedBlock.block.popinLoad) {

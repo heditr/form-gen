@@ -970,6 +970,83 @@ describe('PopinManager', () => {
         expect(screen.queryByText('Loading...')).not.toBeInTheDocument();
       });
     });
+
+    test('given a repeatable popin with popinLoad, should load data when opened in create mode', async () => {
+      const block = createMockBlock({
+        id: 'signatories-block',
+        title: 'Signatories',
+        repeatable: true,
+        repeatablePopin: true,
+        popinLoad: {
+          url: '/api/demo/signatory-load?entityType={{entityType}}&country={{country}}',
+        },
+        fields: [
+          {
+            id: 'signatories.signatoryName',
+            type: 'text',
+            label: 'Signatory Name',
+            repeatableGroupId: 'signatories',
+            validation: [],
+          },
+        ],
+      });
+      const descriptor = createMockDescriptor([block]);
+      const form = createMockForm();
+      (form.getValues as ReturnType<typeof vi.fn>).mockReturnValue({
+        entityType: 'corporation',
+        country: 'US',
+        signatories: [],
+      });
+      const formContext = createMockFormContext({ entityType: 'corporation', country: 'US' });
+
+      mockLoadPopinData.mockResolvedValue({
+        signatoryName: 'Ada Lovelace',
+        signatoryRole: 'director',
+      });
+      mockResolveBlockById.mockReturnValue({
+        block,
+        isHidden: false,
+        isDisabled: false,
+      });
+
+      const TestComponentWithCreate = () => {
+        const { openPopin } = usePopinManager();
+        return (
+          <button
+            onClick={() => openPopin('signatories-block', { groupId: 'signatories' })}
+            data-testid="trigger-button"
+          >
+            Add Signatory
+          </button>
+        );
+      };
+
+      renderWithQueryClient(
+        <PopinManagerProvider
+          mergedDescriptor={descriptor}
+          form={form}
+          formContext={formContext}
+          caseContext={createMockCaseContext()}
+          onLoadDataSource={vi.fn()}
+          dataSourceCache={{}}
+        >
+          <TestComponentWithCreate />
+        </PopinManagerProvider>
+      );
+
+      await userEvent.click(screen.getByTestId('trigger-button'));
+
+      await waitFor(() => {
+        expect(mockLoadPopinData).toHaveBeenCalledWith(
+          'signatories-block',
+          block.popinLoad,
+          expect.objectContaining({
+            entityType: 'corporation',
+            country: 'US',
+          })
+        );
+      });
+    });
   });
 
   describe('error clearing on popin close', () => {
