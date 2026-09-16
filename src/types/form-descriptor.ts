@@ -607,6 +607,8 @@ export interface SubFormDescriptor {
  * @property needSignature - Whether signature is required
  * @property addresses - Optional array of address objects for repeatable address block (e.g. [{ street, city, zip }]).
  *   Used with repeatableDefaultSource in the descriptor to fill the repeatable block at initial page load.
+ * @property signatories - Optional array of signatory objects for the repeatable signatories block.
+ *   Keys may differ from field ids; field defaultValues use `@index` to map them at load.
  */
 export interface CasePrefill {
   incorporationCountry?: string;
@@ -614,6 +616,7 @@ export interface CasePrefill {
   processType?: string;
   needSignature?: boolean;
   addresses?: Array<Record<string, unknown>>;
+  signatories?: Array<Record<string, unknown>>;
 }
 
 /**

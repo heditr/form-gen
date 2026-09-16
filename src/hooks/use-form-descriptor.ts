@@ -24,6 +24,11 @@ export interface UseFormDescriptorOptions {
   /** Initial form values for template default evaluation at mount only (not live schema deps) */
   formData?: Partial<FormData>;
   validationScope?: 'main' | 'popin';
+  /**
+   * Row index for binding `@index` in flattened popin instance field defaults.
+   * Only used for non-repeatable fields; inner repeatable groups bind their own row index.
+   */
+  repeatableIndex?: number;
 }
 
 export interface UseFormDescriptorReturn {
@@ -44,6 +49,7 @@ export function useFormDescriptor(
     caseContext = {},
     formData: initialFormData = {},
     validationScope = 'main',
+    repeatableIndex,
   } = options;
 
   const initFormContext: FormContext = useMemo(
@@ -57,8 +63,12 @@ export function useFormDescriptor(
   );
 
   const defaultValues = useMemo(
-    () => extractDefaultValues(descriptor, initFormContext, validationScope),
-    [descriptor, initFormContext, validationScope]
+    () =>
+      extractDefaultValues(descriptor, initFormContext, {
+        scope: validationScope,
+        index: repeatableIndex,
+      }),
+    [descriptor, initFormContext, validationScope, repeatableIndex]
   );
 
   const fieldsWithTemplateDefaults = useMemo(

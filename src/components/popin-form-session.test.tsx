@@ -2,7 +2,7 @@
  * Tests for PopinFormSession — repeatable edit seeding and status evaluation.
  */
 
-import { describe, test, expect, beforeAll } from 'vitest';
+import { describe, test, expect, beforeAll, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { useForm } from 'react-hook-form';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -251,8 +251,20 @@ describe('PopinFormSession', () => {
         id: 'signatories-block-instance',
         title: 'Signatories',
         fields: [
-          { id: 'signatoryName', type: 'text', label: 'Signatory Name', validation: [] },
-          { id: 'signatoryRole', type: 'text', label: 'Signatory Role', validation: [] },
+          {
+            id: 'signatoryName',
+            type: 'text',
+            label: 'Signatory Name',
+            validation: [],
+            defaultValue: '{{caseContext.signatories.@index.name}}',
+          },
+          {
+            id: 'signatoryRole',
+            type: 'text',
+            label: 'Signatory Role',
+            validation: [],
+            defaultValue: '{{caseContext.signatories.@index.role}}',
+          },
           {
             id: 'ownershipPercent',
             type: 'text',
@@ -272,6 +284,7 @@ describe('PopinFormSession', () => {
             type: 'text',
             label: 'National ID',
             validation: [],
+            defaultValue: '{{caseContext.signatories.@index.nationalId}}',
             status: { hidden: '{{eq country "US"}}' },
           },
         ],
@@ -286,12 +299,14 @@ describe('PopinFormSession', () => {
     index,
     signatories = [],
     popinLoadData = null,
+    caseContext = {},
   }: {
     entityType: string;
     country: string;
     index: number;
     signatories?: Array<Record<string, unknown>>;
     popinLoadData?: Record<string, unknown> | null;
+    caseContext?: CaseContext;
   }) => {
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -312,7 +327,7 @@ describe('PopinFormSession', () => {
           popinDescriptor={signatoryPopinDescriptor}
           mainForm={mainForm}
           initialFormContext={{ entityType, country }}
-          caseContext={{} as CaseContext}
+          caseContext={caseContext}
           popinEditContext={{ groupId: 'signatories', index }}
           popinLoadData={popinLoadData}
           isLoadingPopinData={false}
@@ -396,5 +411,37 @@ describe('PopinFormSession', () => {
     expect(screen.queryByLabelText('Ownership Percent')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('SSN')).not.toBeInTheDocument();
     expect(screen.getByLabelText('National ID')).toBeInTheDocument();
+  });
+
+  test('given edit mode with @index defaultValues, should not log Handlebars parse errors', async () => {
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    renderSignatorySession({
+      entityType: 'individual',
+      country: 'FR',
+      index: 0,
+      signatories: [
+        {
+          signatoryName: 'Existing Person',
+          signatoryRole: 'self',
+          nationalId: 'AB123',
+        },
+      ],
+      caseContext: {
+        signatories: [{ name: 'From Context', role: 'self', nationalId: 'CTX-0' }],
+      } as CaseContext,
+    });
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Signatory Name')).toHaveValue('Existing Person');
+    });
+    expect(screen.getByLabelText('National ID')).toHaveValue('AB123');
+
+    const parseErrors = consoleErrorSpy.mock.calls.filter((args) =>
+      String(args[0] ?? '').includes('Error evaluating template') ||
+      String(args[1] ?? '').includes("Expecting 'ID', got 'DATA'")
+    );
+    expect(parseErrors).toHaveLength(0);
+    consoleErrorSpy.mockRestore();
   });
 });

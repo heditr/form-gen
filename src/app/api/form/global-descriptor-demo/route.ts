@@ -461,7 +461,7 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
         {
           id: 'signatory-block',
           title: 'Authorized Signatory',
-          description: 'A single authorized signatory. Hidden status depends on Entity Type and Country on the main form.',
+          description: 'A single authorized signatory. Hidden status depends on Entity Type and Country on the main form. Default values map caseContext.signatories with @index.',
           includeInMainValidation: false,
           status: {
             hidden: 'true',
@@ -477,6 +477,7 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
               type: 'text',
               label: 'Signatory Name',
               description: 'Legal name of the authorized signatory',
+              defaultValue: '{{caseContext.signatories.@index.name}}',
               validation: [
                 {
                   type: 'required',
@@ -489,6 +490,7 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
               type: 'dropdown',
               label: 'Role',
               description: 'Options change with Entity Type on the main form',
+              defaultValue: '{{caseContext.signatories.@index.role}}',
               items:
                 '{{#if (eq entityType "individual")}}' +
                 '[{"label":"Self","value":"self"},{"label":"Attorney","value":"attorney"}]' +
@@ -509,7 +511,8 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
               id: 'signatoryEmail',
               type: 'text',
               label: 'Signatory Email',
-              description: 'Pre-filled from the backend when you add a row',
+              description: 'Seeded from caseContext.signatories via @index; new rows use /api/demo/signatory-load',
+              defaultValue: '{{caseContext.signatories.@index.email}}',
               validation: [
                 {
                   type: 'required',
@@ -530,6 +533,7 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
               type: 'text',
               label: 'Job Title',
               description: 'Visible when Entity Type is Corporation',
+              defaultValue: '{{caseContext.signatories.@index.title}}',
               validation: [
                 {
                   type: 'required',
@@ -545,6 +549,7 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
               type: 'number',
               label: 'Ownership Percent',
               description: 'Visible when Entity Type is Corporation',
+              defaultValue: '{{caseContext.signatories.@index.ownership}}',
               validation: [
                 {
                   type: 'required',
@@ -563,6 +568,7 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
               type: 'text',
               label: 'SSN',
               description: 'Visible when Country on the main form is United States',
+              defaultValue: '{{caseContext.signatories.@index.ssn}}',
               validation: [
                 {
                   type: 'required',
@@ -581,6 +587,7 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
               type: 'text',
               label: 'National ID',
               description: 'Visible when Country on the main form is not United States',
+              defaultValue: '{{caseContext.signatories.@index.nationalId}}',
               validation: [
                 {
                   type: 'required',
@@ -597,12 +604,13 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
           id: 'signatories-block',
           title: 'Authorized Signatories',
           description:
-            'Add signatories in a popin. Hidden fields follow Entity Type and Country on the main form. New rows are filled from /api/demo/signatory-load.',
+            'Existing rows are seeded from caseContext.signatories via @index defaultValues. Hidden fields follow Entity Type and Country on the main form. New rows are filled from /api/demo/signatory-load.',
           repeatable: true,
           repeatablePopin: true,
           repeatableSummaryTemplate:
             '{{#if signatoryName}}{{signatoryName}}{{#if signatoryRole}} ({{signatoryRole}}){{/if}}{{else}}New signatory{{/if}}',
           repeatableBlockRef: 'signatory-block',
+          repeatableDefaultSource: 'signatories',
           minInstances: 0,
           maxInstances: 5,
           popinLoad: {

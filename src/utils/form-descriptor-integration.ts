@@ -26,6 +26,15 @@ import { evaluateValidationArrayTemplate } from './array-template-evaluator';
 
 type ValidationScope = 'main' | 'popin';
 
+export interface ExtractDefaultValuesOptions {
+  scope?: ValidationScope;
+  /**
+   * Outer popin / flattened-instance row index. Applied only to non-repeatable
+   * field defaults. Inner repeatable groups always bind their own loop index.
+   */
+  index?: number;
+}
+
 const createDocumentSlotDefault = ({
   requestedDefault = false,
   optionalDefault,
@@ -310,16 +319,24 @@ export function buildAutoFillPatchFromSelection({
  * 
  * @param descriptor - Global form descriptor
  * @param context - Optional form context for template evaluation (formData, caseContext)
+ * @param optionsOrScope - Validation scope string, or options with scope + optional outer index
  * @returns Object with field IDs as keys and default values as values
  */
 export function extractDefaultValues(
   descriptor: GlobalFormDescriptor | null,
   context: FormContext = {},
-  scope: ValidationScope = 'main'
+  optionsOrScope: ExtractDefaultValuesOptions | ValidationScope = 'main'
 ): Partial<FormData> {
   if (!descriptor) {
     return {};
   }
+
+  const options: ExtractDefaultValuesOptions =
+    typeof optionsOrScope === 'string'
+      ? { scope: optionsOrScope }
+      : optionsOrScope;
+  const scope = options.scope ?? 'main';
+  const outerIndex = options.index;
 
   const defaultValues: Partial<FormData> = {};
   const processedRepeatableGroups = new Set<string>();
@@ -351,14 +368,18 @@ export function extractDefaultValues(
               f => typeof f.defaultValue === 'string' && f.defaultValue.includes('@index')
             );
             if (hasAtIndex) {
-              // Per-row: evaluate each field's defaultValue with @index substituted (e.g. {{caseContext.addresses.@index.street}} → .0.street for i=0)
+              // Per-row: bind @index to the inner row index i (never outerIndex)
               const rows = sourceArray.map((_item: Record<string, unknown>, i: number) => {
                 const row: Record<string, unknown> = {};
                 for (const field of nonButtonFields) {
                   const bid = baseFieldId(field);
                   if (field.defaultValue !== undefined && typeof field.defaultValue === 'string' && field.defaultValue.includes('@index')) {
-                    const templateWithIndex = field.defaultValue.replace(/@index/g, String(i));
-                    const value = evaluateDefaultValue(templateWithIndex, field.type, context);
+                    const value = evaluateDefaultValue(
+                      field.defaultValue,
+                      field.type,
+                      context,
+                      { index: i }
+                    );
                     setNestedValue(row, bid, value);
                   } else {
                     const item = sourceArray[i] as Record<string, unknown> | undefined;
@@ -394,6 +415,7 @@ export function extractDefaultValues(
         
         if (hasAnyDefault) {
           // Build default object for this repeatable group using base field id (no groupId prefix)
+          // Do not apply outerIndex — unbound @index returns type defaults
           const groupDefault: Record<string, unknown> = {};
           for (const field of fields) {
             if (field.type === 'button') {
@@ -483,6 +505,7 @@ export function extractDefaultValues(
       }
     } else {
       // Handle non-repeatable blocks - add fields as individual properties
+      // Outer index applies here (flattened popin instance fields)
       for (const field of block.fields) {
         // Skip fields that belong to a repeatable group (they're handled above)
         if (field.repeatableGroupId) {
@@ -497,7 +520,8 @@ export function extractDefaultValues(
           const evaluatedValue = evaluateDefaultValue(
             field.defaultValue,
             field.type,
-            context
+            context,
+            typeof outerIndex === 'number' ? { index: outerIndex } : {}
           );
           setNestedValue(
             target,

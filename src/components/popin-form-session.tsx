@@ -73,6 +73,7 @@ export default function PopinFormSession({
     formData: mainFormValues as Partial<DescriptorFormData>,
     savedFormData: repeatableInstanceValues as Partial<DescriptorFormData> | undefined,
     validationScope: 'popin',
+    repeatableIndex: popinEditContext?.index,
   });
 
   const watchedPopinValues = useWatch({ control: popinForm.control }) as Record<string, unknown>;
@@ -163,7 +164,8 @@ export default function PopinFormSession({
         defaultInstance[baseFieldId] = evaluateDefaultValue(
           field.defaultValue,
           field.type,
-          defaultEvalContext
+          defaultEvalContext,
+          typeof index === 'number' ? { index } : {}
         );
       } else {
         defaultInstance[baseFieldId] = field.type === 'checkbox' ? false : '';

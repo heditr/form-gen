@@ -5,7 +5,7 @@
  * and grouping fields by repeatableGroupId work correctly.
  */
 
-import { describe, test, expect } from 'vitest';
+import { describe, test, expect, vi } from 'vitest';
 import { z } from 'zod';
 import type { BlockDescriptor, GlobalFormDescriptor, FormData } from '@/types/form-descriptor';
 import type { FormContext } from '@/utils/template-evaluator';
@@ -2076,6 +2076,153 @@ describe('form descriptor integration', () => {
       const defaultValues = extractDefaultValues(descriptor, context);
 
       expect(defaultValues.addresses).toEqual([{ street: '10 Downing St' }]);
+    });
+
+    test('given flattened popin fields with @index defaults and index option, should bind to caseContext row', () => {
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'signatories-block-instance',
+            title: 'Signatory',
+            fields: [
+              {
+                id: 'signatoryName',
+                type: 'text',
+                label: 'Name',
+                validation: [],
+                defaultValue: '{{caseContext.signatories.@index.name}}',
+              },
+              {
+                id: 'nationalId',
+                type: 'text',
+                label: 'National ID',
+                validation: [],
+                defaultValue: '{{caseContext.signatories.@index.nationalId}}',
+              },
+            ],
+          },
+        ],
+        submission: { url: '/api/submit', method: 'POST' },
+      };
+
+      const context: FormContext = {
+        caseContext: {
+          signatories: [
+            { name: 'Ada', nationalId: 'ID-0' },
+            { name: 'Grace', nationalId: 'ID-1' },
+          ],
+        },
+      };
+
+      const defaultValues = extractDefaultValues(descriptor, context, {
+        scope: 'popin',
+        index: 1,
+      });
+
+      expect(defaultValues).toEqual({
+        signatoryName: 'Grace',
+        nationalId: 'ID-1',
+      });
+      expect(consoleErrorSpy).not.toHaveBeenCalled();
+      consoleErrorSpy.mockRestore();
+    });
+
+    test('given flattened popin fields with @index defaults and no index, should return type defaults without parse error', () => {
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'signatories-block-instance',
+            title: 'Signatory',
+            fields: [
+              {
+                id: 'nationalId',
+                type: 'text',
+                label: 'National ID',
+                validation: [],
+                defaultValue: '{{caseContext.signatories.@index.nationalId}}',
+              },
+            ],
+          },
+        ],
+        submission: { url: '/api/submit', method: 'POST' },
+      };
+
+      const context: FormContext = {
+        caseContext: {
+          signatories: [{ nationalId: 'ID-0' }],
+        },
+      };
+
+      const defaultValues = extractDefaultValues(descriptor, context, { scope: 'popin' });
+
+      expect(defaultValues).toEqual({ nationalId: '' });
+      expect(consoleErrorSpy).not.toHaveBeenCalled();
+      consoleErrorSpy.mockRestore();
+    });
+
+    test('given inner repeatable group inside a popin, should bind @index to inner row i not outer index', () => {
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'contact-info',
+            title: 'Contact Information',
+            popin: true,
+            repeatable: true,
+            repeatableDefaultSource: 'emergencyContacts',
+            fields: [
+              {
+                id: 'contactEmail',
+                type: 'text',
+                label: 'Contact Email',
+                validation: [],
+                defaultValue: 'fallback@example.com',
+              },
+              {
+                id: 'emergency-contacts.emergencyName',
+                type: 'text',
+                label: 'Full Name',
+                repeatableGroupId: 'emergency-contacts',
+                validation: [],
+                defaultValue: '{{caseContext.emergencyContacts.@index.name}}',
+              },
+              {
+                id: 'emergency-contacts.emergencyPhone',
+                type: 'text',
+                label: 'Phone',
+                repeatableGroupId: 'emergency-contacts',
+                validation: [],
+                defaultValue: '{{caseContext.emergencyContacts.@index.phone}}',
+              },
+            ],
+          },
+        ],
+        submission: { url: '/api/submit', method: 'POST' },
+      };
+
+      const context: FormContext = {
+        caseContext: {
+          emergencyContacts: [
+            { name: 'Alice', phone: '111' },
+            { name: 'Bob', phone: '222' },
+          ],
+        },
+      };
+
+      // Decoy outer index 99 must not leak into the inner emergency-contacts rows
+      const defaultValues = extractDefaultValues(descriptor, context, {
+        scope: 'popin',
+        index: 99,
+      });
+
+      expect(defaultValues['emergency-contacts']).toEqual([
+        { emergencyName: 'Alice', emergencyPhone: '111' },
+        { emergencyName: 'Bob', emergencyPhone: '222' },
+      ]);
+      expect(consoleErrorSpy).not.toHaveBeenCalled();
+      consoleErrorSpy.mockRestore();
     });
   });
 

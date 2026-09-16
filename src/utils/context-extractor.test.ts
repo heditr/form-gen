@@ -70,6 +70,22 @@ describe('context extractor', () => {
         { street: '456 Oak Ave', city: 'Boston', zip: '02101' },
       ]);
     });
+
+    test('given CasePrefill with signatories, should copy signatories into context', () => {
+      const casePrefill: CasePrefill = {
+        incorporationCountry: 'US',
+        signatories: [
+          { name: 'Ada Lovelace', role: 'director', email: 'ada.lovelace@example.com' },
+          { name: 'Alan Turing', role: 'officer', email: 'alan.turing@example.com' },
+        ],
+      };
+      const context = initializeCaseContext(casePrefill);
+
+      expect(context.signatories).toEqual([
+        { name: 'Ada Lovelace', role: 'director', email: 'ada.lovelace@example.com' },
+        { name: 'Alan Turing', role: 'officer', email: 'alan.turing@example.com' },
+      ]);
+    });
   });
 
   describe('identifyDiscriminantFields', () => {

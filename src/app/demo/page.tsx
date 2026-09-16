@@ -62,7 +62,7 @@ export default function DemoPage() {
   // This automatically syncs to Redux state on success
   const { refetch: refetchDescriptor } = useGlobalDescriptor('/api/form/global-descriptor-demo');
 
-  // Load case prefill (including addresses) from backend and set context so repeatable block is filled via Handlebars
+  // Load case prefill (including addresses and signatories) from backend so repeatable blocks fill at load
   useEffect(() => {
     const hasContext = caseContext && Object.keys(caseContext).length > 0;
     if (!hasContext) {
