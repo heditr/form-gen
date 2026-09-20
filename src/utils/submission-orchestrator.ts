@@ -13,10 +13,9 @@
 import type { UseFormReturn, FieldErrors } from 'react-hook-form';
 import { evaluateTemplate } from './template-evaluator';
 import {
-  isRepeatableBlock,
-  groupFieldsByRepeatableGroupId,
   isSubmitSkippedFieldType,
 } from './form-descriptor-integration';
+import { omitStatusHiddenFormValues } from './schema-fingerprint';
 import { mapBackendErrorsToForm, type BackendError } from './form-descriptor-integration';
 import type {
   GlobalFormDescriptor,
@@ -414,7 +413,12 @@ export function createSubmissionOrchestrator(): SubmissionOrchestrator {
     const { submission } = descriptor;
     const submitValidData = async (validData: T) => {
       try {
-        const formValues = validData as Partial<DescriptorFormData>;
+        const formValues = omitStatusHiddenFormValues(
+          descriptor,
+          validData as Partial<DescriptorFormData>,
+          caseContext,
+          'main'
+        );
         const submitFormValues = stripSubmitSkippedFormValues(descriptor, formValues);
         
         // Check if form data contains File objects (pending uploads)

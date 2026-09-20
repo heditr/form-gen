@@ -20,6 +20,7 @@ import type { AppDispatch } from '@/store/store';
 import { updateCaseContext, identifyDiscriminantFields } from '@/utils/context-extractor';
 import { useFormDescriptor } from '@/hooks/use-form-descriptor';
 import { createSubmissionOrchestrator, evaluatePayloadTemplate, constructSubmissionRequest, serializeFormValues } from '@/utils/submission-orchestrator';
+import { omitStatusHiddenFormValues } from '@/utils/schema-fingerprint';
 import type { GlobalFormDescriptor, FormData, CaseContext, BlockDescriptor, FieldDescriptor, CasePrefill } from '@/types/form-descriptor';
 import { Button } from '@/components/ui/button';
 import FormPresentation from '@/components/form-presentation';
@@ -372,7 +373,12 @@ function FormContainerWithSubmissionComponent({
     }
 
     // Get current form values
-    const formValues = form.getValues();
+    const formValues = omitStatusHiddenFormValues(
+      demoDescriptor,
+      form.getValues() as Partial<FormData>,
+      caseContext,
+      'main'
+    );
     
     // Check if form data contains File objects
     const { hasFileObjects } = await import('@/utils/submission-orchestrator');

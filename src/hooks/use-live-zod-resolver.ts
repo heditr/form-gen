@@ -98,8 +98,18 @@ export function useLiveZodResolver({
 
       const formContext = buildFormContextFromValues(formValues, caseContext);
       const nextTargets = collectValidationTargets(descriptor, formContext, validationScope);
+      const statusHiddenIds = new Set(
+        collectStatusHiddenFieldIds(descriptor, formContext, validationScope)
+      );
+      const presentHidden = Object.keys(formValues).filter((fieldId) =>
+        statusHiddenIds.has(fieldId)
+      );
 
-      if (targetsEqual(previousTargetsRef.current, nextTargets) && initializedRef.current) {
+      if (
+        targetsEqual(previousTargetsRef.current, nextTargets) &&
+        initializedRef.current &&
+        presentHidden.length === 0
+      ) {
         return;
       }
 
@@ -111,15 +121,8 @@ export function useLiveZodResolver({
 
       // Status-hidden fields (including file/document) for value membership.
       // Do not use "absent from Zod targets" — visible file fields are not in the schema
-      // but must keep their defaults.
-      const statusHiddenIds = new Set(
-        collectStatusHiddenFieldIds(descriptor, formContext, validationScope)
-      );
-      const initialHidden = isInitial
-        ? Object.keys(formValues).filter((fieldId) => statusHiddenIds.has(fieldId))
-        : [];
-
-      const fieldsToHide = [...new Set([...newlyHidden, ...initialHidden])];
+      // but must keep their defaults. Also strip hidden keys restored by reset().
+      const fieldsToHide = [...new Set([...newlyHidden, ...presentHidden])];
       // On first pass every visible field looks "newly visible" — restore values only,
       // do not trigger validation (would show errors as if the form were touched).
       const fieldsToShow = isInitial ? [] : newlyVisible;

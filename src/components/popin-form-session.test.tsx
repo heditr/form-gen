@@ -3,12 +3,22 @@
  */
 
 import { describe, test, expect, beforeAll, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
-import { useForm } from 'react-hook-form';
+import { render, screen, waitFor, act } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { useForm, type UseFormReturn, type FieldValues } from 'react-hook-form';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { registerHandlebarsHelpers } from '@/utils/handlebars-helpers';
+import { extractDefaultValues } from '@/utils/form-descriptor-integration';
 import type { GlobalFormDescriptor, BlockDescriptor, CaseContext } from '@/types/form-descriptor';
 import PopinFormSession from './popin-form-session';
+
+vi.mock('@/utils/form-descriptor-integration', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/utils/form-descriptor-integration')>();
+  return {
+    ...actual,
+    extractDefaultValues: vi.fn(actual.extractDefaultValues),
+  };
+});
 
 describe('PopinFormSession', () => {
   beforeAll(() => {
@@ -195,6 +205,229 @@ describe('PopinFormSession', () => {
     });
     expect(screen.queryByLabelText('Company Name')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('State')).not.toBeInTheDocument();
+  });
+
+  test('given residential edit Validate, should write the row back without hidden keys', async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    let mainForm: UseFormReturn<FieldValues> | undefined;
+
+    function Harness() {
+      mainForm = useForm({
+        defaultValues: {
+          country: 'US',
+          addresses: [
+            {
+              addressType: 'residential',
+              country: 'UK',
+              street: '10 Downing St',
+              companyName: '',
+              state: '',
+            },
+          ],
+        },
+      });
+
+      return (
+        <PopinFormSession
+          resolvedBlock={{ block: repeatableBlock, isHidden: false, isDisabled: false }}
+          popinDescriptor={popinDescriptor}
+          mainForm={mainForm}
+          initialFormContext={{ country: 'US' }}
+          caseContext={{} as CaseContext}
+          popinEditContext={{ groupId: 'addresses', index: 0 }}
+          popinLoadData={null}
+          isLoadingPopinData={false}
+          onLoadDataSource={() => {}}
+          dataSourceCache={{}}
+          onClose={() => {}}
+          onValidated={async () => {}}
+        />
+      );
+    }
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <Harness />
+      </QueryClientProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Street')).toHaveValue('10 Downing St');
+    });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Validate' }));
+
+    await waitFor(() => {
+      const row = (mainForm?.getValues('addresses') as Array<Record<string, unknown>>)[0];
+      expect(row).not.toHaveProperty('companyName');
+      expect(row).not.toHaveProperty('state');
+      expect(row.street).toBe('10 Downing St');
+    });
+  });
+
+  test('given a main-form edit while the popin is open, should not rebuild popin defaults', async () => {
+    const callsBefore = vi.mocked(extractDefaultValues).mock.calls.length;
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    let mainForm: UseFormReturn<FieldValues> | undefined;
+
+    function Harness() {
+      mainForm = useForm({
+        defaultValues: {
+          country: 'US',
+          city: 'Paris',
+          addresses: [
+            {
+              addressType: 'residential',
+              country: 'UK',
+              street: '10 Downing St',
+            },
+          ],
+        },
+      });
+
+      return (
+        <PopinFormSession
+          resolvedBlock={{ block: repeatableBlock, isHidden: false, isDisabled: false }}
+          popinDescriptor={popinDescriptor}
+          mainForm={mainForm}
+          initialFormContext={{ country: 'US', city: 'Paris' }}
+          caseContext={{} as CaseContext}
+          popinEditContext={{ groupId: 'addresses', index: 0 }}
+          popinLoadData={null}
+          isLoadingPopinData={false}
+          onLoadDataSource={() => {}}
+          dataSourceCache={{}}
+          onClose={() => {}}
+          onValidated={async () => {}}
+        />
+      );
+    }
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <Harness />
+      </QueryClientProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Street')).toHaveValue('10 Downing St');
+    });
+
+    const callsAfterMount = vi.mocked(extractDefaultValues).mock.calls.length;
+    expect(callsAfterMount).toBeGreaterThan(callsBefore);
+
+    await act(async () => {
+      mainForm?.setValue('city', 'Lyon');
+    });
+
+    expect(vi.mocked(extractDefaultValues).mock.calls.length).toBe(callsAfterMount);
+    expect(screen.getByLabelText('Street')).toHaveValue('10 Downing St');
+  });
+
+  test('given popinSubmit Validate, should omit hidden keys from the request payload', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ success: true }),
+    });
+    global.fetch = fetchMock;
+
+    const contactBlock: BlockDescriptor = {
+      id: 'contact-info',
+      title: 'Contact',
+      popin: true,
+      fields: [
+        { id: 'contactEmail', type: 'text', label: 'Email', validation: [] },
+        {
+          id: 'ssn',
+          type: 'text',
+          label: 'SSN',
+          validation: [],
+          status: { hidden: '{{not (eq country "US")}}' },
+        },
+      ],
+      popinSubmit: {
+        url: '/api/popin-submit',
+        method: 'POST',
+      },
+    };
+
+    const contactPopinDescriptor: GlobalFormDescriptor = {
+      version: '1.0.0',
+      blocks: [
+        {
+          id: 'contact-info',
+          title: 'Contact',
+          fields: [
+            { id: 'contactEmail', type: 'text', label: 'Email', validation: [] },
+            {
+              id: 'ssn',
+              type: 'text',
+              label: 'SSN',
+              validation: [],
+              status: { hidden: '{{not (eq country "US")}}' },
+            },
+          ],
+        },
+      ],
+      submission: { url: '/api/submit', method: 'POST' },
+    };
+
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+
+    function Harness() {
+      const mainForm = useForm({
+        defaultValues: {
+          country: 'UK',
+          contactEmail: 'ada@example.com',
+          ssn: '999-99-9999',
+        },
+      });
+
+      return (
+        <PopinFormSession
+          resolvedBlock={{ block: contactBlock, isHidden: false, isDisabled: false }}
+          popinDescriptor={contactPopinDescriptor}
+          mainForm={mainForm}
+          initialFormContext={{ country: 'UK' }}
+          caseContext={{} as CaseContext}
+          popinEditContext={null}
+          popinLoadData={{ contactEmail: 'ada@example.com', ssn: '999-99-9999' }}
+          isLoadingPopinData={false}
+          onLoadDataSource={() => {}}
+          dataSourceCache={{}}
+          onClose={() => {}}
+          onValidated={async () => {}}
+        />
+      );
+    }
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <Harness />
+      </QueryClientProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Email')).toHaveValue('ada@example.com');
+    });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Validate' }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalled();
+    });
+
+    const requestInit = fetchMock.mock.calls[0][1] as RequestInit;
+    const body = JSON.parse(requestInit.body as string) as Record<string, unknown>;
+    expect(body).not.toHaveProperty('ssn');
+    expect(body.contactEmail).toBe('ada@example.com');
+    expect(body.country).toBe('UK');
   });
 
   const signatoryBlock: BlockDescriptor = {

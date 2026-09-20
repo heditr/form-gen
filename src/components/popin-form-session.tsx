@@ -5,13 +5,14 @@
 
 'use client';
 
-import { useEffect, useMemo, useCallback, useRef } from 'react';
+import { useEffect, useMemo, useCallback, useRef, useState } from 'react';
 import { useWatch } from 'react-hook-form';
 import type { GlobalFormDescriptor, SubmissionConfig, FormData as DescriptorFormData, CaseContext } from '@/types/form-descriptor';
 import type { UseFormReturn, FieldValues } from 'react-hook-form';
 import type { FormContext } from '@/utils/template-evaluator';
 import type { ResolvedBlock } from '@/utils/block-resolver';
 import { evaluatePayloadTemplate, type BackendErrorResponse } from '@/utils/submission-orchestrator';
+import { omitStatusHiddenFormValues } from '@/utils/schema-fingerprint';
 import type { BackendError } from '@/utils/form-descriptor-integration';
 import { useFormDescriptor } from '@/hooks/use-form-descriptor';
 import { isRepeatableBlock, groupFieldsByRepeatableGroupId } from '@/utils/form-descriptor-integration';
@@ -59,6 +60,14 @@ export default function PopinFormSession({
 }: PopinFormSessionProps) {
   const mainFormValues = useWatch({ control: mainForm.control }) as Record<string, unknown>;
 
+  const [mountFormData] = useState(
+    () =>
+      ({
+        ...(initialFormContext as Partial<DescriptorFormData>),
+        ...(mainForm.getValues() as Partial<DescriptorFormData>),
+      }) as Partial<DescriptorFormData>
+  );
+
   const repeatableInstanceValues = useMemo(
     () =>
       getRepeatablePopinInstanceValues(
@@ -70,7 +79,7 @@ export default function PopinFormSession({
 
   const { form: popinForm } = useFormDescriptor(popinDescriptor, {
     caseContext,
-    formData: mainFormValues as Partial<DescriptorFormData>,
+    formData: mountFormData,
     savedFormData: repeatableInstanceValues as Partial<DescriptorFormData> | undefined,
     validationScope: 'popin',
     repeatableIndex: popinEditContext?.index,
@@ -223,7 +232,12 @@ export default function PopinFormSession({
     const block = resolvedBlock.block;
 
     if (popinEditContext && isRepeatableBlock(block)) {
-      const values = popinForm.getValues() as Record<string, unknown>;
+      const values = omitStatusHiddenFormValues(
+        popinDescriptor,
+        popinForm.getValues() as Partial<DescriptorFormData>,
+        caseContext,
+        'popin'
+      ) as Record<string, unknown>;
       const { groupId, index } = popinEditContext;
 
       const currentArrayRaw = mainForm.getValues(groupId as never) as unknown;
@@ -261,11 +275,15 @@ export default function PopinFormSession({
     };
 
     const currentMainFormValues = mainForm.getValues();
-    const currentPopinFormValues = popinForm.getValues();
-    const allFormValues = {
-      ...currentMainFormValues,
-      ...currentPopinFormValues,
-    } as Partial<DescriptorFormData>;
+    const allFormValues = omitStatusHiddenFormValues(
+      popinDescriptor,
+      {
+        ...currentMainFormValues,
+        ...popinForm.getValues(),
+      } as Partial<DescriptorFormData>,
+      caseContext,
+      'popin'
+    );
 
     const evaluatedPayload = evaluatePayloadTemplate(
       popinSubmitConfig.payloadTemplate,
@@ -322,6 +340,8 @@ export default function PopinFormSession({
     mainForm,
     onValidated,
     onClose,
+    popinDescriptor,
+    caseContext,
   ]);
 
   return (

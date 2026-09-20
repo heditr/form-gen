@@ -5,10 +5,11 @@
  * and grouping fields by repeatableGroupId work correctly.
  */
 
-import { describe, test, expect, vi } from 'vitest';
+import { describe, test, expect, vi, beforeAll } from 'vitest';
 import { z } from 'zod';
 import type { BlockDescriptor, GlobalFormDescriptor, FormData } from '@/types/form-descriptor';
 import type { FormContext } from '@/utils/template-evaluator';
+import { registerHandlebarsHelpers } from '@/utils/handlebars-helpers';
 import {
   isRepeatableBlock,
   isRepeatablePopinBlock,
@@ -20,6 +21,10 @@ import {
 } from './form-descriptor-integration';
 
 describe('form descriptor integration', () => {
+  beforeAll(() => {
+    registerHandlebarsHelpers();
+  });
+
   describe('isRepeatableBlock', () => {
     test('given a block with repeatable flag set to true, should return true', () => {
       const block: BlockDescriptor = {
@@ -1538,6 +1543,154 @@ describe('form descriptor integration', () => {
         { street: '123 Main St', city: 'New York', zip: '10001' },
         { street: '456 Oak Ave', city: 'Boston', zip: '02101' },
       ]);
+    });
+
+    test('given repeatableDefaultSource rows with hidden fields, should omit hidden keys from each row', () => {
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'addresses-block',
+            title: 'Addresses',
+            repeatable: true,
+            repeatableDefaultSource: 'addresses',
+            fields: [
+              {
+                id: 'addressType',
+                type: 'text',
+                label: 'Address Type',
+                repeatableGroupId: 'addresses',
+                validation: [],
+              },
+              {
+                id: 'country',
+                type: 'text',
+                label: 'Country',
+                repeatableGroupId: 'addresses',
+                validation: [],
+              },
+              {
+                id: 'street',
+                type: 'text',
+                label: 'Street',
+                repeatableGroupId: 'addresses',
+                validation: [],
+              },
+              {
+                id: 'companyName',
+                type: 'text',
+                label: 'Company Name',
+                repeatableGroupId: 'addresses',
+                validation: [],
+                status: { hidden: '{{not (eq addressType "business")}}' },
+              },
+              {
+                id: 'state',
+                type: 'text',
+                label: 'State',
+                repeatableGroupId: 'addresses',
+                validation: [],
+                status: { hidden: '{{not (or (eq country "US") (eq country "CA"))}}' },
+              },
+            ],
+          },
+        ],
+        submission: {
+          url: '/api/submit',
+          method: 'POST',
+        },
+      };
+
+      const context: FormContext = {
+        caseContext: {
+          addresses: [
+            { addressType: 'residential', country: 'UK', street: '10 Downing St' },
+            { addressType: 'business', country: 'US', street: '1 Infinite Loop', companyName: 'Acme', state: 'CA' },
+          ],
+        },
+      };
+
+      const defaultValues = extractDefaultValues(descriptor, context);
+      const rows = defaultValues.addresses as Array<Record<string, unknown>>;
+
+      expect(rows[0]).toEqual({
+        addressType: 'residential',
+        country: 'UK',
+        street: '10 Downing St',
+      });
+      expect(rows[0]).not.toHaveProperty('companyName');
+      expect(rows[0]).not.toHaveProperty('state');
+      expect(rows[1]).toEqual({
+        addressType: 'business',
+        country: 'US',
+        street: '1 Infinite Loop',
+        companyName: 'Acme',
+        state: 'CA',
+      });
+    });
+
+    test('given a status-hidden field whose sibling default makes it visible, should keep the type default', () => {
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'jurisdiction',
+            title: 'Jurisdiction',
+            fields: [
+              {
+                id: 'country',
+                type: 'text',
+                label: 'Country',
+                validation: [],
+                defaultValue: 'US',
+              },
+              {
+                id: 'ssn',
+                type: 'text',
+                label: 'SSN',
+                validation: [],
+                status: { hidden: '{{not (eq country "US")}}' },
+              },
+            ],
+          },
+        ],
+        submission: { url: '/api/submit', method: 'POST' },
+      };
+
+      const defaultValues = extractDefaultValues(descriptor);
+
+      expect(defaultValues).toEqual({ country: 'US', ssn: '' });
+    });
+
+    test('given a status-hidden field that stays hidden, should omit it from defaults', () => {
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'jurisdiction',
+            title: 'Jurisdiction',
+            fields: [
+              {
+                id: 'country',
+                type: 'text',
+                label: 'Country',
+                validation: [],
+                defaultValue: 'UK',
+              },
+              {
+                id: 'ssn',
+                type: 'text',
+                label: 'SSN',
+                validation: [],
+                status: { hidden: '{{not (eq country "US")}}' },
+              },
+            ],
+          },
+        ],
+        submission: { url: '/api/submit', method: 'POST' },
+      };
+
+      const defaultValues = extractDefaultValues(descriptor);
+
+      expect(defaultValues).toEqual({ country: 'UK' });
+      expect(defaultValues).not.toHaveProperty('ssn');
     });
 
     test('given repeatable block with repeatableDefaultSource and field defaultValues using @index, should fill each row from context', () => {

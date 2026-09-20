@@ -84,6 +84,36 @@ describe('useLiveZodResolver membership', () => {
     expect(formResult.current.formState.errors.extraField).toBeUndefined();
   });
 
+  test('given reset restoring hidden keys without a target change, should omit them again', async () => {
+    const descriptor = createToggleDescriptor();
+    const { result } = renderHook(() => useLiveZodResolver({ descriptor }));
+    const { result: formResult } = renderHook(() =>
+      useForm({
+        resolver: result.current.resolver,
+        defaultValues: { showExtra: false, extraField: 'stashed' },
+      })
+    );
+
+    await act(async () => {
+      result.current.applyMembershipChanges(formResult.current, {
+        showExtra: false,
+        extraField: 'stashed',
+      });
+    });
+
+    expect(formResult.current.getValues()).not.toHaveProperty('extraField');
+
+    await act(async () => {
+      formResult.current.reset({ showExtra: false, extraField: 'restored' });
+      result.current.applyMembershipChanges(formResult.current, {
+        showExtra: false,
+        extraField: 'restored',
+      });
+    });
+
+    expect(formResult.current.getValues()).not.toHaveProperty('extraField');
+  });
+
   test('given mount with membership sync, should not show validation errors before user interaction', async () => {
     const descriptor: GlobalFormDescriptor = {
       blocks: [

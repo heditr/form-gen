@@ -196,6 +196,33 @@ function getNestedValue(
   return current;
 }
 
+function defaultStatusContext(
+  parent: FormContext,
+  sourceRow: Record<string, unknown> | undefined,
+  builtRow: Record<string, unknown>
+): FormContext {
+  const parentFormData =
+    parent.formData &&
+    typeof parent.formData === 'object' &&
+    !Array.isArray(parent.formData)
+      ? (parent.formData as Record<string, unknown>)
+      : {};
+  const row = { ...(sourceRow ?? {}), ...builtRow };
+
+  return {
+    ...parent,
+    ...row,
+    formData: { ...parentFormData, ...row },
+  } as FormContext;
+}
+
+function shouldSkipHiddenDefault(field: FieldDescriptor, statusContext: FormContext): boolean {
+  if (field.type === 'button' || isSubmitSkippedFieldType(field.type)) {
+    return false;
+  }
+  return evaluateHiddenStatus(field, statusContext);
+}
+
 /**
  * Resolve a caseContext path from a static string or Handlebars template.
  * Supports nested paths (e.g. "legalEntity.addresses").
@@ -346,6 +373,10 @@ export function extractDefaultValues(
       continue;
     }
 
+    if (evaluateHiddenStatus(block, context)) {
+      continue;
+    }
+
     if (isRepeatableBlock(block)) {
       // Handle repeatable blocks - group fields by repeatableGroupId
       const fieldGroups = groupFieldsByRepeatableGroupId(block.fields);
@@ -371,8 +402,12 @@ export function extractDefaultValues(
               // Per-row: bind @index to the inner row index i (never outerIndex)
               const rows = sourceArray.map((_item: Record<string, unknown>, i: number) => {
                 const row: Record<string, unknown> = {};
+                const item = sourceArray[i] as Record<string, unknown> | undefined;
                 for (const field of nonButtonFields) {
                   const bid = baseFieldId(field);
+                  if (shouldSkipHiddenDefault(field, defaultStatusContext(context, item, row))) {
+                    continue;
+                  }
                   if (field.defaultValue !== undefined && typeof field.defaultValue === 'string' && field.defaultValue.includes('@index')) {
                     const value = evaluateDefaultValue(
                       field.defaultValue,
@@ -382,7 +417,6 @@ export function extractDefaultValues(
                     );
                     setNestedValue(row, bid, value);
                   } else {
-                    const item = sourceArray[i] as Record<string, unknown> | undefined;
                     const rawValue = getNestedValue(item, bid);
                     const value = rawValue !== undefined ? rawValue : '';
                     setNestedValue(row, bid, value);
@@ -393,10 +427,13 @@ export function extractDefaultValues(
               (defaultValues as Record<string, unknown>)[groupId] = rows;
             } else {
               // No @index in any defaultValue: use source array as-is (normalized to field ids)
-              const baseFieldIds = new Set(nonButtonFields.map(f => baseFieldId(f)));
               const normalized = sourceArray.map((item: Record<string, unknown>) => {
                 const out: Record<string, unknown> = {};
-                for (const id of baseFieldIds) {
+                for (const field of nonButtonFields) {
+                  const id = baseFieldId(field);
+                  if (shouldSkipHiddenDefault(field, defaultStatusContext(context, item, out))) {
+                    continue;
+                  }
                   const rawValue = getNestedValue(item, id);
                   const value = rawValue !== undefined ? rawValue : '';
                   setNestedValue(out, id, value);
@@ -424,6 +461,9 @@ export function extractDefaultValues(
             const baseFieldId = field.id.startsWith(`${groupId}.`)
               ? field.id.slice(groupId.length + 1)
               : field.id;
+            if (shouldSkipHiddenDefault(field, defaultStatusContext(context, undefined, groupDefault))) {
+              continue;
+            }
             if (field.defaultValue !== undefined) {
               const evaluatedValue = evaluateDefaultValue(
                 field.defaultValue,
@@ -477,6 +517,9 @@ export function extractDefaultValues(
             const baseFieldId = field.id.startsWith(`${groupId}.`)
               ? field.id.slice(groupId.length + 1)
               : field.id;
+            if (shouldSkipHiddenDefault(field, defaultStatusContext(context, undefined, emptyInstance))) {
+              continue;
+            }
             switch (field.type) {
               case 'checkbox':
                 setNestedValue(emptyInstance, baseFieldId, false);
@@ -514,6 +557,9 @@ export function extractDefaultValues(
         
         // Always set a default value to ensure controlled inputs
         const target = defaultValues as Record<string, unknown>;
+        if (shouldSkipHiddenDefault(field, defaultStatusContext(context, undefined, target))) {
+          continue;
+        }
 
         if (field.defaultValue !== undefined) {
           // Evaluate defaultValue as Handlebars template if it's a string, otherwise use directly
