@@ -21,6 +21,7 @@ export interface FieldWrapperProps {
   field: FieldDescriptor;
   isDisabled: boolean;
   isHidden: boolean;
+  isReadonly?: boolean;
   form: UseFormReturn<FieldValues>;
   formContext: FormContext;
   onLoadDataSource: (fieldPath: string, url: string, auth?: { type: 'bearer' | 'apikey'; token?: string; headerName?: string }) => void;
@@ -37,6 +38,7 @@ function FieldWrapper({
   field,
   isDisabled,
   isHidden,
+  isReadonly = false,
   form,
   formContext,
   onLoadDataSource,
@@ -62,6 +64,7 @@ function FieldWrapper({
             field={field}
             form={form}
             isDisabled={isDisabled}
+            isReadonly={isReadonly}
             required={isRequired}
           />
         );
@@ -71,6 +74,7 @@ function FieldWrapper({
           field={field}
           form={form}
           isDisabled={isDisabled}
+          isReadonly={isReadonly}
           required={isRequired}
         />
       );
@@ -81,6 +85,7 @@ function FieldWrapper({
           form={form}
           formContext={formContext}
           isDisabled={isDisabled}
+          isReadonly={isReadonly}
           required={isRequired}
           onLoadDataSource={onLoadDataSource}
           dataSourceCache={dataSourceCache}
@@ -94,6 +99,7 @@ function FieldWrapper({
           form={form}
           formContext={formContext}
           isDisabled={isDisabled}
+          isReadonly={isReadonly}
           required={isRequired}
           onLoadDataSource={onLoadDataSource}
           dataSourceCache={dataSourceCache}
@@ -106,6 +112,7 @@ function FieldWrapper({
           form={form}
           formContext={formContext}
           isDisabled={isDisabled}
+          isReadonly={isReadonly}
           required={isRequired}
           onLoadDataSource={onLoadDataSource}
           dataSourceCache={dataSourceCache}
@@ -118,6 +125,7 @@ function FieldWrapper({
           field={field}
           form={form}
           isDisabled={isDisabled}
+          isReadonly={isReadonly}
           required={isRequired}
         />
       );
@@ -128,6 +136,7 @@ function FieldWrapper({
           form={form}
           formContext={formContext}
           isDisabled={isDisabled}
+          isReadonly={isReadonly}
           required={isRequired}
           onLoadDataSource={onLoadDataSource}
           dataSourceCache={dataSourceCache}
@@ -139,6 +148,7 @@ function FieldWrapper({
           field={field}
           form={form}
           isDisabled={isDisabled}
+          isReadonly={isReadonly}
           required={isRequired}
         />
       );
@@ -148,6 +158,7 @@ function FieldWrapper({
           field={field}
           form={form}
           isDisabled={isDisabled}
+          isReadonly={isReadonly}
           required={isRequired}
         />
       );
@@ -157,6 +168,7 @@ function FieldWrapper({
           field={field}
           form={form}
           isDisabled={isDisabled}
+          isReadonly={isReadonly}
           required={isRequired}
         />
       );
@@ -166,6 +178,7 @@ function FieldWrapper({
           field={field}
           form={form}
           isDisabled={isDisabled}
+          isReadonly={isReadonly}
           required={isRequired}
         />
       );
@@ -188,6 +201,10 @@ function FieldWrapper({
             <input
               type="text"
               disabled={isDisabled}
+              readOnly={isReadonly}
+              aria-readonly={isReadonly}
+              data-readonly={isReadonly ? 'true' : undefined}
+              className={isReadonly && !isDisabled ? 'bg-muted' : undefined}
               {...form.register(field.id)}
             />
           </div>

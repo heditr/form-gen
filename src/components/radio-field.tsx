@@ -21,6 +21,7 @@ export interface RadioFieldProps {
   form: UseFormReturn<FieldValues>;
   formContext: FormContext;
   isDisabled: boolean;
+  isReadonly?: boolean;
   required?: boolean;
   onLoadDataSource?: (fieldPath: string, url: string, auth?: { type: 'bearer' | 'apikey'; token?: string; headerName?: string }) => void;
   dataSourceCache?: Record<string, unknown>;
@@ -40,6 +41,7 @@ export default function RadioField({
   form,
   formContext,
   isDisabled,
+  isReadonly = false,
   required = false,
   onLoadDataSource,
   dataSourceCache = {},
@@ -118,7 +120,12 @@ export default function RadioField({
   }, [field.dataSource, field.id, dataSourceQuery.isLoading, dataSourceCache]);
 
   return (
-    <div data-testid={`radio-field-${field.id}`} className="space-y-2">
+    <div
+      data-testid={`radio-field-${field.id}`}
+      data-readonly={isReadonly ? 'true' : undefined}
+      aria-readonly={isReadonly}
+      className="space-y-2"
+    >
       <div>
         <Label>
           {field.label}
@@ -155,7 +162,8 @@ export default function RadioField({
                         checked={isChecked}
                         onChange={() => controllerField.onChange(item.value)}
                         onBlur={controllerField.onBlur}
-                        disabled={isDisabled}
+                        disabled={isDisabled || isReadonly}
+                        data-readonly={isReadonly ? 'true' : undefined}
                         required={required}
                         className={cn(
                           'h-4 w-4 border-input text-primary focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50',

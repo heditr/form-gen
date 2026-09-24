@@ -17,6 +17,7 @@ export interface NumberFieldProps {
   field: FieldDescriptor;
   form: UseFormReturn<FieldValues>;
   isDisabled: boolean;
+  isReadonly?: boolean;
   required?: boolean;
 }
 
@@ -32,6 +33,7 @@ export default function NumberField({
   field,
   form,
   isDisabled,
+  isReadonly = false,
   required = false,
 }: NumberFieldProps) {
   const error = useFieldError(form, field.id);
@@ -64,8 +66,12 @@ export default function NumberField({
               controllerField.onChange(numValue);
             }}
             disabled={isDisabled}
+            readOnly={isReadonly}
+            aria-readonly={isReadonly}
+            data-readonly={isReadonly ? 'true' : undefined}
             required={required}
             className={cn(
+              isReadonly && !isDisabled && 'bg-muted',
               errorMessage && 'border-destructive focus-visible:ring-destructive'
             )}
             aria-invalid={errorMessage ? 'true' : 'false'}

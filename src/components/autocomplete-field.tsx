@@ -22,6 +22,7 @@ export interface AutocompleteFieldProps {
   form: UseFormReturn<FieldValues>;
   formContext: FormContext;
   isDisabled: boolean;
+  isReadonly?: boolean;
   required?: boolean;
   onLoadDataSource?: (fieldPath: string, url: string, auth?: { type: 'bearer' | 'apikey'; token?: string; headerName?: string }) => void;
   dataSourceCache?: Record<string, unknown>;
@@ -40,6 +41,7 @@ export default function AutocompleteField({
   form,
   formContext,
   isDisabled,
+  isReadonly = false,
   required = false,
   onLoadDataSource,
   dataSourceCache = {},
@@ -238,7 +240,13 @@ export default function AutocompleteField({
   }, [focusedIndex]);
 
   return (
-    <div data-testid={`autocomplete-field-${field.id}`} className="space-y-2" ref={containerRef}>
+    <div
+      data-testid={`autocomplete-field-${field.id}`}
+      data-readonly={isReadonly ? 'true' : undefined}
+      aria-readonly={isReadonly}
+      className="space-y-2"
+      ref={containerRef}
+    >
       <Label htmlFor={field.id}>
         {field.label}
         {required && <span className="ml-1 text-destructive" aria-hidden="true">*</span>}
@@ -266,7 +274,7 @@ export default function AutocompleteField({
                 onKeyDown={(e) => handleKeyDown(e, controllerField.onChange)}
                 onBlur={controllerField.onBlur}
                 onFocus={() => setIsFocused(true)}
-                disabled={isDisabled || isLoading}
+                disabled={isDisabled || isReadonly || isLoading}
                 required={required}
                 className={cn(
                   errorMessage && 'border-destructive focus-visible:ring-destructive'

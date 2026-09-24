@@ -30,6 +30,7 @@ export interface DocumentCardProps {
   field: FieldDescriptor;
   form: UseFormReturn<FieldValues>;
   isDisabled: boolean;
+  isReadonly?: boolean;
   required?: boolean;
 }
 
@@ -40,6 +41,7 @@ export default function DocumentCard({
   field,
   form,
   isDisabled,
+  isReadonly = false,
   required = false,
 }: DocumentCardProps) {
   const config = field.document;
@@ -103,7 +105,12 @@ export default function DocumentCard({
   const slots = getSlotDescriptors(config);
 
   return (
-    <div data-testid={`document-card-${field.id}`} className="space-y-3 rounded-md border bg-background p-4">
+    <div
+      data-testid={`document-card-${field.id}`}
+      data-readonly={isReadonly ? 'true' : undefined}
+      aria-readonly={isReadonly}
+      className="space-y-3 rounded-md border bg-background p-4"
+    >
       <div className="space-y-1">
         <Label>
           {field.label}
@@ -140,7 +147,7 @@ export default function DocumentCard({
                   controllerField.onChange(updateSlotData(value, slot, { optional: checked }));
                 };
 
-                const slotReadable = !(isDisabled || config.category === 'prefilledOnly');
+                const slotReadable = !(isDisabled || isReadonly || config.category === 'prefilledOnly');
 
                 return (
                   <div key={`${slot.kind}-${slot.id}`} className="space-y-2 rounded-md border p-3">
@@ -158,7 +165,9 @@ export default function DocumentCard({
                           <input
                             type="checkbox"
                             checked={slotData.requested}
-                            disabled={isDisabled || config.requestedDisabled}
+                            disabled={isDisabled || isReadonly || config.requestedDisabled}
+                            aria-readonly={isReadonly}
+                            data-readonly={isReadonly ? 'true' : undefined}
                             onChange={(event) =>
                               setRequestedCheckbox(event.currentTarget.checked)}
                           />
@@ -169,7 +178,8 @@ export default function DocumentCard({
                             <input
                               type="checkbox"
                               checked={slotData.optional ?? false}
-                              disabled={isDisabled}
+                              disabled={isDisabled || isReadonly}
+                              aria-readonly={isReadonly}
                               onChange={(event) => setOptionalCheckbox(event.currentTarget.checked)}
                             />
                             Optional
@@ -205,7 +215,7 @@ export default function DocumentCard({
                       type="button"
                       variant="secondary"
                       size="sm"
-                      disabled={!slotReadable || isDisabled || config.requestedDisabled}
+                      disabled={!slotReadable || isDisabled || isReadonly || config.requestedDisabled}
                       aria-label={`Manage uploads · ${slot.label}`}
                       onClick={() => openManageDialog(slot.id)}
                       data-slot-key={getSlotKey(slot)}
@@ -222,7 +232,9 @@ export default function DocumentCard({
                   <textarea
                     id={`${field.id}-comment`}
                     value={value.comment ?? ''}
-                    disabled={isDisabled}
+                    disabled={isDisabled || isReadonly}
+                    readOnly={isReadonly}
+                    aria-readonly={isReadonly}
                     onChange={(event) => controllerField.onChange({
                       ...value,
                       comment: event.currentTarget.value,

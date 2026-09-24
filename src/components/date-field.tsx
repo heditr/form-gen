@@ -51,6 +51,7 @@ export interface DateFieldProps {
   field: FieldDescriptor;
   form: UseFormReturn<FieldValues>;
   isDisabled: boolean;
+  isReadonly?: boolean;
   required?: boolean;
 }
 
@@ -65,6 +66,7 @@ export default function DateField({
   field,
   form,
   isDisabled,
+  isReadonly = false,
   required = false,
 }: DateFieldProps) {
   const error = useFieldError(form, field.id);
@@ -94,8 +96,12 @@ export default function DateField({
               controllerField.onChange(parseInputDate(event.target.value));
             }}
             disabled={isDisabled}
+            readOnly={isReadonly}
+            aria-readonly={isReadonly}
+            data-readonly={isReadonly ? 'true' : undefined}
             required={required}
             className={cn(
+              isReadonly && !isDisabled && 'bg-muted',
               errorMessage && 'border-destructive focus-visible:ring-destructive'
             )}
             aria-invalid={errorMessage ? 'true' : 'false'}

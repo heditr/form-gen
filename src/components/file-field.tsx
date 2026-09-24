@@ -23,6 +23,7 @@ export interface FileFieldProps {
   field: FieldDescriptor;
   form: UseFormReturn<FieldValues>;
   isDisabled: boolean;
+  isReadonly?: boolean;
   required?: boolean;
 }
 
@@ -108,6 +109,7 @@ export default function FileField({
   field,
   form,
   isDisabled,
+  isReadonly = false,
   required = false,
 }: FileFieldProps) {
   const error = useFieldError(form, field.id);
@@ -194,7 +196,12 @@ export default function FileField({
   );
 
   return (
-    <div data-testid={`file-field-${field.id}`} className="space-y-2">
+    <div
+      data-testid={`file-field-${field.id}`}
+      data-readonly={isReadonly ? 'true' : undefined}
+      aria-readonly={isReadonly}
+      className="space-y-2"
+    >
       <Label htmlFor={field.id}>
         {field.label}
         {required && <span className="ml-1 text-destructive" aria-hidden="true">*</span>}
@@ -225,7 +232,7 @@ export default function FileField({
                   variant="outline"
                   size="sm"
                   onClick={() => handleRemoveFile(controllerField.onChange)}
-                  disabled={isDisabled || isUploading}
+                  disabled={isDisabled || isReadonly || isUploading}
                 >
                   Remove
                 </Button>
@@ -242,7 +249,9 @@ export default function FileField({
                 handleFileChange(selectedFiles, controllerField.onChange);
               }}
               onBlur={controllerField.onBlur}
-              disabled={isDisabled || isUploading}
+              disabled={isDisabled || isReadonly || isUploading}
+              aria-readonly={isReadonly}
+              data-readonly={isReadonly ? 'true' : undefined}
               required={required}
               accept={accept}
               multiple={isMultiple}

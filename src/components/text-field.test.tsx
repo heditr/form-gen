@@ -151,6 +151,16 @@ describe('TextField', () => {
     vi.clearAllMocks();
   });
 
+  test('given readonly status, should mark the input readonly without disabling it', () => {
+    const props = createProps({ isReadonly: true });
+    render(<TextField {...props} />);
+
+    const input = screen.getByLabelText('Test Field');
+    expect(input).toHaveAttribute('readonly');
+    expect(input).toHaveAttribute('aria-readonly', 'true');
+    expect(input).not.toBeDisabled();
+  });
+
   test('given field descriptor, should render text input with label and description', () => {
     const props = createProps();
     render(<TextField {...props} />);

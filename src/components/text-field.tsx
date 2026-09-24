@@ -17,6 +17,7 @@ export interface TextFieldProps {
   field: FieldDescriptor;
   form: UseFormReturn<FieldValues>;
   isDisabled: boolean;
+  isReadonly?: boolean;
   required?: boolean;
 }
 
@@ -32,6 +33,7 @@ export default function TextField({
   field,
   form,
   isDisabled,
+  isReadonly = false,
   required = false,
 }: TextFieldProps) {
   const error = useFieldError(form, field.id);
@@ -58,8 +60,12 @@ export default function TextField({
             {...controllerField}
             value={controllerField.value ?? ''}
             disabled={isDisabled}
+            readOnly={isReadonly}
+            aria-readonly={isReadonly}
+            data-readonly={isReadonly ? 'true' : undefined}
             required={required}
             className={cn(
+              isReadonly && !isDisabled && 'bg-muted',
               errorMessage && 'border-destructive focus-visible:ring-destructive'
             )}
             aria-invalid={errorMessage ? 'true' : 'false'}

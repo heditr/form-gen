@@ -10,7 +10,7 @@ import type { BlockDescriptor, FieldDescriptor, GlobalFormDescriptor, FormData }
 import type { UseFormReturn, FieldValues } from 'react-hook-form';
 import type { FormContext } from '@/utils/template-evaluator';
 import FieldWrapper from './field-wrapper';
-import { evaluateHiddenStatus, evaluateDisabledStatus } from '@/utils/template-evaluator';
+import { evaluateHiddenStatus, evaluateDisabledStatus, evaluateReadonlyStatus } from '@/utils/template-evaluator';
 import { evaluateDefaultValue } from '@/utils/default-value-evaluator';
 import { buildAutoFillPatchFromSelection } from '@/utils/form-descriptor-integration';
 import { buildBlockLayoutRows } from '@/utils/block-layout';
@@ -25,6 +25,7 @@ export interface RepeatableFieldGroupProps {
   fields: FieldDescriptor[];
   isDisabled: boolean;
   isHidden: boolean;
+  isReadonly?: boolean;
   form: UseFormReturn<FieldValues>;
   formContext: FormContext;
   onLoadDataSource: (fieldPath: string, url: string, auth?: { type: 'bearer' | 'apikey'; token?: string; headerName?: string }) => void;
@@ -43,6 +44,7 @@ export default function RepeatableFieldGroup({
   fields,
   isDisabled,
   isHidden,
+  isReadonly = false,
   form,
   formContext,
   onLoadDataSource,
@@ -342,6 +344,7 @@ export default function RepeatableFieldGroup({
 
                       const fieldHidden = evaluateHiddenStatus(fieldWithMeta, instanceFormContext);
                       const fieldDisabled = evaluateDisabledStatus(fieldWithMeta, instanceFormContext) || isDisabled;
+                      const fieldReadonly = evaluateReadonlyStatus(fieldWithMeta, instanceFormContext) || isReadonly;
 
                       return (
                         <FieldWrapper
@@ -349,6 +352,7 @@ export default function RepeatableFieldGroup({
                           field={indexedField}
                           isDisabled={fieldDisabled}
                           isHidden={fieldHidden}
+                          isReadonly={fieldReadonly}
                           form={form}
                           formContext={instanceFormContext}
                           onLoadDataSource={onLoadDataSource}

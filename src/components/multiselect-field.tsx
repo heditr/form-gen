@@ -32,6 +32,7 @@ export interface MultiselectFieldProps {
   form: UseFormReturn<FieldValues>;
   formContext: FormContext;
   isDisabled: boolean;
+  isReadonly?: boolean;
   required?: boolean;
   onLoadDataSource?: (
     fieldPath: string,
@@ -52,6 +53,7 @@ export default function MultiselectField({
   form,
   formContext,
   isDisabled,
+  isReadonly = false,
   required = false,
   onLoadDataSource,
   dataSourceCache = {},
@@ -155,7 +157,7 @@ export default function MultiselectField({
   }, [isOpen]);
 
   const openDropdown = () => {
-    if (!isDisabled && !isLoading) {
+    if (!isDisabled && !isReadonly && !isLoading) {
       setIsOpen(true);
     }
   };
@@ -163,7 +165,12 @@ export default function MultiselectField({
   const triggerLabel = isLoading ? 'Loading...' : 'Select options';
 
   return (
-    <div data-testid={`multiselect-field-${field.id}`} className="space-y-2">
+    <div
+      data-testid={`multiselect-field-${field.id}`}
+      data-readonly={isReadonly ? 'true' : undefined}
+      aria-readonly={isReadonly}
+      className="space-y-2"
+    >
       <Label htmlFor={field.id}>
         {field.label}
         {required && (
@@ -212,7 +219,7 @@ export default function MultiselectField({
                   'rounded-md border border-input bg-background text-sm',
                   'transition-colors',
                   errorMessage && 'border-destructive',
-                  (isDisabled || isLoading) && 'opacity-50 cursor-not-allowed'
+                  (isDisabled || isReadonly || isLoading) && 'opacity-50 cursor-not-allowed'
                 )}
               >
                 {/* Dismissible chips for each selected value */}
@@ -225,7 +232,7 @@ export default function MultiselectField({
                     <button
                       type="button"
                       aria-label={`Remove ${item.label}`}
-                      disabled={isDisabled}
+                      disabled={isDisabled || isReadonly}
                       onClick={(e) => {
                         e.stopPropagation();
                         removeValue(String(item.value));
@@ -246,7 +253,7 @@ export default function MultiselectField({
                   aria-expanded={isOpen}
                   aria-invalid={errorMessage ? 'true' : 'false'}
                   aria-describedby={errorMessage ? `${field.id}-error` : undefined}
-                  disabled={isDisabled || isLoading}
+                  disabled={isDisabled || isReadonly || isLoading}
                   onClick={openDropdown}
                   className="flex-1 text-left text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
                 >

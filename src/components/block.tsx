@@ -9,7 +9,9 @@ import { useEffect, useState, useRef, useMemo, memo } from 'react';
 import type { BlockDescriptor, GlobalFormDescriptor, FormData } from '@/types/form-descriptor';
 import type { UseFormReturn, FieldValues } from 'react-hook-form';
 import type { FormContext } from '@/utils/template-evaluator';
-import { evaluateHiddenStatus, evaluateDisabledStatus } from '@/utils/template-evaluator';
+import { evaluateHiddenStatus, evaluateDisabledStatus, evaluateReadonlyStatus } from '@/utils/template-evaluator';
+import { resolveFieldStatus, type StatusMode } from '@/utils/resolve-field-status';
+import { useOptionalFormStatusContext } from '@/context/form-status-context';
 import { isRepeatableBlock, isRepeatablePopinBlock, groupFieldsByRepeatableGroupId, buildAutoFillPatchFromSelection } from '@/utils/form-descriptor-integration';
 import { buildBlockLayoutRows } from '@/utils/block-layout';
 import { cn } from '@/lib/utils';
@@ -23,6 +25,14 @@ export interface BlockProps {
   isHidden: boolean;
   form: UseFormReturn<FieldValues>;
   formContext: FormContext;
+  /**
+   * `context` reads the main-form status map. `local` evaluates templates
+   * against `formContext` (popins and tests). Defaults to local so a block
+   * nested under the main provider does not inherit the wrong map.
+   */
+  statusMode?: StatusMode;
+  /** Block-level readonly, cascaded onto fields. */
+  isReadonly?: boolean;
   onLoadDataSource: (fieldPath: string, url: string, auth?: { type: 'bearer' | 'apikey'; token?: string; headerName?: string }) => void;
   dataSourceCache: Record<string, unknown>;
   /**
@@ -47,7 +57,11 @@ function Block({
   onLoadDataSource,
   dataSourceCache,
   renderRepeatablesAsSummary,
+  statusMode = 'local',
+  isReadonly = false,
 }: BlockProps) {
+  const ancestorStatus = useOptionalFormStatusContext();
+  const statusContext = statusMode === 'context' ? ancestorStatus : null;
   // Track visibility state for smooth animations
   const [shouldRender, setShouldRender] = useState(!isHidden);
   const [isVisible, setIsVisible] = useState(!isHidden);
@@ -135,12 +149,18 @@ function Block({
     const disabledFieldIds: string[] = [];
 
     for (const field of nonRepeatableFields) {
-      const fieldHidden = evaluateHiddenStatus(field, formContext);
-      const fieldDisabled = evaluateDisabledStatus(field, formContext) || isDisabled;
-      if (fieldHidden) {
+      const fieldStatus = resolveFieldStatus({
+        field,
+        formContext,
+        statusContext,
+        statusMode,
+        blockDisabled: isDisabled,
+        blockReadonly: isReadonly,
+      });
+      if (fieldStatus.hidden) {
         hiddenFieldIds.push(field.id);
       }
-      if (fieldDisabled) {
+      if (fieldStatus.disabled) {
         disabledFieldIds.push(field.id);
       }
     }
@@ -196,6 +216,7 @@ function Block({
           Object.entries(fieldGroups).map(([groupId, fields]) => {
             const groupHidden = evaluateHiddenStatus(block, formContext);
             const groupDisabled = evaluateDisabledStatus(block, formContext) || isDisabled;
+            const groupReadonly = evaluateReadonlyStatus(block, formContext) || isReadonly;
 
             if (renderRepeatablesAsSummary && isRepeatablePopinBlock(block)) {
               return (
@@ -220,6 +241,7 @@ function Block({
                 fields={fields}
                 isDisabled={groupDisabled}
                 isHidden={groupHidden}
+                isReadonly={groupReadonly}
                 form={form}
                 formContext={formContext}
                 onLoadDataSource={onLoadDataSource}
@@ -232,25 +254,34 @@ function Block({
         {(() => {
           const layoutMode = block.layout?.mode ?? 'default';
 
-          if (layoutMode !== 'grid') {
-            return nonRepeatableFields.map((field) => {
-              const fieldHidden = evaluateHiddenStatus(field, formContext);
-              const fieldDisabled = evaluateDisabledStatus(field, formContext) || isDisabled;
-
-              return (
-                <FieldWrapper
-                  key={field.id}
-                  field={field}
-                  isDisabled={fieldDisabled}
-                  isHidden={fieldHidden}
-                  form={form}
-                  formContext={formContext}
-                  onLoadDataSource={onLoadDataSource}
-                  dataSourceCache={dataSourceCache}
-                  onAutoFillSelection={handleAutoFillSelection}
-                />
-              );
+          const renderField = (field: (typeof nonRepeatableFields)[number]) => {
+            const fieldStatus = resolveFieldStatus({
+              field,
+              formContext,
+              statusContext,
+              statusMode,
+              blockDisabled: isDisabled,
+              blockReadonly: isReadonly,
             });
+
+            return (
+              <FieldWrapper
+                key={field.id}
+                field={field}
+                isDisabled={fieldStatus.disabled}
+                isHidden={fieldStatus.hidden}
+                isReadonly={fieldStatus.readonly}
+                form={form}
+                formContext={formContext}
+                onLoadDataSource={onLoadDataSource}
+                dataSourceCache={dataSourceCache}
+                onAutoFillSelection={handleAutoFillSelection}
+              />
+            );
+          };
+
+          if (layoutMode !== 'grid') {
+            return nonRepeatableFields.map(renderField);
           }
 
           const rows = buildBlockLayoutRows(block, nonRepeatableFields);
@@ -288,25 +319,7 @@ function Block({
             >
               {row.slots.map((slot, slotIndex) => (
                 <div key={`slot-${slotIndex}`} className={slot.colSpan ? `col-span-${slot.colSpan}` : undefined}>
-                  {slot.fields.map((field) => {
-                    const fieldHidden = evaluateHiddenStatus(field, formContext);
-                    const fieldDisabled =
-                      evaluateDisabledStatus(field, formContext) || isDisabled;
-
-                    return (
-                      <FieldWrapper
-                        key={field.id}
-                        field={field}
-                        isDisabled={fieldDisabled}
-                        isHidden={fieldHidden}
-                        form={form}
-                        formContext={formContext}
-                        onLoadDataSource={onLoadDataSource}
-                        dataSourceCache={dataSourceCache}
-                        onAutoFillSelection={handleAutoFillSelection}
-                      />
-                    );
-                  })}
+                  {slot.fields.map(renderField)}
                 </div>
               ))}
             </div>

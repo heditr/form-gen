@@ -13,21 +13,21 @@ import {
   type FieldStatus,
   type FormStatusContextValue,
 } from '@/context/form-status-context';
-import { evaluateHiddenStatus, evaluateDisabledStatus } from '@/utils/template-evaluator';
+import { evaluateHiddenStatus, evaluateDisabledStatus, evaluateReadonlyStatus } from '@/utils/template-evaluator';
 import Block from './block';
 
 function resolveBlockStatus(
   block: BlockDescriptor,
   formContext: FormPresentationProps['formContext'],
   statusContext: FormStatusContextValue | null
-): Pick<FieldStatus, 'hidden' | 'disabled'> {
+): FieldStatus {
   if (statusContext) {
-    const status = statusContext.getBlockStatus(block.id);
-    return { hidden: status.hidden, disabled: status.disabled };
+    return statusContext.getBlockStatus(block.id);
   }
   return {
     hidden: evaluateHiddenStatus(block, formContext ?? {}),
     disabled: evaluateDisabledStatus(block, formContext ?? {}),
+    readonly: evaluateReadonlyStatus(block, formContext ?? {}),
   };
 }
 
@@ -45,7 +45,7 @@ function FormPresentationBlock({
   dataSourceCache: FormPresentationProps['dataSourceCache'];
 }) {
   const statusContext = useContext(FormStatusContext);
-  const { hidden: isHidden, disabled: isDisabled } = resolveBlockStatus(
+  const { hidden: isHidden, disabled: isDisabled, readonly: isReadonly } = resolveBlockStatus(
     block,
     formContext,
     statusContext
@@ -60,6 +60,8 @@ function FormPresentationBlock({
       block={block}
       isDisabled={isDisabled}
       isHidden={false}
+      isReadonly={isReadonly}
+      statusMode="context"
       form={form}
       formContext={formContext}
       onLoadDataSource={onLoadDataSource}

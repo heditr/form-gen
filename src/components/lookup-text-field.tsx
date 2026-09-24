@@ -8,6 +8,7 @@ export interface LookupTextFieldProps {
   field: FieldDescriptor;
   form: UseFormReturn<FieldValues>;
   isDisabled: boolean;
+  isReadonly?: boolean;
   required?: boolean;
 }
 
@@ -15,6 +16,7 @@ export default function LookupTextField({
   field,
   form,
   isDisabled,
+  isReadonly = false,
   required = false,
 }: LookupTextFieldProps) {
   const error = useFieldError(form, field.id);
@@ -35,6 +37,7 @@ export default function LookupTextField({
         field={field}
         form={form}
         isDisabled={isDisabled}
+        isReadonly={isReadonly}
         required={required}
         errorMessage={errorMessage}
       />

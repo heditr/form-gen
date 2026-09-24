@@ -16,6 +16,7 @@ export interface CheckboxFieldProps {
   field: FieldDescriptor;
   form: UseFormReturn<FieldValues>;
   isDisabled: boolean;
+  isReadonly?: boolean;
   required?: boolean;
 }
 
@@ -31,13 +32,19 @@ export default function CheckboxField({
   field,
   form,
   isDisabled,
+  isReadonly = false,
   required = false,
 }: CheckboxFieldProps) {
   const error = useFieldError(form, field.id);
   const errorMessage = error?.message as string | undefined;
 
   return (
-    <div data-testid={`checkbox-field-${field.id}`} className="space-y-2">
+    <div
+      data-testid={`checkbox-field-${field.id}`}
+      data-readonly={isReadonly ? 'true' : undefined}
+      aria-readonly={isReadonly}
+      className="space-y-2"
+    >
       <div className="flex items-center space-x-2">
         <Controller
           name={field.id}
@@ -51,7 +58,9 @@ export default function CheckboxField({
               checked={controllerField.value || false}
               onChange={(e) => controllerField.onChange(e.target.checked)}
               onBlur={controllerField.onBlur}
-              disabled={isDisabled}
+              disabled={isDisabled || isReadonly}
+              aria-readonly={isReadonly}
+              data-readonly={isReadonly ? 'true' : undefined}
               required={required}
               className={cn(
                 'h-4 w-4 rounded border-input text-primary focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50',

@@ -22,6 +22,7 @@ export interface DropdownFieldProps {
   form: UseFormReturn<FieldValues>;
   formContext: FormContext;
   isDisabled: boolean;
+  isReadonly?: boolean;
   required?: boolean;
   onLoadDataSource?: (fieldPath: string, url: string, auth?: { type: 'bearer' | 'apikey'; token?: string; headerName?: string }) => void;
   dataSourceCache?: Record<string, unknown>;
@@ -40,6 +41,7 @@ export default function DropdownField({
   form,
   formContext,
   isDisabled,
+  isReadonly = false,
   required = false,
   onLoadDataSource,
   dataSourceCache = {},
@@ -125,7 +127,12 @@ export default function DropdownField({
   }, [field.dataSource, field.id, dataSourceQuery.isLoading, dataSourceCache]);
 
   return (
-    <div data-testid={`dropdown-field-${field.id}`} className="space-y-2">
+    <div
+      data-testid={`dropdown-field-${field.id}`}
+      data-readonly={isReadonly ? 'true' : undefined}
+      aria-readonly={isReadonly}
+      className="space-y-2"
+    >
       <Label htmlFor={field.id}>
         {field.label}
         {required && <span className="ml-1 text-destructive" aria-hidden="true">*</span>}
@@ -163,7 +170,7 @@ export default function DropdownField({
                 }
               }
             }}
-            disabled={isDisabled || isLoading}
+            disabled={isDisabled || isReadonly || isLoading}
             required={required}
             className={cn(
               errorMessage && 'border-destructive focus:ring-destructive'
