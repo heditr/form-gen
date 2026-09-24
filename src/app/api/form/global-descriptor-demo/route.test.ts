@@ -57,6 +57,17 @@ describe('GET /api/form/global-descriptor-demo', () => {
     );
     expect(fieldById['signatories.ssn']?.status?.hidden).toBe('{{not (eq country "US")}}');
     expect(fieldById['signatories.nationalId']?.status?.hidden).toBe('{{eq country "US"}}');
+    expect(fieldById['signatories.powerOfAttorney']?.defaultValue).toBe(
+      '{{caseContext.signatories.@index.powerOfAttorney}}'
+    );
+    expect(fieldById['signatories.powerOfAttorney']?.status?.hidden).toBe(
+      '{{#if includePowerOfAttorney}}false{{else}}true{{/if}}'
+    );
+
+    const includePowerOfAttorney = descriptor.blocks
+      .flatMap((block: { fields?: Array<{ id: string }> }) => block.fields ?? [])
+      .find((field: { id: string }) => field.id === 'includePowerOfAttorney');
+    expect(includePowerOfAttorney?.type).toBe('checkbox');
   });
 
   test('given backend signatories with unmapped keys, should seed rows via @index defaultValues', async () => {
@@ -95,6 +106,7 @@ describe('GET /api/form/global-descriptor-demo', () => {
         ownershipPercent: 40,
         ssn: '123-45-6789',
         nationalId: '',
+        powerOfAttorney: '',
       },
       {
         signatoryName: 'Alan Turing',
@@ -104,7 +116,25 @@ describe('GET /api/form/global-descriptor-demo', () => {
         ownershipPercent: 15,
         ssn: '',
         nationalId: 'AB123456C',
+        powerOfAttorney: '',
       },
     ]);
+  });
+
+  test('given include power of attorney is checked, should seed that popin field from caseContext', async () => {
+    const response = await GET(new Request('http://localhost:3000/api/form/global-descriptor-demo'));
+    const descriptor = (await response.json()) as GlobalFormDescriptor;
+
+    const defaultValues = extractDefaultValues(descriptor, {
+      includePowerOfAttorney: true,
+      caseContext: {
+        signatories: [
+          { name: 'Ada Lovelace', powerOfAttorney: 'POA-1843-ADA' },
+        ],
+      },
+    });
+
+    const rows = defaultValues.signatories as Array<Record<string, unknown>>;
+    expect(rows[0]?.powerOfAttorney).toBe('POA-1843-ADA');
   });
 });

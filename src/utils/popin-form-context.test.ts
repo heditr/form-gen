@@ -140,6 +140,30 @@ describe('buildPopinFormContext', () => {
     expect(evaluateHiddenStatus(ownershipField, hiddenForIndividual)).toBe(true);
     expect(evaluateHiddenStatus(ownershipField, visibleForCorporation)).toBe(false);
   });
+
+  test('given a main-form checkbox, should hide the popin field until it is checked', () => {
+    const powerOfAttorney: FieldDescriptor = {
+      id: 'powerOfAttorney',
+      type: 'text',
+      label: 'Power of Attorney',
+      validation: [],
+      status: {
+        hidden: '{{#if includePowerOfAttorney}}false{{else}}true{{/if}}',
+      },
+    };
+
+    const hidden = buildPopinFormContext({
+      mainFormValues: { includePowerOfAttorney: false },
+      popinValues: { signatoryName: 'Ada' },
+    });
+    const shown = buildPopinFormContext({
+      mainFormValues: { includePowerOfAttorney: true },
+      popinValues: { signatoryName: 'Ada' },
+    });
+
+    expect(evaluateHiddenStatus(powerOfAttorney, hidden)).toBe(true);
+    expect(evaluateHiddenStatus(powerOfAttorney, shown)).toBe(false);
+  });
 });
 
 describe('getPopinLoadFieldValues', () => {

@@ -220,6 +220,12 @@ function shouldSkipHiddenDefault(field: FieldDescriptor, statusContext: FormCont
   if (field.type === 'button' || isSubmitSkippedFieldType(field.type)) {
     return false;
   }
+  // An explicit default belongs on the row even while a main-form condition hides the field.
+  // Fields with no default are omitted so a row-local hide (for example companyName on a
+  // residential address) does not copy a value that does not apply.
+  if (field.defaultValue !== undefined) {
+    return false;
+  }
   return evaluateHiddenStatus(field, statusContext);
 }
 

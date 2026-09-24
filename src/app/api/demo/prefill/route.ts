@@ -65,6 +65,7 @@ export async function GET(): Promise<NextResponse<DemoPrefillResponse | { error:
           title: 'Managing Director',
           ownership: 40,
           ssn: '123-45-6789',
+          powerOfAttorney: 'POA-1843-ADA',
         },
         {
           name: 'Alan Turing',
@@ -73,6 +74,7 @@ export async function GET(): Promise<NextResponse<DemoPrefillResponse | { error:
           title: 'CTO',
           ownership: 15,
           nationalId: 'AB123456C',
+          powerOfAttorney: 'POA-1912-ALAN',
         },
       ],
     };

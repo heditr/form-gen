@@ -474,6 +474,17 @@ describe('PopinFormSession', () => {
         validation: [],
         status: { hidden: '{{eq country "US"}}' },
       },
+      {
+        id: 'signatories.powerOfAttorney',
+        type: 'text',
+        label: 'Power of Attorney',
+        repeatableGroupId: 'signatories',
+        validation: [],
+        defaultValue: '{{caseContext.signatories.@index.powerOfAttorney}}',
+        status: {
+          hidden: '{{#if includePowerOfAttorney}}false{{else}}true{{/if}}',
+        },
+      },
     ],
   };
 
@@ -520,6 +531,16 @@ describe('PopinFormSession', () => {
             defaultValue: '{{caseContext.signatories.@index.nationalId}}',
             status: { hidden: '{{eq country "US"}}' },
           },
+          {
+            id: 'powerOfAttorney',
+            type: 'text',
+            label: 'Power of Attorney',
+            validation: [],
+            defaultValue: '{{caseContext.signatories.@index.powerOfAttorney}}',
+            status: {
+              hidden: '{{#if includePowerOfAttorney}}false{{else}}true{{/if}}',
+            },
+          },
         ],
       },
     ],
@@ -530,6 +551,7 @@ describe('PopinFormSession', () => {
     entityType,
     country,
     index,
+    includePowerOfAttorney = false,
     signatories = [],
     popinLoadData = null,
     caseContext = {},
@@ -537,6 +559,7 @@ describe('PopinFormSession', () => {
     entityType: string;
     country: string;
     index: number;
+    includePowerOfAttorney?: boolean;
     signatories?: Array<Record<string, unknown>>;
     popinLoadData?: Record<string, unknown> | null;
     caseContext?: CaseContext;
@@ -550,6 +573,7 @@ describe('PopinFormSession', () => {
         defaultValues: {
           entityType,
           country,
+          includePowerOfAttorney,
           signatories,
         },
       });
@@ -676,5 +700,40 @@ describe('PopinFormSession', () => {
     );
     expect(parseErrors).toHaveLength(0);
     consoleErrorSpy.mockRestore();
+  });
+
+  test('given the power of attorney checkbox is unchecked, should hide that popin field', async () => {
+    renderSignatorySession({
+      entityType: 'corporation',
+      country: 'US',
+      index: 0,
+      includePowerOfAttorney: false,
+      signatories: [{ signatoryName: 'Ada Lovelace' }],
+      caseContext: {
+        signatories: [{ name: 'Ada Lovelace', powerOfAttorney: 'POA-1843-ADA' }],
+      } as CaseContext,
+    });
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Signatory Name')).toHaveValue('Ada Lovelace');
+    });
+    expect(screen.queryByLabelText('Power of Attorney')).not.toBeInTheDocument();
+  });
+
+  test('given the power of attorney checkbox is checked, should show the caseContext default', async () => {
+    renderSignatorySession({
+      entityType: 'corporation',
+      country: 'US',
+      index: 0,
+      includePowerOfAttorney: true,
+      signatories: [{ signatoryName: 'Ada Lovelace' }],
+      caseContext: {
+        signatories: [{ name: 'Ada Lovelace', powerOfAttorney: 'POA-1843-ADA' }],
+      } as CaseContext,
+    });
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Power of Attorney')).toHaveValue('POA-1843-ADA');
+    });
   });
 });

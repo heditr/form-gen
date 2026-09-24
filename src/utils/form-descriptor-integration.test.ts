@@ -1693,6 +1693,52 @@ describe('form descriptor integration', () => {
       expect(defaultValues).not.toHaveProperty('ssn');
     });
 
+    test('given a hidden field with an explicit default, should keep that default', () => {
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'signatories-block',
+            title: 'Signatories',
+            repeatable: true,
+            repeatableDefaultSource: 'signatories',
+            fields: [
+              {
+                id: 'signatoryName',
+                type: 'text',
+                label: 'Name',
+                repeatableGroupId: 'signatories',
+                validation: [],
+                defaultValue: '{{caseContext.signatories.@index.name}}',
+              },
+              {
+                id: 'powerOfAttorney',
+                type: 'text',
+                label: 'Power of Attorney',
+                repeatableGroupId: 'signatories',
+                validation: [],
+                defaultValue: '{{caseContext.signatories.@index.powerOfAttorney}}',
+                status: {
+                  hidden: '{{#if includePowerOfAttorney}}false{{else}}true{{/if}}',
+                },
+              },
+            ],
+          },
+        ],
+        submission: { url: '/api/submit', method: 'POST' },
+      };
+
+      const defaultValues = extractDefaultValues(descriptor, {
+        includePowerOfAttorney: false,
+        caseContext: {
+          signatories: [{ name: 'Ada Lovelace', powerOfAttorney: 'POA-1843-ADA' }],
+        },
+      });
+
+      expect(defaultValues.signatories).toEqual([
+        { signatoryName: 'Ada Lovelace', powerOfAttorney: 'POA-1843-ADA' },
+      ]);
+    });
+
     test('given repeatable block with repeatableDefaultSource and field defaultValues using @index, should fill each row from context', () => {
       const descriptor: GlobalFormDescriptor = {
         blocks: [

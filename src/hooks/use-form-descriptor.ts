@@ -29,6 +29,11 @@ export interface UseFormDescriptorOptions {
    * Only used for non-repeatable fields; inner repeatable groups bind their own row index.
    */
   repeatableIndex?: number;
+  /**
+   * Main-form values overlaid under a popin row so status templates can read
+   * fields that are not part of the popin itself.
+   */
+  statusValues?: Record<string, unknown>;
 }
 
 export interface UseFormDescriptorReturn {
@@ -50,6 +55,7 @@ export function useFormDescriptor(
     formData: initialFormData = {},
     validationScope = 'main',
     repeatableIndex,
+    statusValues,
   } = options;
 
   const initFormContext: FormContext = useMemo(
@@ -114,6 +120,7 @@ export function useFormDescriptor(
     caseContext,
     validationScope,
     defaultValuesByFieldId,
+    statusValues,
   });
 
   const form = useForm<FieldValues>({
