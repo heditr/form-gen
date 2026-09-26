@@ -26,6 +26,12 @@ export interface UseLiveZodResolverOptions {
   validationScope?: ValidationScope;
   /** Field id → default value for newly shown fields */
   defaultValuesByFieldId?: Record<string, unknown>;
+  /**
+   * Values merged under the form row before status evaluation.
+   * Popin sessions pass main-form values so a checkbox outside the popin
+   * can show or hide a popin field.
+   */
+  statusValues?: Record<string, unknown>;
 }
 
 export interface LiveZodResolverBundle {
@@ -57,6 +63,7 @@ export function useLiveZodResolver({
   caseContext = {},
   validationScope = 'main',
   defaultValuesByFieldId = {},
+  statusValues = {},
 }: UseLiveZodResolverOptions): LiveZodResolverBundle {
   const schemaRef = useRef<z.ZodObject<Record<string, z.ZodTypeAny>>>(z.object({}));
   const fingerprintRef = useRef('');
@@ -66,11 +73,23 @@ export function useLiveZodResolver({
   const initializedRef = useRef(false);
   const defaultValuesRef = useRef(defaultValuesByFieldId);
   defaultValuesRef.current = defaultValuesByFieldId;
+  const statusValuesRef = useRef(statusValues);
+  statusValuesRef.current = statusValues;
+  const statusFingerprint = JSON.stringify(statusValues ?? {});
+
+  const withStatusValues = useCallback(
+    (formValues: Partial<FormData>) =>
+      ({
+        ...statusValuesRef.current,
+        ...formValues,
+      }) as Partial<FormData>,
+    [statusFingerprint]
+  );
 
   const resolver = useCallback<Resolver<FieldValues>>(
     async (values, resolverContext, options) => {
       const formContext = buildFormContextFromValues(
-        values as Partial<FormData>,
+        withStatusValues(values as Partial<FormData>),
         caseContext
       );
       const targets = collectValidationTargets(descriptor, formContext, validationScope);
@@ -87,7 +106,7 @@ export function useLiveZodResolver({
 
       return zodResolver(schemaRef.current)(values, resolverContext, options);
     },
-    [caseContext, descriptor, validationScope]
+    [caseContext, descriptor, validationScope, withStatusValues]
   );
 
   const applyMembershipChanges = useCallback(
@@ -96,7 +115,7 @@ export function useLiveZodResolver({
         return;
       }
 
-      const formContext = buildFormContextFromValues(formValues, caseContext);
+      const formContext = buildFormContextFromValues(withStatusValues(formValues), caseContext);
       const nextTargets = collectValidationTargets(descriptor, formContext, validationScope);
       const statusHiddenIds = new Set(
         collectStatusHiddenFieldIds(descriptor, formContext, validationScope)
@@ -171,7 +190,7 @@ export function useLiveZodResolver({
         applyingRef.current = false;
       }
     },
-    [caseContext, descriptor, validationScope]
+    [caseContext, descriptor, validationScope, withStatusValues]
   );
 
   const refreshSchemaFromDescriptor = useCallback(
@@ -181,7 +200,7 @@ export function useLiveZodResolver({
       }
 
       const values = form.getValues() as Partial<FormData>;
-      const formContext = buildFormContextFromValues(values, caseContext);
+      const formContext = buildFormContextFromValues(withStatusValues(values), caseContext);
       const targets = collectValidationTargets(descriptor, formContext, validationScope);
       const fingerprint = buildSchemaFingerprint({ descriptor, caseContext, targets });
 
@@ -195,7 +214,7 @@ export function useLiveZodResolver({
       initializedRef.current = true;
       // Rebuild schema only — do not trigger() the whole form (avoids mount-time errors).
     },
-    [caseContext, descriptor, validationScope]
+    [caseContext, descriptor, validationScope, withStatusValues]
   );
 
   return {

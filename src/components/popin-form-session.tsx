@@ -83,6 +83,7 @@ export default function PopinFormSession({
     savedFormData: repeatableInstanceValues as Partial<DescriptorFormData> | undefined,
     validationScope: 'popin',
     repeatableIndex: popinEditContext?.index,
+    statusValues: mainFormValues ?? {},
   });
 
   const watchedPopinValues = useWatch({ control: popinForm.control }) as Record<string, unknown>;
@@ -155,8 +156,8 @@ export default function PopinFormSession({
       if (!instanceData) {
         return;
       }
+      // The saved row is already merged under explicit defaults by useFormDescriptor.
       repeatableInitKeyRef.current = sessionKey;
-      popinForm.reset(instanceData);
       return;
     }
 

@@ -53,6 +53,15 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
               ],
               isDiscriminant: true, // Triggers re-hydration
             },
+            {
+              id: 'includePowerOfAttorney',
+              type: 'checkbox',
+              label: 'Include power of attorney',
+              description:
+                'When checked, each authorized signatory popin shows Power of Attorney, prefilled from the case.',
+              defaultValue: false,
+              validation: [],
+            },
           ],
         },
         {
@@ -461,7 +470,7 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
         {
           id: 'signatory-block',
           title: 'Authorized Signatory',
-          description: 'A single authorized signatory. Hidden status depends on Entity Type and Country on the main form. Default values map caseContext.signatories with @index.',
+          description: 'A single authorized signatory. Hidden status depends on Entity Type, Country, and Include power of attorney on the main form. Default values map caseContext.signatories with @index.',
           includeInMainValidation: false,
           status: {
             hidden: 'true',
@@ -598,13 +607,25 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
                 hidden: '{{eq country "US"}}',
               },
             },
+            {
+              id: 'powerOfAttorney',
+              type: 'text',
+              label: 'Power of Attorney',
+              description:
+                'Hidden until Include power of attorney is checked. Seeded from caseContext.signatories.',
+              defaultValue: '{{caseContext.signatories.@index.powerOfAttorney}}',
+              validation: [],
+              status: {
+                hidden: '{{#if includePowerOfAttorney}}false{{else}}true{{/if}}',
+              },
+            },
           ],
         },
         {
           id: 'signatories-block',
           title: 'Authorized Signatories',
           description:
-            'Existing rows are seeded from caseContext.signatories via @index defaultValues. Hidden fields follow Entity Type and Country on the main form. New rows are filled from /api/demo/signatory-load.',
+            'Existing rows are seeded from caseContext.signatories via @index defaultValues. Hidden fields follow Entity Type, Country, and Include power of attorney on the main form. New rows are filled from /api/demo/signatory-load.',
           repeatable: true,
           repeatablePopin: true,
           repeatableSummaryTemplate:
