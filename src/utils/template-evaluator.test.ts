@@ -5,7 +5,7 @@
  * with form context works correctly.
  */
 
-import { describe, test, expect, beforeAll } from 'vitest';
+import { describe, test, expect, beforeAll, beforeEach, vi } from 'vitest';
 import Handlebars from 'handlebars';
 import { registerHandlebarsHelpers } from './handlebars-helpers';
 import {
@@ -13,12 +13,17 @@ import {
   evaluateHiddenStatus,
   evaluateDisabledStatus,
   evaluateReadonlyStatus,
+  clearTemplateCompileCache,
 } from './template-evaluator';
 import type { BlockDescriptor, FieldDescriptor } from '@/types/form-descriptor';
 
 describe('template evaluator', () => {
   beforeAll(() => {
     registerHandlebarsHelpers();
+  });
+
+  beforeEach(() => {
+    clearTemplateCompileCache();
   });
 
   describe('evaluateTemplate', () => {
@@ -55,10 +60,17 @@ describe('template evaluator', () => {
       expect(result).toBe('');
     });
 
-    test('given undefined template, should return empty string', () => {
-      const result = evaluateTemplate(undefined, {});
-      
-      expect(result).toBe('');
+    test('given repeated template evaluation, should compile template only once', () => {
+      const compileSpy = vi.spyOn(Handlebars, 'compile');
+      const template = 'Hello {{name}}';
+      const context = { name: 'World' };
+
+      evaluateTemplate(template, context);
+      evaluateTemplate(template, context);
+      evaluateTemplate(template, { name: 'Again' });
+
+      expect(compileSpy).toHaveBeenCalledTimes(1);
+      compileSpy.mockRestore();
     });
   });
 

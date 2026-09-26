@@ -1,3 +1,5 @@
+> **Architecture update:** Data-source fetches should pass live `templateContext` from `form.getValues()`; see **[thin-center-form-engine.md](./thin-center-form-engine.md)**.
+
 # Form Descriptor Engine Integration Plan
 ## For React + react-hook-form + TanStack Query + Redux (Redux Thunk)
 

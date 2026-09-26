@@ -8,6 +8,40 @@
 import { evaluateTemplate, type FormContext } from './template-evaluator';
 import type { DocumentCardData, FieldType } from '@/types/form-descriptor';
 
+export interface EvaluateDefaultValueOptions {
+  /**
+   * Row index used to bind the `@index` preprocessor token before Handlebars compile.
+   * Only integers >= 0 are applied; unbound `@index` templates return a type default
+   * without compiling (Handlebars cannot parse `foo.@index.bar`).
+   */
+  index?: number;
+}
+
+/**
+ * Replace the `@index` preprocessor token with a numeric path segment.
+ * This is not Handlebars data-frame `@index` — it rewrites the template string
+ * so `{{caseContext.items.@index.name}}` becomes `{{caseContext.items.0.name}}`.
+ */
+export function bindTemplateIndex(template: string, index: number): string {
+  return template.replaceAll('@index', String(index));
+}
+
+function typeDefaultForField(
+  fieldType: FieldType
+): string | number | boolean | Date | null {
+  switch (fieldType) {
+    case 'checkbox':
+      return false;
+    case 'number':
+      return 0;
+    case 'date':
+    case 'file':
+      return null;
+    default:
+      return '';
+  }
+}
+
 function parseDateDefaultValue(value: string): Date | null {
   const trimmed = value.trim();
   if (trimmed === '') {
@@ -40,12 +74,14 @@ function parseDateDefaultValue(value: string): Date | null {
  * @param defaultValue - The default value (can be string template or static value)
  * @param fieldType - The type of field (determines return type and conversion)
  * @param context - Form context for template evaluation
+ * @param options - Optional `@index` bind for repeatable / popin instance defaults
  * @returns Evaluated and type-converted default value
  */
 export function evaluateDefaultValue(
   defaultValue: string | string[] | number | boolean | DocumentCardData | null | undefined,
   fieldType: FieldType,
-  context: FormContext
+  context: FormContext,
+  options: EvaluateDefaultValueOptions = {}
 ): string | number | boolean | Date | string[] | DocumentCardData | null | undefined {
   // If defaultValue is not a string, return it unchanged (static value)
   if (typeof defaultValue !== 'string') {
@@ -79,8 +115,17 @@ export function evaluateDefaultValue(
     return defaultValue;
   }
 
+  const { index } = options;
+  const shouldBindIndex = typeof index === 'number' && Number.isInteger(index) && index >= 0;
+  const template = shouldBindIndex ? bindTemplateIndex(defaultValue, index) : defaultValue;
+
+  // Unbound `@index` is a preprocessor token, not valid Handlebars — skip compile
+  if (template.includes('@index')) {
+    return typeDefaultForField(fieldType);
+  }
+
   // Evaluate Handlebars template
-  const evaluated = evaluateTemplate(defaultValue, context);
+  const evaluated = evaluateTemplate(template, context);
 
   // Convert result based on field type
   switch (fieldType) {

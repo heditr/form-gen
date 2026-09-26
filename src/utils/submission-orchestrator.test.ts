@@ -5,7 +5,8 @@
  * error handling, payload template evaluation, and success messaging.
  */
 
-import { describe, test, expect, vi, beforeEach } from 'vitest';
+import { describe, test, expect, vi, beforeEach, beforeAll } from 'vitest';
+import { registerHandlebarsHelpers } from '@/utils/handlebars-helpers';
 import {
   createSubmissionOrchestrator,
   scrollToFirstError,
@@ -28,6 +29,10 @@ import type { UseFormReturn, FieldErrors } from 'react-hook-form';
 type MockFormValues = Record<string, unknown>;
 
 describe('submission orchestrator', () => {
+  beforeAll(() => {
+    registerHandlebarsHelpers();
+  });
+
   describe('scrollToFirstError', () => {
     beforeEach(() => {
       // Mock scrollIntoView
@@ -678,6 +683,125 @@ describe('submission orchestrator', () => {
       expect(JSON.parse(requestInit.body as string)).toEqual({
         email: 'test@example.com',
       });
+
+      vi.restoreAllMocks();
+    });
+
+    test('given status-hidden fields in form values, should omit them from the submit payload', async () => {
+      const mockForm = {
+        handleSubmit: vi.fn((onValid) => async () => {
+          await onValid({
+            country: 'UK',
+            email: 'ada@example.com',
+            ssn: '999-99-9999',
+            addresses: [
+              {
+                addressType: 'residential',
+                country: 'UK',
+                street: '10 Downing St',
+                companyName: '',
+                state: '',
+              },
+            ],
+          });
+        }),
+        formState: {
+          errors: {},
+        },
+        getValues: vi.fn(() => ({ country: 'UK' })),
+      } as unknown as UseFormReturn<MockFormValues>;
+
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'jurisdiction',
+            title: 'Jurisdiction',
+            fields: [
+              { id: 'country', type: 'text', label: 'Country', validation: [] },
+              { id: 'email', type: 'text', label: 'Email', validation: [] },
+              {
+                id: 'ssn',
+                type: 'text',
+                label: 'SSN',
+                validation: [],
+                status: { hidden: '{{not (eq country "US")}}' },
+              },
+            ],
+          },
+          {
+            id: 'addresses-block',
+            title: 'Addresses',
+            repeatable: true,
+            fields: [
+              {
+                id: 'addresses.addressType',
+                type: 'text',
+                label: 'Address Type',
+                repeatableGroupId: 'addresses',
+                validation: [],
+              },
+              {
+                id: 'addresses.country',
+                type: 'text',
+                label: 'Country',
+                repeatableGroupId: 'addresses',
+                validation: [],
+              },
+              {
+                id: 'addresses.street',
+                type: 'text',
+                label: 'Street',
+                repeatableGroupId: 'addresses',
+                validation: [],
+              },
+              {
+                id: 'addresses.companyName',
+                type: 'text',
+                label: 'Company Name',
+                repeatableGroupId: 'addresses',
+                validation: [],
+                status: { hidden: '{{not (eq addressType "business")}}' },
+              },
+              {
+                id: 'addresses.state',
+                type: 'text',
+                label: 'State',
+                repeatableGroupId: 'addresses',
+                validation: [],
+                status: { hidden: '{{not (or (eq country "US") (eq country "CA"))}}' },
+              },
+            ],
+          },
+        ],
+        submission: {
+          url: '/api/submit',
+          method: 'POST',
+        },
+      };
+
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ success: true }),
+      });
+
+      const orchestrator = createSubmissionOrchestrator();
+      const submitHandler = orchestrator.createSubmitHandler(mockForm, descriptor, {
+        setError: vi.fn(),
+      });
+
+      await submitHandler();
+
+      const callArgs = vi.mocked(global.fetch).mock.calls[0];
+      const requestInit = callArgs[1] as RequestInit;
+      const bodyData = JSON.parse(requestInit.body as string) as Record<string, unknown>;
+      const row = (bodyData.addresses as Array<Record<string, unknown>>)[0];
+
+      expect(bodyData).not.toHaveProperty('ssn');
+      expect(bodyData.email).toBe('ada@example.com');
+      expect(row).not.toHaveProperty('companyName');
+      expect(row).not.toHaveProperty('state');
+      expect(row.street).toBe('10 Downing St');
 
       vi.restoreAllMocks();
     });

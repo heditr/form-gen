@@ -1,8 +1,8 @@
 /**
  * Form Container with Redux Thunks - Properly Typed Example
- * 
- * This example shows how to properly type connect() when using Redux Toolkit thunks.
- * The key is to properly type the dispatch function and mapDispatchToProps.
+ *
+ * NOTE: Production `FormContainer` no longer uses `formKey` remount or per-keystroke
+ * `formData` sync. See docs/thin-center-form-engine.md for the current pattern.
  */
 
 import { connect, ConnectedProps } from 'react-redux';

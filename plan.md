@@ -1,6 +1,13 @@
 # Project Plan
 
+## Completed Epics
+
+- [Discriminant Form Values Compare](tasks/archive/2026-09-09-discriminant-form-values-compare-epic.md) - ✅ COMPLETED (2026-09-09)
+- [Form Engine Performance (Thin Center)](docs/thin-center-form-engine.md) - ✅ COMPLETE — live Zod resolver, no `formKey` remount, status map, lazy popin session
+
 ## Active Epics
+
+- [Repeatable Popin Main-Form Status Demo Epic](tasks/repeatable-popin-main-form-status-demo-epic.md) - ✅ IMPLEMENTED (2026-09-16)
 
 - [Document Upload Popin Epic](tasks/document-upload-popin-epic.md) - 📋 PLANNED
 
@@ -21,7 +28,3 @@
 - [Repeatable Fields Epic](tasks/repeatable-fields-epic.md) - 📋 PLANNED
 - [Repeatable Popin Epic](tasks/repeatable-popin-epic.md) - 📋 PLANNED
 - [Manual-Triggered Lookup Autofill Epic](tasks/manual-triggered-lookup-autofill-epic.md) - 📋 PLANNED
-
-## Completed Epics
-
-_None yet_

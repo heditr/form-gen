@@ -5,10 +5,9 @@
  * for field default values with proper type conversion.
  */
 
-import { describe, test, expect, beforeAll } from 'vitest';
+import { describe, test, expect, beforeAll, vi } from 'vitest';
 import { registerHandlebarsHelpers } from './handlebars-helpers';
-import { evaluateDefaultValue } from './default-value-evaluator';
-import type { FieldType } from '@/types/form-descriptor';
+import { bindTemplateIndex, evaluateDefaultValue } from './default-value-evaluator';
 import type { FormContext } from './template-evaluator';
 
 describe('default-value-evaluator', () => {
@@ -280,6 +279,71 @@ describe('default-value-evaluator', () => {
           const result = evaluateDefaultValue(template, 'file', context);
           
           expect(result).toBeNull();
+        });
+      });
+
+      describe('@index preprocessor token', () => {
+        test('given bindTemplateIndex, should replace @index with the numeric index', () => {
+          const result = bindTemplateIndex(
+            '{{caseContext.signatories.@index.nationalId}}',
+            1
+          );
+
+          expect(result).toBe('{{caseContext.signatories.1.nationalId}}');
+        });
+
+        test('given index option, should evaluate @index template against caseContext row', () => {
+          const template = '{{caseContext.signatories.@index.nationalId}}';
+          const context: FormContext = {
+            caseContext: {
+              signatories: [
+                { nationalId: 'ID-0' },
+                { nationalId: 'ID-1' },
+              ],
+            },
+          };
+
+          const result = evaluateDefaultValue(template, 'text', context, { index: 1 });
+
+          expect(result).toBe('ID-1');
+        });
+
+        test('given unbound @index template, should return type default without console.error', () => {
+          const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+          const template = '{{caseContext.signatories.@index.nationalId}}';
+          const context: FormContext = {
+            caseContext: {
+              signatories: [{ nationalId: 'ID-0' }],
+            },
+          };
+
+          const result = evaluateDefaultValue(template, 'text', context);
+
+          expect(result).toBe('');
+          expect(consoleErrorSpy).not.toHaveBeenCalled();
+          consoleErrorSpy.mockRestore();
+        });
+
+        test('given unbound @index on number field, should return 0 without console.error', () => {
+          const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+          const template = '{{caseContext.items.@index.amount}}';
+
+          const result = evaluateDefaultValue(template, 'number', {});
+
+          expect(result).toBe(0);
+          expect(consoleErrorSpy).not.toHaveBeenCalled();
+          consoleErrorSpy.mockRestore();
+        });
+
+        test('given negative index, should leave @index unbound and return type default', () => {
+          const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+          const template = '{{caseContext.signatories.@index.nationalId}}';
+
+          const result = evaluateDefaultValue(template, 'text', {}, { index: -1 });
+
+          expect(result).toBe('');
+          expect(consoleErrorSpy).not.toHaveBeenCalled();
+          consoleErrorSpy.mockRestore();
         });
       });
     });

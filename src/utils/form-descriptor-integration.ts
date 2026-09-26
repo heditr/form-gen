@@ -26,6 +26,15 @@ import { evaluateValidationArrayTemplate } from './array-template-evaluator';
 
 type ValidationScope = 'main' | 'popin';
 
+export interface ExtractDefaultValuesOptions {
+  scope?: ValidationScope;
+  /**
+   * Outer popin / flattened-instance row index. Applied only to non-repeatable
+   * field defaults. Inner repeatable groups always bind their own loop index.
+   */
+  index?: number;
+}
+
 const createDocumentSlotDefault = ({
   requestedDefault = false,
   optionalDefault,
@@ -59,10 +68,7 @@ const resolveDocumentProspects = (
     return [];
   }
 
-  const key = config.prospectSource.includes('{{') && config.prospectSource.includes('}}')
-    ? evaluateTemplate(config.prospectSource, context).trim()
-    : config.prospectSource.trim();
-  const source = (context.caseContext as Record<string, unknown> | undefined)?.[key];
+  const source = resolveCaseContextPath(config.prospectSource, context);
 
   return Array.isArray(source)
     ? source.filter((item): item is DocumentCardProspectConfig =>
@@ -190,6 +196,61 @@ function getNestedValue(
   return current;
 }
 
+function defaultStatusContext(
+  parent: FormContext,
+  sourceRow: Record<string, unknown> | undefined,
+  builtRow: Record<string, unknown>
+): FormContext {
+  const parentFormData =
+    parent.formData &&
+    typeof parent.formData === 'object' &&
+    !Array.isArray(parent.formData)
+      ? (parent.formData as Record<string, unknown>)
+      : {};
+  const row = { ...(sourceRow ?? {}), ...builtRow };
+
+  return {
+    ...parent,
+    ...row,
+    formData: { ...parentFormData, ...row },
+  } as FormContext;
+}
+
+function shouldSkipHiddenDefault(field: FieldDescriptor, statusContext: FormContext): boolean {
+  if (field.type === 'button' || isSubmitSkippedFieldType(field.type)) {
+    return false;
+  }
+  // An explicit default belongs on the row even while a main-form condition hides the field.
+  // Fields with no default are omitted so a row-local hide (for example companyName on a
+  // residential address) does not copy a value that does not apply.
+  if (field.defaultValue !== undefined) {
+    return false;
+  }
+  return evaluateHiddenStatus(field, statusContext);
+}
+
+/**
+ * Resolve a caseContext path from a static string or Handlebars template.
+ * Supports nested paths (e.g. "legalEntity.addresses").
+ */
+function resolveCaseContextPath(
+  sourceTemplate: string,
+  context: FormContext
+): unknown {
+  const path = sourceTemplate.includes('{{') && sourceTemplate.includes('}}')
+    ? evaluateTemplate(sourceTemplate, context).trim()
+    : sourceTemplate.trim();
+
+  if (!path) {
+    return undefined;
+  }
+
+  return getNestedValue(
+    context.caseContext as Record<string, unknown> | undefined,
+    path
+  );
+}
+
 /**
  * Parameters for building an auto-fill patch from a selection payload.
  * 
@@ -291,22 +352,34 @@ export function buildAutoFillPatchFromSelection({
  * 
  * @param descriptor - Global form descriptor
  * @param context - Optional form context for template evaluation (formData, caseContext)
+ * @param optionsOrScope - Validation scope string, or options with scope + optional outer index
  * @returns Object with field IDs as keys and default values as values
  */
 export function extractDefaultValues(
   descriptor: GlobalFormDescriptor | null,
   context: FormContext = {},
-  scope: ValidationScope = 'main'
+  optionsOrScope: ExtractDefaultValuesOptions | ValidationScope = 'main'
 ): Partial<FormData> {
   if (!descriptor) {
     return {};
   }
+
+  const options: ExtractDefaultValuesOptions =
+    typeof optionsOrScope === 'string'
+      ? { scope: optionsOrScope }
+      : optionsOrScope;
+  const scope = options.scope ?? 'main';
+  const outerIndex = options.index;
 
   const defaultValues: Partial<FormData> = {};
   const processedRepeatableGroups = new Set<string>();
 
   for (const block of descriptor.blocks) {
     if (!shouldIncludeBlockInScope(block, scope)) {
+      continue;
+    }
+
+    if (evaluateHiddenStatus(block, context)) {
       continue;
     }
 
@@ -320,14 +393,10 @@ export function extractDefaultValues(
           continue;
         }
 
-        // Fill repeatable group from caseContext when repeatableDefaultSource is set (Handlebars template → key)
+        // Fill repeatable group from caseContext when repeatableDefaultSource is set (Handlebars template → path)
         const sourceTemplate = block.repeatableDefaultSource;
         if (sourceTemplate) {
-          const key = sourceTemplate.includes('{{') && sourceTemplate.includes('}}')
-            ? evaluateTemplate(sourceTemplate, context).trim()
-            : sourceTemplate.trim();
-          const caseCtx = context.caseContext as Record<string, unknown> | undefined;
-          const sourceArray = key && caseCtx && caseCtx[key];
+          const sourceArray = resolveCaseContextPath(sourceTemplate, context);
           if (Array.isArray(sourceArray) && sourceArray.length > 0) {
             const baseFieldId = (f: FieldDescriptor) =>
               f.id.startsWith(`${groupId}.`) ? f.id.slice(groupId.length + 1) : f.id;
@@ -336,17 +405,24 @@ export function extractDefaultValues(
               f => typeof f.defaultValue === 'string' && f.defaultValue.includes('@index')
             );
             if (hasAtIndex) {
-              // Per-row: evaluate each field's defaultValue with @index substituted (e.g. {{caseContext.addresses.@index.street}} → .0.street for i=0)
+              // Per-row: bind @index to the inner row index i (never outerIndex)
               const rows = sourceArray.map((_item: Record<string, unknown>, i: number) => {
                 const row: Record<string, unknown> = {};
+                const item = sourceArray[i] as Record<string, unknown> | undefined;
                 for (const field of nonButtonFields) {
                   const bid = baseFieldId(field);
+                  if (shouldSkipHiddenDefault(field, defaultStatusContext(context, item, row))) {
+                    continue;
+                  }
                   if (field.defaultValue !== undefined && typeof field.defaultValue === 'string' && field.defaultValue.includes('@index')) {
-                    const templateWithIndex = field.defaultValue.replace(/@index/g, String(i));
-                    const value = evaluateDefaultValue(templateWithIndex, field.type, context);
+                    const value = evaluateDefaultValue(
+                      field.defaultValue,
+                      field.type,
+                      context,
+                      { index: i }
+                    );
                     setNestedValue(row, bid, value);
                   } else {
-                    const item = sourceArray[i] as Record<string, unknown> | undefined;
                     const rawValue = getNestedValue(item, bid);
                     const value = rawValue !== undefined ? rawValue : '';
                     setNestedValue(row, bid, value);
@@ -357,10 +433,13 @@ export function extractDefaultValues(
               (defaultValues as Record<string, unknown>)[groupId] = rows;
             } else {
               // No @index in any defaultValue: use source array as-is (normalized to field ids)
-              const baseFieldIds = new Set(nonButtonFields.map(f => baseFieldId(f)));
               const normalized = sourceArray.map((item: Record<string, unknown>) => {
                 const out: Record<string, unknown> = {};
-                for (const id of baseFieldIds) {
+                for (const field of nonButtonFields) {
+                  const id = baseFieldId(field);
+                  if (shouldSkipHiddenDefault(field, defaultStatusContext(context, item, out))) {
+                    continue;
+                  }
                   const rawValue = getNestedValue(item, id);
                   const value = rawValue !== undefined ? rawValue : '';
                   setNestedValue(out, id, value);
@@ -379,6 +458,7 @@ export function extractDefaultValues(
         
         if (hasAnyDefault) {
           // Build default object for this repeatable group using base field id (no groupId prefix)
+          // Do not apply outerIndex — unbound @index returns type defaults
           const groupDefault: Record<string, unknown> = {};
           for (const field of fields) {
             if (field.type === 'button') {
@@ -387,6 +467,9 @@ export function extractDefaultValues(
             const baseFieldId = field.id.startsWith(`${groupId}.`)
               ? field.id.slice(groupId.length + 1)
               : field.id;
+            if (shouldSkipHiddenDefault(field, defaultStatusContext(context, undefined, groupDefault))) {
+              continue;
+            }
             if (field.defaultValue !== undefined) {
               const evaluatedValue = evaluateDefaultValue(
                 field.defaultValue,
@@ -440,6 +523,9 @@ export function extractDefaultValues(
             const baseFieldId = field.id.startsWith(`${groupId}.`)
               ? field.id.slice(groupId.length + 1)
               : field.id;
+            if (shouldSkipHiddenDefault(field, defaultStatusContext(context, undefined, emptyInstance))) {
+              continue;
+            }
             switch (field.type) {
               case 'checkbox':
                 setNestedValue(emptyInstance, baseFieldId, false);
@@ -468,6 +554,7 @@ export function extractDefaultValues(
       }
     } else {
       // Handle non-repeatable blocks - add fields as individual properties
+      // Outer index applies here (flattened popin instance fields)
       for (const field of block.fields) {
         // Skip fields that belong to a repeatable group (they're handled above)
         if (field.repeatableGroupId) {
@@ -476,13 +563,17 @@ export function extractDefaultValues(
         
         // Always set a default value to ensure controlled inputs
         const target = defaultValues as Record<string, unknown>;
+        if (shouldSkipHiddenDefault(field, defaultStatusContext(context, undefined, target))) {
+          continue;
+        }
 
         if (field.defaultValue !== undefined) {
           // Evaluate defaultValue as Handlebars template if it's a string, otherwise use directly
           const evaluatedValue = evaluateDefaultValue(
             field.defaultValue,
             field.type,
-            context
+            context,
+            typeof outerIndex === 'number' ? { index: outerIndex } : {}
           );
           setNestedValue(
             target,

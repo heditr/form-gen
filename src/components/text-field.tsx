@@ -8,7 +8,7 @@
 import { Controller } from 'react-hook-form';
 import type { FieldDescriptor } from '@/types/form-descriptor';
 import type { UseFormReturn, FieldValues } from 'react-hook-form';
-import { getErrorByPath } from '@/utils/form-errors';
+import { useFieldError } from '@/hooks/use-field-error';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
@@ -17,6 +17,7 @@ export interface TextFieldProps {
   field: FieldDescriptor;
   form: UseFormReturn<FieldValues>;
   isDisabled: boolean;
+  isReadonly?: boolean;
   required?: boolean;
 }
 
@@ -32,9 +33,10 @@ export default function TextField({
   field,
   form,
   isDisabled,
+  isReadonly = false,
   required = false,
 }: TextFieldProps) {
-  const error = getErrorByPath(form.formState.errors, field.id) ?? form.formState.errors[field.id];
+  const error = useFieldError(form, field.id);
   const errorMessage = error?.message as string | undefined;
 
   return (
@@ -58,8 +60,12 @@ export default function TextField({
             {...controllerField}
             value={controllerField.value ?? ''}
             disabled={isDisabled}
+            readOnly={isReadonly}
+            aria-readonly={isReadonly}
+            data-readonly={isReadonly ? 'true' : undefined}
             required={required}
             className={cn(
+              isReadonly && !isDisabled && 'bg-muted',
               errorMessage && 'border-destructive focus-visible:ring-destructive'
             )}
             aria-invalid={errorMessage ? 'true' : 'false'}

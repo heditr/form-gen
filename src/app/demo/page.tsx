@@ -10,7 +10,7 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { useGlobalDescriptor } from '@/hooks/use-form-query';
-import { getFormState, getVisibleBlocks, getVisibleFields, syncFormDataToContext, initializeCaseContextFromPrefill, updateCaseContextValues } from '@/store/form-dux';
+import { getMergedDescriptor, getCaseContext, getIsRehydrating, getFormData, getDataSourceCache, getVisibleBlocks, getVisibleFields, syncFormDataToContext, initializeCaseContextFromPrefill, updateCaseContextValues, getFormState } from '@/store/form-dux';
 import { fetchDataSourceThunk } from '@/store/form-thunks';
 import { useDebouncedRehydration } from '@/hooks/use-debounced-rehydration';
 import { useDebouncedDocumentsRehydration } from '@/hooks/use-debounced-documents-rehydration';
@@ -21,14 +21,13 @@ import { createSubmissionOrchestrator, evaluatePayloadTemplate, serializeFormVal
 import { useDraftSave } from '@/hooks/use-draft-save';
 import type { FormData, GlobalFormDescriptor, BlockDescriptor, FieldDescriptor, CaseContext, CasePrefill } from '@/types/form-descriptor';
 import { useFormDescriptor } from '@/hooks/use-form-descriptor';
-import { updateCaseContext, identifyDiscriminantFields, hasContextChanged } from '@/utils/context-extractor';
+import { updateCaseContext, identifyDiscriminantFields } from '@/utils/context-extractor';
 import FormPresentation from '@/components/form-presentation';
 import FormValuesWatcher from '@/components/form-values-watcher';
+import { FormStatusProvider } from '@/context/form-status-context';
 import { PopinManagerProvider } from '@/components/popin-manager';
 import { DocumentPopinProvider, DocumentMainFormBinder } from '@/components/document-popin-provider';
 import SubmitButton from '@/components/submit-button';
-import { ClientOnlyDevTool } from '@/components/client-only-devtool';
-
 interface SubmissionState {
   payload: string | null;
   requestHeaders?: Record<string, string> | null;
@@ -63,7 +62,7 @@ export default function DemoPage() {
   // This automatically syncs to Redux state on success
   const { refetch: refetchDescriptor } = useGlobalDescriptor('/api/form/global-descriptor-demo');
 
-  // Load case prefill (including addresses) from backend and set context so repeatable block is filled via Handlebars
+  // Load case prefill (including addresses and signatories) from backend so repeatable blocks fill at load
   useEffect(() => {
     const hasContext = caseContext && Object.keys(caseContext).length > 0;
     if (!hasContext) {
@@ -413,27 +412,14 @@ function FormContainerWithSubmissionComponent({
   fetchDataSource: loadDataSource,
   onSubmissionStateChange,
 }: FormContainerWithSubmissionComponentProps) {
-  const handleDiscriminantChange = useCallback(
-    (newFormData: Partial<FormData>) => {
-      syncFormData(newFormData);
-      const discriminantFields = mergedDescriptor
-        ? identifyDiscriminantFields(visibleFields)
-        : [];
-      if (discriminantFields.length === 0) {
-        return;
-      }
-      const updatedContext = updateCaseContext(caseContext, newFormData, discriminantFields);
-      if (hasContextChanged(caseContext, updatedContext)) {
-        rehydrate(updatedContext);
-      }
-    },
-    [mergedDescriptor, visibleFields, caseContext, syncFormData, rehydrate]
+  const discriminantFields = useMemo(
+    () => (mergedDescriptor ? identifyDiscriminantFields(visibleFields) : []),
+    [mergedDescriptor, visibleFields]
   );
 
   const { form } = useFormDescriptor(mergedDescriptor, {
     savedFormData,
     caseContext,
-    formData: savedFormData,
   });
 
   const { saveDraft, flushDraftSave } = useDraftSave({
@@ -441,6 +427,20 @@ function FormContainerWithSubmissionComponent({
     draftConfig: mergedDescriptor?.draft,
     caseContext,
   });
+
+  const handleDiscriminantChange = useCallback(
+    async (newFormData: Partial<FormData>) => {
+      if (discriminantFields.length === 0) {
+        return;
+      }
+
+      await flushDraftSave();
+      syncFormData(newFormData);
+      const updatedContext = updateCaseContext(caseContext, newFormData, discriminantFields);
+      rehydrate(updatedContext);
+    },
+    [discriminantFields, caseContext, syncFormData, rehydrate, flushDraftSave]
+  );
 
   const orchestrator = useMemo(() => createSubmissionOrchestrator(), []);
 
@@ -562,37 +562,33 @@ function FormContainerWithSubmissionComponent({
     <DocumentPopinProvider mergedDescriptor={mergedDescriptor}>
       <FormValuesWatcher
         form={form}
-        caseContext={caseContext}
-        descriptor={mergedDescriptor}
+        discriminantFields={discriminantFields}
         onDiscriminantChange={handleDiscriminantChange}
         onFormChange={saveDraft}
-      >
-        {(formContext) => (
-          <PopinManagerProvider
-            mergedDescriptor={mergedDescriptor}
-            form={form}
-            formContext={formContext}
-            caseContext={caseContext}
-            onLoadDataSource={loadDataSource}
-            dataSourceCache={dataSourceCache}
-            flushDraftSave={flushDraftSave}
-          >
-            <DocumentMainFormBinder form={form} />
-            <FormPresentation {...presentationProps} formContext={formContext} />
-            {mergedDescriptor && (
-              <div className="mt-6">
-                <SubmitButton
-                  form={form}
-                  descriptor={mergedDescriptor}
-                  isRehydrating={isRehydrating}
-                  onSubmit={handleSubmitWithTracking}
-                />
-              </div>
-            )}
-            <ClientOnlyDevTool control={form.control} />
-          </PopinManagerProvider>
-        )}
-      </FormValuesWatcher>
+      />
+      <FormStatusProvider form={form} caseContext={caseContext} descriptor={mergedDescriptor}>
+        <PopinManagerProvider
+          mergedDescriptor={mergedDescriptor}
+          form={form}
+          caseContext={caseContext}
+          onLoadDataSource={loadDataSource}
+          dataSourceCache={dataSourceCache}
+          flushDraftSave={flushDraftSave}
+        >
+          <DocumentMainFormBinder form={form} />
+          <FormPresentation {...presentationProps} />
+          {mergedDescriptor && (
+            <div className="mt-6">
+              <SubmitButton
+                form={form}
+                descriptor={mergedDescriptor}
+                isRehydrating={isRehydrating}
+                onSubmit={handleSubmitWithTracking}
+              />
+            </div>
+          )}
+        </PopinManagerProvider>
+      </FormStatusProvider>
     </DocumentPopinProvider>
   );
 }
@@ -605,7 +601,11 @@ function FormContainerWithSubmissionWithHook({
   onSubmissionStateChange: (state: SubmissionState) => void;
 }) {
   const dispatch = useDispatch<AppDispatch>();
-  const formState = useSelector((state: RootState) => getFormState(state));
+  const mergedDescriptor = useSelector((state: RootState) => getMergedDescriptor(state));
+  const caseContext = useSelector((state: RootState) => getCaseContext(state));
+  const isRehydratingFromRedux = useSelector((state: RootState) => getIsRehydrating(state));
+  const formData = useSelector((state: RootState) => getFormData(state));
+  const dataSourceCache = useSelector((state: RootState) => getDataSourceCache(state));
   const visibleBlocks = useSelector((state: RootState) => getVisibleBlocks(state));
   const visibleFields = useSelector((state: RootState) => getVisibleFields(state));
   const { mutate: debouncedRehydrate, isPending: isRehydratingFromHook } = useDebouncedRehydration();
@@ -613,14 +613,6 @@ function FormContainerWithSubmissionWithHook({
     mutate: debouncedDocumentsRehydrate,
     isPending: isDocumentsRehydratingFromHook,
   } = useDebouncedDocumentsRehydration();
-
-  const {
-    mergedDescriptor,
-    caseContext,
-    isRehydrating: isRehydratingFromRedux,
-    formData,
-    dataSourceCache,
-  } = formState;
 
   const isRehydrating =
     isRehydratingFromHook || isDocumentsRehydratingFromHook || isRehydratingFromRedux;

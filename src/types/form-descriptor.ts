@@ -472,8 +472,9 @@ export type QueryInvalidationMap = Record<string, Array<Array<string | number>>>
  * @property minInstances - Optional minimum number of instances required for repeatable blocks
  * @property maxInstances - Optional maximum number of instances allowed for repeatable blocks
  * @property repeatableBlockRef - Optional ID of another block to reference and make repeatable (avoids duplicating block definitions)
- * @property repeatableDefaultSource - Optional Handlebars template that evaluates to a caseContext key (e.g. 'addresses').
- *   At initial load, the repeatable group is filled from caseContext[key] when it is an array of objects.
+ * @property repeatableDefaultSource - Optional Handlebars template that evaluates to a caseContext path
+ *   (e.g. 'addresses' or 'legalEntity.addresses'). At initial load, the repeatable group is filled from
+ *   that nested path when it is an array of objects.
  * @property repeatablePopin - If true with repeatable, each instance is edited via popin; summaries shown inline, click to edit
  * @property repeatableSummaryTemplate - Optional Handlebars template for summary text per instance (e.g. "{{name}} ({{role}})")
  */
@@ -606,6 +607,8 @@ export interface SubFormDescriptor {
  * @property needSignature - Whether signature is required
  * @property addresses - Optional array of address objects for repeatable address block (e.g. [{ street, city, zip }]).
  *   Used with repeatableDefaultSource in the descriptor to fill the repeatable block at initial page load.
+ * @property signatories - Optional array of signatory objects for the repeatable signatories block.
+ *   Keys may differ from field ids; field defaultValues use `@index` to map them at load.
  */
 export interface CasePrefill {
   incorporationCountry?: string;
@@ -613,6 +616,7 @@ export interface CasePrefill {
   processType?: string;
   needSignature?: boolean;
   addresses?: Array<Record<string, unknown>>;
+  signatories?: Array<Record<string, unknown>>;
 }
 
 /**

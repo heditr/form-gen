@@ -10,7 +10,7 @@ import { Controller } from 'react-hook-form';
 import type { FieldDescriptor, FieldItem } from '@/types/form-descriptor';
 import type { UseFormReturn, FieldValues } from 'react-hook-form';
 import type { FormContext } from '@/utils/template-evaluator';
-import { getErrorByPath } from '@/utils/form-errors';
+import { useFieldError } from '@/hooks/use-field-error';
 import { evaluateItemsArrayTemplate } from '@/utils/array-template-evaluator';
 import { useDataSource } from '@/hooks/use-form-query';
 import { Label } from '@/components/ui/label';
@@ -21,6 +21,7 @@ export interface RadioFieldProps {
   form: UseFormReturn<FieldValues>;
   formContext: FormContext;
   isDisabled: boolean;
+  isReadonly?: boolean;
   required?: boolean;
   onLoadDataSource?: (fieldPath: string, url: string, auth?: { type: 'bearer' | 'apikey'; token?: string; headerName?: string }) => void;
   dataSourceCache?: Record<string, unknown>;
@@ -40,11 +41,12 @@ export default function RadioField({
   form,
   formContext,
   isDisabled,
+  isReadonly = false,
   required = false,
   onLoadDataSource,
   dataSourceCache = {},
 }: RadioFieldProps) {
-  const error = getErrorByPath(form.formState.errors, field.id) ?? form.formState.errors[field.id];
+  const error = useFieldError(form, field.id);
   const errorMessage = error?.message as string | undefined;
 
   // Use useDataSource hook - always call it (React hooks rule), but disable when no dataSource
@@ -118,7 +120,12 @@ export default function RadioField({
   }, [field.dataSource, field.id, dataSourceQuery.isLoading, dataSourceCache]);
 
   return (
-    <div data-testid={`radio-field-${field.id}`} className="space-y-2">
+    <div
+      data-testid={`radio-field-${field.id}`}
+      data-readonly={isReadonly ? 'true' : undefined}
+      aria-readonly={isReadonly}
+      className="space-y-2"
+    >
       <div>
         <Label>
           {field.label}
@@ -155,7 +162,8 @@ export default function RadioField({
                         checked={isChecked}
                         onChange={() => controllerField.onChange(item.value)}
                         onBlur={controllerField.onBlur}
-                        disabled={isDisabled}
+                        disabled={isDisabled || isReadonly}
+                        data-readonly={isReadonly ? 'true' : undefined}
                         required={required}
                         className={cn(
                           'h-4 w-4 border-input text-primary focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50',

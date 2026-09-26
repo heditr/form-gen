@@ -5,10 +5,11 @@
  * and grouping fields by repeatableGroupId work correctly.
  */
 
-import { describe, test, expect } from 'vitest';
+import { describe, test, expect, vi, beforeAll } from 'vitest';
 import { z } from 'zod';
 import type { BlockDescriptor, GlobalFormDescriptor, FormData } from '@/types/form-descriptor';
 import type { FormContext } from '@/utils/template-evaluator';
+import { registerHandlebarsHelpers } from '@/utils/handlebars-helpers';
 import {
   isRepeatableBlock,
   isRepeatablePopinBlock,
@@ -20,6 +21,10 @@ import {
 } from './form-descriptor-integration';
 
 describe('form descriptor integration', () => {
+  beforeAll(() => {
+    registerHandlebarsHelpers();
+  });
+
   describe('isRepeatableBlock', () => {
     test('given a block with repeatable flag set to true, should return true', () => {
       const block: BlockDescriptor = {
@@ -1540,6 +1545,200 @@ describe('form descriptor integration', () => {
       ]);
     });
 
+    test('given repeatableDefaultSource rows with hidden fields, should omit hidden keys from each row', () => {
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'addresses-block',
+            title: 'Addresses',
+            repeatable: true,
+            repeatableDefaultSource: 'addresses',
+            fields: [
+              {
+                id: 'addressType',
+                type: 'text',
+                label: 'Address Type',
+                repeatableGroupId: 'addresses',
+                validation: [],
+              },
+              {
+                id: 'country',
+                type: 'text',
+                label: 'Country',
+                repeatableGroupId: 'addresses',
+                validation: [],
+              },
+              {
+                id: 'street',
+                type: 'text',
+                label: 'Street',
+                repeatableGroupId: 'addresses',
+                validation: [],
+              },
+              {
+                id: 'companyName',
+                type: 'text',
+                label: 'Company Name',
+                repeatableGroupId: 'addresses',
+                validation: [],
+                status: { hidden: '{{not (eq addressType "business")}}' },
+              },
+              {
+                id: 'state',
+                type: 'text',
+                label: 'State',
+                repeatableGroupId: 'addresses',
+                validation: [],
+                status: { hidden: '{{not (or (eq country "US") (eq country "CA"))}}' },
+              },
+            ],
+          },
+        ],
+        submission: {
+          url: '/api/submit',
+          method: 'POST',
+        },
+      };
+
+      const context: FormContext = {
+        caseContext: {
+          addresses: [
+            { addressType: 'residential', country: 'UK', street: '10 Downing St' },
+            { addressType: 'business', country: 'US', street: '1 Infinite Loop', companyName: 'Acme', state: 'CA' },
+          ],
+        },
+      };
+
+      const defaultValues = extractDefaultValues(descriptor, context);
+      const rows = defaultValues.addresses as Array<Record<string, unknown>>;
+
+      expect(rows[0]).toEqual({
+        addressType: 'residential',
+        country: 'UK',
+        street: '10 Downing St',
+      });
+      expect(rows[0]).not.toHaveProperty('companyName');
+      expect(rows[0]).not.toHaveProperty('state');
+      expect(rows[1]).toEqual({
+        addressType: 'business',
+        country: 'US',
+        street: '1 Infinite Loop',
+        companyName: 'Acme',
+        state: 'CA',
+      });
+    });
+
+    test('given a status-hidden field whose sibling default makes it visible, should keep the type default', () => {
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'jurisdiction',
+            title: 'Jurisdiction',
+            fields: [
+              {
+                id: 'country',
+                type: 'text',
+                label: 'Country',
+                validation: [],
+                defaultValue: 'US',
+              },
+              {
+                id: 'ssn',
+                type: 'text',
+                label: 'SSN',
+                validation: [],
+                status: { hidden: '{{not (eq country "US")}}' },
+              },
+            ],
+          },
+        ],
+        submission: { url: '/api/submit', method: 'POST' },
+      };
+
+      const defaultValues = extractDefaultValues(descriptor);
+
+      expect(defaultValues).toEqual({ country: 'US', ssn: '' });
+    });
+
+    test('given a status-hidden field that stays hidden, should omit it from defaults', () => {
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'jurisdiction',
+            title: 'Jurisdiction',
+            fields: [
+              {
+                id: 'country',
+                type: 'text',
+                label: 'Country',
+                validation: [],
+                defaultValue: 'UK',
+              },
+              {
+                id: 'ssn',
+                type: 'text',
+                label: 'SSN',
+                validation: [],
+                status: { hidden: '{{not (eq country "US")}}' },
+              },
+            ],
+          },
+        ],
+        submission: { url: '/api/submit', method: 'POST' },
+      };
+
+      const defaultValues = extractDefaultValues(descriptor);
+
+      expect(defaultValues).toEqual({ country: 'UK' });
+      expect(defaultValues).not.toHaveProperty('ssn');
+    });
+
+    test('given a hidden field with an explicit default, should keep that default', () => {
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'signatories-block',
+            title: 'Signatories',
+            repeatable: true,
+            repeatableDefaultSource: 'signatories',
+            fields: [
+              {
+                id: 'signatoryName',
+                type: 'text',
+                label: 'Name',
+                repeatableGroupId: 'signatories',
+                validation: [],
+                defaultValue: '{{caseContext.signatories.@index.name}}',
+              },
+              {
+                id: 'powerOfAttorney',
+                type: 'text',
+                label: 'Power of Attorney',
+                repeatableGroupId: 'signatories',
+                validation: [],
+                defaultValue: '{{caseContext.signatories.@index.powerOfAttorney}}',
+                status: {
+                  hidden: '{{#if includePowerOfAttorney}}false{{else}}true{{/if}}',
+                },
+              },
+            ],
+          },
+        ],
+        submission: { url: '/api/submit', method: 'POST' },
+      };
+
+      const defaultValues = extractDefaultValues(descriptor, {
+        includePowerOfAttorney: false,
+        caseContext: {
+          signatories: [{ name: 'Ada Lovelace', powerOfAttorney: 'POA-1843-ADA' }],
+        },
+      });
+
+      expect(defaultValues.signatories).toEqual([
+        { signatoryName: 'Ada Lovelace', powerOfAttorney: 'POA-1843-ADA' },
+      ]);
+    });
+
     test('given repeatable block with repeatableDefaultSource and field defaultValues using @index, should fill each row from context', () => {
       const descriptor: GlobalFormDescriptor = {
         blocks: [
@@ -1986,6 +2185,243 @@ describe('form descriptor integration', () => {
           headquarters: { city: 'Paris' },
         },
       ]);
+    });
+
+    test('given repeatable block with nested repeatableDefaultSource path, should fill group from nested caseContext array', () => {
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'addresses-block',
+            title: 'Addresses',
+            repeatable: true,
+            repeatableDefaultSource: 'legalEntity.addresses',
+            fields: [
+              {
+                id: 'street',
+                type: 'text',
+                label: 'Street',
+                repeatableGroupId: 'addresses',
+                validation: [],
+              },
+              {
+                id: 'city',
+                type: 'text',
+                label: 'City',
+                repeatableGroupId: 'addresses',
+                validation: [],
+              },
+            ],
+          },
+        ],
+        submission: {
+          url: '/api/submit',
+          method: 'POST',
+        },
+      };
+
+      const context: FormContext = {
+        caseContext: {
+          legalEntity: {
+            addresses: [
+              { street: '123 Main St', city: 'New York' },
+              { street: '456 Oak Ave', city: 'Boston' },
+            ],
+          },
+        },
+      };
+
+      const defaultValues = extractDefaultValues(descriptor, context);
+
+      expect(defaultValues.addresses).toEqual([
+        { street: '123 Main St', city: 'New York' },
+        { street: '456 Oak Ave', city: 'Boston' },
+      ]);
+    });
+
+    test('given repeatableDefaultSource template that evaluates to a nested path, should fill group from that path', () => {
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'addresses-block',
+            title: 'Addresses',
+            repeatable: true,
+            repeatableDefaultSource: '{{caseContext.sourcePath}}',
+            fields: [
+              {
+                id: 'street',
+                type: 'text',
+                label: 'Street',
+                repeatableGroupId: 'addresses',
+                validation: [],
+              },
+            ],
+          },
+        ],
+        submission: {
+          url: '/api/submit',
+          method: 'POST',
+        },
+      };
+
+      const context: FormContext = {
+        caseContext: {
+          sourcePath: 'legalEntity.addresses',
+          legalEntity: {
+            addresses: [{ street: '10 Downing St' }],
+          },
+        },
+      };
+
+      const defaultValues = extractDefaultValues(descriptor, context);
+
+      expect(defaultValues.addresses).toEqual([{ street: '10 Downing St' }]);
+    });
+
+    test('given flattened popin fields with @index defaults and index option, should bind to caseContext row', () => {
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'signatories-block-instance',
+            title: 'Signatory',
+            fields: [
+              {
+                id: 'signatoryName',
+                type: 'text',
+                label: 'Name',
+                validation: [],
+                defaultValue: '{{caseContext.signatories.@index.name}}',
+              },
+              {
+                id: 'nationalId',
+                type: 'text',
+                label: 'National ID',
+                validation: [],
+                defaultValue: '{{caseContext.signatories.@index.nationalId}}',
+              },
+            ],
+          },
+        ],
+        submission: { url: '/api/submit', method: 'POST' },
+      };
+
+      const context: FormContext = {
+        caseContext: {
+          signatories: [
+            { name: 'Ada', nationalId: 'ID-0' },
+            { name: 'Grace', nationalId: 'ID-1' },
+          ],
+        },
+      };
+
+      const defaultValues = extractDefaultValues(descriptor, context, {
+        scope: 'popin',
+        index: 1,
+      });
+
+      expect(defaultValues).toEqual({
+        signatoryName: 'Grace',
+        nationalId: 'ID-1',
+      });
+      expect(consoleErrorSpy).not.toHaveBeenCalled();
+      consoleErrorSpy.mockRestore();
+    });
+
+    test('given flattened popin fields with @index defaults and no index, should return type defaults without parse error', () => {
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'signatories-block-instance',
+            title: 'Signatory',
+            fields: [
+              {
+                id: 'nationalId',
+                type: 'text',
+                label: 'National ID',
+                validation: [],
+                defaultValue: '{{caseContext.signatories.@index.nationalId}}',
+              },
+            ],
+          },
+        ],
+        submission: { url: '/api/submit', method: 'POST' },
+      };
+
+      const context: FormContext = {
+        caseContext: {
+          signatories: [{ nationalId: 'ID-0' }],
+        },
+      };
+
+      const defaultValues = extractDefaultValues(descriptor, context, { scope: 'popin' });
+
+      expect(defaultValues).toEqual({ nationalId: '' });
+      expect(consoleErrorSpy).not.toHaveBeenCalled();
+      consoleErrorSpy.mockRestore();
+    });
+
+    test('given inner repeatable group inside a popin, should bind @index to inner row i not outer index', () => {
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'contact-info',
+            title: 'Contact Information',
+            popin: true,
+            repeatable: true,
+            repeatableDefaultSource: 'emergencyContacts',
+            fields: [
+              {
+                id: 'contactEmail',
+                type: 'text',
+                label: 'Contact Email',
+                validation: [],
+                defaultValue: 'fallback@example.com',
+              },
+              {
+                id: 'emergency-contacts.emergencyName',
+                type: 'text',
+                label: 'Full Name',
+                repeatableGroupId: 'emergency-contacts',
+                validation: [],
+                defaultValue: '{{caseContext.emergencyContacts.@index.name}}',
+              },
+              {
+                id: 'emergency-contacts.emergencyPhone',
+                type: 'text',
+                label: 'Phone',
+                repeatableGroupId: 'emergency-contacts',
+                validation: [],
+                defaultValue: '{{caseContext.emergencyContacts.@index.phone}}',
+              },
+            ],
+          },
+        ],
+        submission: { url: '/api/submit', method: 'POST' },
+      };
+
+      const context: FormContext = {
+        caseContext: {
+          emergencyContacts: [
+            { name: 'Alice', phone: '111' },
+            { name: 'Bob', phone: '222' },
+          ],
+        },
+      };
+
+      // Decoy outer index 99 must not leak into the inner emergency-contacts rows
+      const defaultValues = extractDefaultValues(descriptor, context, {
+        scope: 'popin',
+        index: 99,
+      });
+
+      expect(defaultValues['emergency-contacts']).toEqual([
+        { emergencyName: 'Alice', emergencyPhone: '111' },
+        { emergencyName: 'Bob', emergencyPhone: '222' },
+      ]);
+      expect(consoleErrorSpy).not.toHaveBeenCalled();
+      consoleErrorSpy.mockRestore();
     });
   });
 

@@ -13,6 +13,7 @@ export interface TextFieldInputControlProps {
   field: FieldDescriptor;
   form: UseFormReturn<FieldValues>;
   isDisabled: boolean;
+  isReadonly?: boolean;
   required?: boolean;
   errorMessage?: string;
 }
@@ -21,6 +22,7 @@ export default function TextFieldInputControl({
   field,
   form,
   isDisabled,
+  isReadonly = false,
   required = false,
   errorMessage,
 }: TextFieldInputControlProps) {
@@ -259,8 +261,12 @@ export default function TextFieldInputControl({
                 controllerField.onBlur();
               }}
               disabled={isFieldDisabled}
+              readOnly={isReadonly}
+              aria-readonly={isReadonly}
+              data-readonly={isReadonly ? 'true' : undefined}
               required={required}
               className={cn(
+                isReadonly && !isDisabled && 'bg-muted',
                 errorMessage && 'border-destructive focus-visible:ring-destructive'
               )}
               aria-invalid={errorMessage ? 'true' : 'false'}
@@ -284,7 +290,7 @@ export default function TextFieldInputControl({
                   size="icon"
                   aria-label={`Lookup ${field.id}`}
                   onClick={handleManualLookup}
-                  disabled={isLookupLoading || String(controllerField.value ?? '').trim().length === 0}
+                  disabled={isReadonly || isLookupLoading || String(controllerField.value ?? '').trim().length === 0}
                 >
                   {isLookupLoading ? (
                     <Loader2 className="h-4 w-4 animate-spin" />

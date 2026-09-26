@@ -1,7 +1,7 @@
 # Document Upload Popin Epic
 
 **Status**: 📋 PLANNED  
-**Goal**: Host a multi-file upload dialog outside FormInner so session state survives `formKey` remounts, and centralize upload/metadata flows for document cards.
+**Goal**: Host a multi-file upload dialog outside the main form tree via `DocumentPopinProvider`, and centralize upload/metadata flows for document cards. *(The engine no longer uses `formKey` remounts — see [thin-center-form-engine.md](../docs/thin-center-form-engine.md). The provider still keeps upload session stable across descriptor updates.)*
 
 ## Overview
 

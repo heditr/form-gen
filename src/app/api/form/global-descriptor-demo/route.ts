@@ -53,6 +53,15 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
               ],
               isDiscriminant: true, // Triggers re-hydration
             },
+            {
+              id: 'includePowerOfAttorney',
+              type: 'checkbox',
+              label: 'Include power of attorney',
+              description:
+                'When checked, each authorized signatory popin shows Power of Attorney, prefilled from the case.',
+              defaultValue: false,
+              validation: [],
+            },
           ],
         },
         {
@@ -279,17 +288,78 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
             },
           ],
         },
-        // Non-repeatable address block (referenced by repeatable block)
+        // Field template for addresses-block only (not rendered on the main form)
         {
           id: 'address-block',
           title: 'Address',
           description: 'A single address entry',
+          includeInMainValidation: false,
+          status: {
+            hidden: 'true',
+          },
           layout: {
             mode: 'grid',
             columns: 2,
             gap: 'md',
           },
           fields: [
+            {
+              id: 'addressType',
+              type: 'dropdown',
+              label: 'Address Type',
+              description: 'Residential, business, or mailing — controls which fields appear',
+              items: [
+                { label: 'Residential', value: 'residential' },
+                { label: 'Business', value: 'business' },
+                { label: 'Mailing', value: 'mailing' },
+              ],
+              validation: [
+                {
+                  type: 'required',
+                  message: 'Address type is required',
+                },
+              ],
+            },
+            {
+              id: 'country',
+              type: 'dropdown',
+              label: 'Address Country',
+              description: 'Country for this address (independent of the jurisdiction country above)',
+              items: [
+                { label: 'United States', value: 'US' },
+                { label: 'Canada', value: 'CA' },
+                { label: 'United Kingdom', value: 'UK' },
+                { label: 'France', value: 'FR' },
+                { label: 'Germany', value: 'DE' },
+              ],
+              validation: [
+                {
+                  type: 'required',
+                  message: 'Address country is required',
+                },
+              ],
+              layout: {
+                width: 'half',
+              },
+            },
+            {
+              id: 'state',
+              type: 'text',
+              label: 'State / Province',
+              description: 'Required for US and Canadian addresses',
+              validation: [
+                {
+                  type: 'required',
+                  message: 'State/Province is required',
+                },
+              ],
+              status: {
+                hidden: '{{not (or (eq country "US") (eq country "CA"))}}',
+              },
+              layout: {
+                width: 'half',
+              },
+            },
             {
               id: 'street',
               type: 'text',
@@ -332,21 +402,242 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
                 width: 'half',
               },
             },
+            {
+              id: 'companyName',
+              type: 'text',
+              label: 'Company Name',
+              description: 'Legal name at this business address',
+              validation: [
+                {
+                  type: 'required',
+                  message: 'Company name is required for business addresses',
+                },
+              ],
+              status: {
+                hidden: '{{not (eq addressType "business")}}',
+              },
+            },
+            {
+              id: 'vatNumber',
+              type: 'text',
+              label: 'VAT Number',
+              description: 'VAT/GST identifier for non-US business addresses',
+              validation: [
+                {
+                  type: 'required',
+                  message: 'VAT number is required for non-US business addresses',
+                },
+              ],
+              status: {
+                hidden: '{{not (and (eq addressType "business") (ne country "US"))}}',
+              },
+              layout: {
+                width: 'half',
+              },
+            },
+            {
+              id: 'attentionTo',
+              type: 'text',
+              label: 'Attention To',
+              description: 'Recipient name for mailing addresses',
+              validation: [
+                {
+                  type: 'required',
+                  message: 'Attention to is required for mailing addresses',
+                },
+              ],
+              status: {
+                hidden: '{{not (eq addressType "mailing")}}',
+              },
+            },
           ],
         },
-        // Repeatable block that references address-block; filled from caseContext.addresses at load (Handlebars source)
+        // Repeatable block that references address-block; filled from caseContext.addresses at load
         {
           id: 'addresses-block',
           title: 'Addresses',
-          description: 'Add multiple addresses. Click a summary to edit.',
+          description: 'Add multiple addresses. Click a summary to edit — type and country control which fields appear.',
           repeatable: true,
           repeatablePopin: true,
-          repeatableSummaryTemplate: '{{#if street}}{{street}}{{#if city}}, {{city}}{{/if}}{{else}}New address{{/if}}',
-          repeatableBlockRef: 'address-block', // Reference to address-block above
+          repeatableSummaryTemplate:
+            '{{#if street}}{{street}}{{#if city}}, {{city}}{{/if}}{{#if addressType}} ({{addressType}}){{/if}}{{else}}New address{{/if}}',
+          repeatableBlockRef: 'address-block',
           minInstances: 1,
           maxInstances: 5,
-          repeatableDefaultSource: 'addresses', // caseContext key: fill from casePrefill.addresses at initial page load
-          fields: [], // Fields will be resolved from address-block
+          repeatableDefaultSource: 'addresses',
+          fields: [],
+        },
+        {
+          id: 'signatory-block',
+          title: 'Authorized Signatory',
+          description: 'A single authorized signatory. Hidden status depends on Entity Type, Country, and Include power of attorney on the main form. Default values map caseContext.signatories with @index.',
+          includeInMainValidation: false,
+          status: {
+            hidden: 'true',
+          },
+          layout: {
+            mode: 'grid',
+            columns: 2,
+            gap: 'md',
+          },
+          fields: [
+            {
+              id: 'signatoryName',
+              type: 'text',
+              label: 'Signatory Name',
+              description: 'Legal name of the authorized signatory',
+              defaultValue: '{{caseContext.signatories.@index.name}}',
+              validation: [
+                {
+                  type: 'required',
+                  message: 'Signatory name is required',
+                },
+              ],
+            },
+            {
+              id: 'signatoryRole',
+              type: 'dropdown',
+              label: 'Role',
+              description: 'Options change with Entity Type on the main form',
+              defaultValue: '{{caseContext.signatories.@index.role}}',
+              items:
+                '{{#if (eq entityType "individual")}}' +
+                '[{"label":"Self","value":"self"},{"label":"Attorney","value":"attorney"}]' +
+                '{{else}}' +
+                '[{"label":"Director","value":"director"},{"label":"Officer","value":"officer"},{"label":"UBO","value":"ubo"}]' +
+                '{{/if}}',
+              validation: [
+                {
+                  type: 'required',
+                  message: 'Role is required',
+                },
+              ],
+              layout: {
+                width: 'half',
+              },
+            },
+            {
+              id: 'signatoryEmail',
+              type: 'text',
+              label: 'Signatory Email',
+              description: 'Seeded from caseContext.signatories via @index; new rows use /api/demo/signatory-load',
+              defaultValue: '{{caseContext.signatories.@index.email}}',
+              validation: [
+                {
+                  type: 'required',
+                  message: 'Signatory email is required',
+                },
+                {
+                  type: 'pattern',
+                  value: '^[^@]+@[^@]+\\.[^@]+$',
+                  message: 'Please enter a valid email address',
+                },
+              ],
+              layout: {
+                width: 'half',
+              },
+            },
+            {
+              id: 'signatoryTitle',
+              type: 'text',
+              label: 'Job Title',
+              description: 'Visible when Entity Type is Corporation',
+              defaultValue: '{{caseContext.signatories.@index.title}}',
+              validation: [
+                {
+                  type: 'required',
+                  message: 'Job title is required for corporate signatories',
+                },
+              ],
+              status: {
+                hidden: '{{not (eq entityType "corporation")}}',
+              },
+            },
+            {
+              id: 'ownershipPercent',
+              type: 'number',
+              label: 'Ownership Percent',
+              description: 'Visible when Entity Type is Corporation',
+              defaultValue: '{{caseContext.signatories.@index.ownership}}',
+              validation: [
+                {
+                  type: 'required',
+                  message: 'Ownership percent is required for corporate signatories',
+                },
+              ],
+              status: {
+                hidden: '{{not (eq entityType "corporation")}}',
+              },
+              layout: {
+                width: 'half',
+              },
+            },
+            {
+              id: 'ssn',
+              type: 'text',
+              label: 'SSN',
+              description: 'Visible when Country on the main form is United States',
+              defaultValue: '{{caseContext.signatories.@index.ssn}}',
+              validation: [
+                {
+                  type: 'required',
+                  message: 'SSN is required for US cases',
+                },
+              ],
+              status: {
+                hidden: '{{not (eq country "US")}}',
+              },
+              layout: {
+                width: 'half',
+              },
+            },
+            {
+              id: 'nationalId',
+              type: 'text',
+              label: 'National ID',
+              description: 'Visible when Country on the main form is not United States',
+              defaultValue: '{{caseContext.signatories.@index.nationalId}}',
+              validation: [
+                {
+                  type: 'required',
+                  message: 'National ID is required for non-US cases',
+                },
+              ],
+              status: {
+                hidden: '{{eq country "US"}}',
+              },
+            },
+            {
+              id: 'powerOfAttorney',
+              type: 'text',
+              label: 'Power of Attorney',
+              description:
+                'Hidden until Include power of attorney is checked. Seeded from caseContext.signatories.',
+              defaultValue: '{{caseContext.signatories.@index.powerOfAttorney}}',
+              validation: [],
+              status: {
+                hidden: '{{#if includePowerOfAttorney}}false{{else}}true{{/if}}',
+              },
+            },
+          ],
+        },
+        {
+          id: 'signatories-block',
+          title: 'Authorized Signatories',
+          description:
+            'Existing rows are seeded from caseContext.signatories via @index defaultValues. Hidden fields follow Entity Type, Country, and Include power of attorney on the main form. New rows are filled from /api/demo/signatory-load.',
+          repeatable: true,
+          repeatablePopin: true,
+          repeatableSummaryTemplate:
+            '{{#if signatoryName}}{{signatoryName}}{{#if signatoryRole}} ({{signatoryRole}}){{/if}}{{else}}New signatory{{/if}}',
+          repeatableBlockRef: 'signatory-block',
+          repeatableDefaultSource: 'signatories',
+          minInstances: 0,
+          maxInstances: 5,
+          popinLoad: {
+            url: '/api/demo/signatory-load?entityType={{entityType}}&country={{country}}',
+          },
+          fields: [],
         },
         {
           id: 'corporation-details',
@@ -949,6 +1240,7 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
           ['form', 'data-source'],
         ],
         'addresses-block': [['case']],
+        'signatories-block': [['case']],
       },
       submission: {
         url: '/api/submit',

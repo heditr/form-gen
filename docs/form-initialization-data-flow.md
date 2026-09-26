@@ -1,3 +1,5 @@
+> **Architecture update:** See **[thin-center-form-engine.md](./thin-center-form-engine.md)** — no `formKey` remount; Redux `formData` sync is discriminant-only.
+
 ## Form Initialization & Interaction Data Flow
 
 ### 1. High‑Level Overview

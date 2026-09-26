@@ -10,7 +10,7 @@ import { Controller } from 'react-hook-form';
 import type { FieldDescriptor, FieldItem } from '@/types/form-descriptor';
 import type { UseFormReturn, FieldValues } from 'react-hook-form';
 import type { FormContext } from '@/utils/template-evaluator';
-import { getErrorByPath } from '@/utils/form-errors';
+import { useFieldError } from '@/hooks/use-field-error';
 import { useDataSource } from '@/hooks/use-form-query';
 import { evaluateItemsArrayTemplate } from '@/utils/array-template-evaluator';
 import { Input } from '@/components/ui/input';
@@ -22,6 +22,7 @@ export interface AutocompleteFieldProps {
   form: UseFormReturn<FieldValues>;
   formContext: FormContext;
   isDisabled: boolean;
+  isReadonly?: boolean;
   required?: boolean;
   onLoadDataSource?: (fieldPath: string, url: string, auth?: { type: 'bearer' | 'apikey'; token?: string; headerName?: string }) => void;
   dataSourceCache?: Record<string, unknown>;
@@ -40,12 +41,13 @@ export default function AutocompleteField({
   form,
   formContext,
   isDisabled,
+  isReadonly = false,
   required = false,
   onLoadDataSource,
   dataSourceCache = {},
   onAutoFillSelection,
 }: AutocompleteFieldProps) {
-  const error = getErrorByPath(form.formState.errors, field.id) ?? form.formState.errors[field.id];
+  const error = useFieldError(form, field.id);
   const errorMessage = error?.message as string | undefined;
 
   // Use useDataSource hook - always call it (React hooks rule), but disable when no dataSource
@@ -238,7 +240,13 @@ export default function AutocompleteField({
   }, [focusedIndex]);
 
   return (
-    <div data-testid={`autocomplete-field-${field.id}`} className="space-y-2" ref={containerRef}>
+    <div
+      data-testid={`autocomplete-field-${field.id}`}
+      data-readonly={isReadonly ? 'true' : undefined}
+      aria-readonly={isReadonly}
+      className="space-y-2"
+      ref={containerRef}
+    >
       <Label htmlFor={field.id}>
         {field.label}
         {required && <span className="ml-1 text-destructive" aria-hidden="true">*</span>}
@@ -266,7 +274,7 @@ export default function AutocompleteField({
                 onKeyDown={(e) => handleKeyDown(e, controllerField.onChange)}
                 onBlur={controllerField.onBlur}
                 onFocus={() => setIsFocused(true)}
-                disabled={isDisabled || isLoading}
+                disabled={isDisabled || isReadonly || isLoading}
                 required={required}
                 className={cn(
                   errorMessage && 'border-destructive focus-visible:ring-destructive'

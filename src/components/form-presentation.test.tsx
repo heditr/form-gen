@@ -105,7 +105,7 @@ describe('FormPresentation', () => {
     const props = createProps();
     // Component should be defined and renderable
     expect(FormPresentation).toBeDefined();
-    expect(typeof FormPresentation).toBe('function');
+    expect(FormPresentation).toHaveProperty('type');
   });
 
   test('given block visibility, should conditionally render blocks based on status evaluation', () => {

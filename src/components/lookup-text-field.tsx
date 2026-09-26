@@ -1,6 +1,6 @@
 import type { FieldDescriptor } from '@/types/form-descriptor';
 import type { UseFormReturn, FieldValues } from 'react-hook-form';
-import { getErrorByPath } from '@/utils/form-errors';
+import { useFieldError } from '@/hooks/use-field-error';
 import { Label } from '@/components/ui/label';
 import TextFieldInputControl from './text-field-input-control';
 
@@ -8,6 +8,7 @@ export interface LookupTextFieldProps {
   field: FieldDescriptor;
   form: UseFormReturn<FieldValues>;
   isDisabled: boolean;
+  isReadonly?: boolean;
   required?: boolean;
 }
 
@@ -15,9 +16,10 @@ export default function LookupTextField({
   field,
   form,
   isDisabled,
+  isReadonly = false,
   required = false,
 }: LookupTextFieldProps) {
-  const error = getErrorByPath(form.formState.errors, field.id) ?? form.formState.errors[field.id];
+  const error = useFieldError(form, field.id);
   const errorMessage = error?.message as string | undefined;
 
   return (
@@ -35,6 +37,7 @@ export default function LookupTextField({
         field={field}
         form={form}
         isDisabled={isDisabled}
+        isReadonly={isReadonly}
         required={required}
         errorMessage={errorMessage}
       />

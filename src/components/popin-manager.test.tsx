@@ -15,6 +15,15 @@ import type { FormContext } from '@/utils/template-evaluator';
 import { registerHandlebarsHelpers } from '@/utils/handlebars-helpers';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
+// Mock useWatch for PopinFormSession live context
+vi.mock('react-hook-form', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('react-hook-form')>();
+  return {
+    ...actual,
+    useWatch: vi.fn(() => ({})),
+  };
+});
+
 // Mock Block component
 vi.mock('./block', () => ({
   default: ({ block, isDisabled }: { block: BlockDescriptor; isDisabled: boolean }) => (
@@ -167,7 +176,7 @@ describe('PopinManager', () => {
       getFieldState: vi.fn(),
       _formState: {},
       _subjects: {
-        values: { next: vi.fn() },
+        values: { next: vi.fn(), subscribe: vi.fn(() => ({ unsubscribe: vi.fn() })) },
         array: { next: vi.fn() },
         state: { next: vi.fn() },
       },
@@ -203,7 +212,7 @@ describe('PopinManager', () => {
       clearErrors: vi.fn(),
       reset: vi.fn(),
       resetField: vi.fn(),
-      trigger: vi.fn(),
+      trigger: vi.fn().mockResolvedValue(true),
       unregister: vi.fn(),
       getFieldState: vi.fn(),
       setFocus: vi.fn(),
@@ -329,6 +338,13 @@ describe('PopinManager', () => {
       await waitFor(() => {
         expect(screen.getByTestId('dialog')).toBeInTheDocument();
         expect(screen.getByTestId('dialog-title')).toHaveTextContent('Emergency Contacts');
+      });
+
+      await waitFor(() => {
+        expect(mockPopinFormInstance.reset).toHaveBeenCalledWith({
+          emergencyName: 'Jane Doe',
+          emergencyPhone: '+1-555-1234',
+        });
       });
     });
 
@@ -952,6 +968,83 @@ describe('PopinManager', () => {
       // Loading should disappear
       await waitFor(() => {
         expect(screen.queryByText('Loading...')).not.toBeInTheDocument();
+      });
+    });
+
+    test('given a repeatable popin with popinLoad, should load data when opened in create mode', async () => {
+      const block = createMockBlock({
+        id: 'signatories-block',
+        title: 'Signatories',
+        repeatable: true,
+        repeatablePopin: true,
+        popinLoad: {
+          url: '/api/demo/signatory-load?entityType={{entityType}}&country={{country}}',
+        },
+        fields: [
+          {
+            id: 'signatories.signatoryName',
+            type: 'text',
+            label: 'Signatory Name',
+            repeatableGroupId: 'signatories',
+            validation: [],
+          },
+        ],
+      });
+      const descriptor = createMockDescriptor([block]);
+      const form = createMockForm();
+      (form.getValues as ReturnType<typeof vi.fn>).mockReturnValue({
+        entityType: 'corporation',
+        country: 'US',
+        signatories: [],
+      });
+      const formContext = createMockFormContext({ entityType: 'corporation', country: 'US' });
+
+      mockLoadPopinData.mockResolvedValue({
+        signatoryName: 'Ada Lovelace',
+        signatoryRole: 'director',
+      });
+      mockResolveBlockById.mockReturnValue({
+        block,
+        isHidden: false,
+        isDisabled: false,
+      });
+
+      const TestComponentWithCreate = () => {
+        const { openPopin } = usePopinManager();
+        return (
+          <button
+            onClick={() => openPopin('signatories-block', { groupId: 'signatories' })}
+            data-testid="trigger-button"
+          >
+            Add Signatory
+          </button>
+        );
+      };
+
+      renderWithQueryClient(
+        <PopinManagerProvider
+          mergedDescriptor={descriptor}
+          form={form}
+          formContext={formContext}
+          caseContext={createMockCaseContext()}
+          onLoadDataSource={vi.fn()}
+          dataSourceCache={{}}
+        >
+          <TestComponentWithCreate />
+        </PopinManagerProvider>
+      );
+
+      await userEvent.click(screen.getByTestId('trigger-button'));
+
+      await waitFor(() => {
+        expect(mockLoadPopinData).toHaveBeenCalledWith(
+          'signatories-block',
+          block.popinLoad,
+          expect.objectContaining({
+            entityType: 'corporation',
+            country: 'US',
+          })
+        );
       });
     });
   });

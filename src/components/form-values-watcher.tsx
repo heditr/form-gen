@@ -1,72 +1,79 @@
 /**
- * FormValuesWatcher Component
+ * Form Values Watcher — side effects only (discriminant detection, draft save).
  *
- * Isolates useWatch in a child component to prevent "Cannot update a component
- * while rendering a different component (Controller)" - when useWatch runs in
- * the parent, its setState triggers a parent re-render during Controller's
- * render; moving useWatch here ensures only this component re-renders.
+ * On value changes, draft (`onFormChange`) is always triggered before
+ * rehydration (`onDiscriminantChange`) when a discriminant field changed.
  */
 
-import { useEffect, useMemo, useRef } from 'react';
-import { useWatch } from 'react-hook-form';
+import { useEffect, useRef } from 'react';
 import type { UseFormReturn, FieldValues } from 'react-hook-form';
-import type { GlobalFormDescriptor, FormData, CaseContext } from '@/types/form-descriptor';
-import type { FormContext } from '@/utils/template-evaluator';
+import type { FormData, FieldDescriptor } from '@/types/form-descriptor';
+import { haveDiscriminantFieldsChanged } from '@/utils/context-extractor';
+import { useDeferredFormValues } from '@/hooks/use-deferred-form-values';
 
 export interface FormValuesWatcherProps {
   form: UseFormReturn<FieldValues>;
-  caseContext: CaseContext;
-  descriptor: GlobalFormDescriptor | null;
+  discriminantFields?: FieldDescriptor[];
   onDiscriminantChange?: (formData: Partial<FormData>) => void;
   onFormChange?: (formData: Partial<FormData>) => void;
-  children: (formContext: FormContext) => React.ReactNode;
 }
 
 export default function FormValuesWatcher({
   form,
-  caseContext,
-  descriptor,
+  discriminantFields = [],
   onDiscriminantChange,
   onFormChange,
-  children,
 }: FormValuesWatcherProps) {
-  const watchedValues = useWatch({ control: form.control });
-  const previousValuesRef = useRef<string | null>(null);
+  const watchedValues = useDeferredFormValues(form);
+  const previousValuesRef = useRef<Partial<FormData> | null>(null);
+  const onDiscriminantChangeRef = useRef(onDiscriminantChange);
+  const onFormChangeRef = useRef(onFormChange);
 
   useEffect(() => {
-    const currentValues = watchedValues ?? {};
-    const currentValuesString = JSON.stringify(currentValues);
+    onDiscriminantChangeRef.current = onDiscriminantChange;
+    onFormChangeRef.current = onFormChange;
+  });
 
-    if (currentValuesString === previousValuesRef.current) {
+  useEffect(() => {
+    const currentValues = (watchedValues ?? {}) as Partial<FormData>;
+    const previousValues = previousValuesRef.current;
+
+    if (
+      previousValues !== null &&
+      JSON.stringify(previousValues) === JSON.stringify(currentValues)
+    ) {
       return;
     }
 
-    previousValuesRef.current = currentValuesString;
-    const formData = currentValues as Partial<FormData>;
-
-    if (descriptor && onDiscriminantChange) {
-      const id = setTimeout(() => onDiscriminantChange(formData), 0);
-      // eslint-disable-next-line consistent-return
-      return () => clearTimeout(id);
+    // Establish baseline on first observation — not a user change
+    if (previousValues === null) {
+      previousValuesRef.current = currentValues;
+      onFormChangeRef.current?.(currentValues);
+      return;
     }
-  }, [descriptor, watchedValues, onDiscriminantChange]);
 
-  useEffect(() => {
-    if (!onFormChange) return;
+    const shouldNotifyDiscriminant =
+      discriminantFields.length > 0 &&
+      Boolean(onDiscriminantChangeRef.current) &&
+      haveDiscriminantFieldsChanged(previousValues, currentValues, discriminantFields);
 
-    const currentValues = watchedValues ?? {};
-    const formData = currentValues as Partial<FormData>;
-    onFormChange(formData);
-  }, [watchedValues, onFormChange]);
+    if (!shouldNotifyDiscriminant) {
+      previousValuesRef.current = currentValues;
+      onFormChangeRef.current?.(currentValues);
+      return;
+    }
 
-  const formContext: FormContext = useMemo(
-    () => ({
-      ...(watchedValues ?? {}),
-      caseContext,
-      formData: (watchedValues ?? {}) as Partial<FormData>,
-    }),
-    [watchedValues, caseContext]
-  );
+    // Defer baseline advance until notify runs so Strict Mode remount /
+    // parent callback identity churn cannot swallow the change after clearTimeout.
+    // Draft must run before rehydration in the same turn.
+    const id = setTimeout(() => {
+      previousValuesRef.current = currentValues;
+      onFormChangeRef.current?.(currentValues);
+      onDiscriminantChangeRef.current?.(currentValues);
+    }, 0);
 
-  return <>{children(formContext)}</>;
+    return () => clearTimeout(id);
+  }, [watchedValues, discriminantFields]);
+
+  return null;
 }

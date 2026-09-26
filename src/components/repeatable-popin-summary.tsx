@@ -43,6 +43,7 @@ export default function RepeatablePopinSummary({
     control: form.control,
     name: groupId,
   });
+  const groupArray = form.watch(groupId) as unknown[] | undefined;
 
   const handleAdd = () => {
     if (isDisabled) return;
@@ -70,7 +71,7 @@ export default function RepeatablePopinSummary({
   const getSummaryText = (index: number, currentInstance: Record<string, unknown> | undefined): string => {
     const instanceContext: FormContext = {
       ...formContext,
-      [groupId]: form.watch(groupId),
+      [groupId]: groupArray,
       ...(currentInstance || {}),
       '@index': index,
       '@first': index === 0,
@@ -140,7 +141,6 @@ export default function RepeatablePopinSummary({
         ) : (
           <>
             {fieldArrayFields.map((fieldArrayField, index) => {
-              const groupArray = form.watch(groupId) as unknown[] | undefined;
               const currentInstance = groupArray?.[index] as Record<string, unknown> | undefined;
               const summaryText = getSummaryText(index, currentInstance);
 

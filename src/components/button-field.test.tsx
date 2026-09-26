@@ -17,6 +17,27 @@ import { registerHandlebarsHelpers } from '@/utils/handlebars-helpers';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
 
+let mockPopinFormInstance: UseFormReturn<FieldValues>;
+
+vi.mock('@/hooks/use-form-descriptor', () => ({
+  useFormDescriptor: () => ({
+    form: mockPopinFormInstance,
+    registerField: vi.fn(),
+    unregisterField: vi.fn(),
+    updateValidationRules: vi.fn(),
+    setBackendErrors: vi.fn(),
+    getDiscriminantFields: () => [],
+  }),
+}));
+
+vi.mock('react-hook-form', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('react-hook-form')>();
+  return {
+    ...actual,
+    useWatch: vi.fn(() => ({})),
+  };
+});
+
 const renderWithQueryClient = (ui: React.ReactElement) => {
   const queryClient = new QueryClient({
     defaultOptions: {
@@ -268,6 +289,7 @@ describe('ButtonField Integration with PopinManager', () => {
     id: 'contact-info',
     title: 'Contact Information',
     description: 'Contact details',
+    popin: true,
     fields: [
       {
         id: 'email',
@@ -342,6 +364,9 @@ describe('ButtonField Integration with PopinManager', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockPopinFormInstance = createMockForm({
+      trigger: vi.fn().mockResolvedValue(true),
+    });
   });
 
   test('given button field with single variant, should open popin dialog on click', async () => {

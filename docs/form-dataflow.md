@@ -1,5 +1,7 @@
 # Form Dataflow Documentation
 
+> **Architecture update:** The engine no longer remounts on rule/context changes and no longer mirrors every keystroke to Redux. See **[thin-center-form-engine.md](./thin-center-form-engine.md)** for the current design. Sections below that mention `formKey` or continuous `formData` sync are historical.
+
 This document describes the complete dataflow of the form engine, from initial global form descriptor loading through user interactions, Handlebars template evaluation, react-hook-form state management, Redux synchronization, re-hydration, and form submission.
 
 ## Table of Contents
