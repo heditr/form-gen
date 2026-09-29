@@ -436,7 +436,7 @@ Aligned with the project vision:
 | [`src/hooks/use-form-descriptor.ts`](../src/hooks/use-form-descriptor.ts) | Defaults merge, `useForm`, public helpers |
 | [`src/hooks/use-live-zod-resolver.ts`](../src/hooks/use-live-zod-resolver.ts) | Live schema + membership + sync effects |
 | [`src/utils/form-descriptor-integration.ts`](../src/utils/form-descriptor-integration.ts) | Defaults, Zod build, backend error map, discriminant IDs |
-| [`src/utils/schema-fingerprint.ts`](../src/utils/schema-fingerprint.ts) | Active targets, fingerprint, hide/show diff |
+| [`src/utils/schema-fingerprint.ts`](../src/utils/schema-fingerprint.ts) | Active targets, fingerprint, hide/show diff. See [schema-fingerprint.md](./schema-fingerprint.md) |
 | [`src/utils/field-descriptor-utils.ts`](../src/utils/field-descriptor-utils.ts) | Template-default field detection |
 | [`src/components/form-container.tsx`](../src/components/form-container.tsx) | Main-form wiring |
 | [`src/components/form-values-watcher.tsx`](../src/components/form-values-watcher.tsx) | Discriminant + draft side effects |
@@ -451,3 +451,4 @@ Aligned with the project vision:
 - [debounced-rehydration.md](./debounced-rehydration.md) — rules API debounce/dedupe
 - [draft-mode-architecture.md](./draft-mode-architecture.md) — draft save alongside the watcher
 - [case-context-usage.md](./case-context-usage.md) — how `caseContext` is shaped and consumed
+- [schema-fingerprint.md](./schema-fingerprint.md) — validation targets, fingerprint string, hide/show diff

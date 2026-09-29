@@ -39,7 +39,7 @@ Read this table first. The diagrams below use these file names as the nodes.
 | `src/hooks/use-form-descriptor.ts` | Builds mount defaults and the RHF instance. Does **not** talk to Redux |
 | `src/utils/form-descriptor-integration.ts` | `extractDefaultValues` at mount; `buildZodSchemaFromDescriptor` whenever the schema is rebuilt |
 | `src/hooks/use-live-zod-resolver.ts` | `schemaRef` clock, `applyMembershipChanges` (hide/show of **values**), `useFormMembershipSync` |
-| `src/utils/schema-fingerprint.ts` | Which fields are validation targets, and the diff between the previous and next set |
+| `src/utils/schema-fingerprint.ts` | Which fields are validation targets, and the diff between the previous and next set. Walkthrough: [schema-fingerprint.md](./schema-fingerprint.md) |
 | `src/utils/template-evaluator.ts` | Handlebars for defaults, hidden/disabled/readonly, and URLs |
 | `src/hooks/use-deferred-form-values.ts` | `form.watch` deferred to a microtask, so subscribers do not update during `Controller` render |
 | `src/components/form-values-watcher.tsx` | Effects only (renders `null`): draft on every change; discriminant callback only when a discriminant field changed |
