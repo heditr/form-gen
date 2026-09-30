@@ -193,7 +193,7 @@ sequenceDiagram
   Hook->>LZR: descriptor, caseContext, scope, defaultValuesByFieldId
   LZR-->>Hook: resolver, applyMembershipChanges, refreshSchemaFromDescriptor
 
-  Hook->>RHF: useForm({ defaultValues: initialValues, resolver, mode: 'onChange' })
+  Hook->>RHF: useForm({ defaultValues: initialValues, resolver, mode: 'onBlur', reValidateMode: 'onBlur' })
   Hook->>Hook: useFormMembershipSync(form, …)
   Note over Hook: watch → applyMembershipChanges<br/>descriptor change → refreshSchemaFromDescriptor
   Hook-->>Caller: { form, helpers }
@@ -234,8 +234,9 @@ This supports rehydration and remount-free rule updates without wiping user inpu
 ```ts
 useForm({
   defaultValues: initialValues,
-  resolver,          // live Zod via schemaRef
-  mode: 'onChange',  // validate as the user types (fast loop)
+  resolver,                 // live Zod via schemaRef
+  mode: 'onBlur',           // validate when the user leaves the field
+  reValidateMode: 'onBlur', // keep revalidation on blur after the first error
 })
 ```
 
@@ -321,7 +322,7 @@ flowchart TB
   UFD -->|form| PMP
   UFD -->|form| PRES
 
-  FVW -->|onFormChange| DRAFT
+  PRES -->|onFieldBlur| DRAFT
   FVW -->|onDiscriminantChange| HANDLER[flushDraft → syncFormData → updateCaseContext → rehydrate]
   HANDLER --> DR
   DR -->|mergedDescriptor update| UFD
@@ -335,7 +336,7 @@ flowchart TB
 4. New `mergedDescriptor` flows back into `useFormDescriptor` as the `descriptor` argument.
 5. Live resolver refreshes `schemaRef`; RHF values are preserved (no remount).
 
-Non-discriminant keystrokes stay inside RHF (+ optional draft save). They do **not** update Redux `formData`.
+Non-discriminant keystrokes stay inside RHF. A draft save is scheduled when a main-form field blurs. Keystrokes do **not** update Redux `formData`.
 
 ---
 
@@ -418,7 +419,7 @@ Aligned with the project vision:
 
 | Loop | Latency target | Where it lives | Hook involvement |
 |------|----------------|----------------|------------------|
-| **Fast** | &lt;100ms | RHF `onChange` + live Zod + status map | Resolver + membership on value/descriptor change |
+| **Fast** | &lt;100ms | RHF `onBlur` validation + live Zod + status map | Resolver on blur; membership on value/descriptor change |
 | **Slow** | &lt;500ms p95 | Debounced rehydration → new `mergedDescriptor` | Receives new descriptor; refreshes schema without remount |
 
 **State ownership reminder:**
@@ -439,7 +440,7 @@ Aligned with the project vision:
 | [`src/utils/schema-fingerprint.ts`](../src/utils/schema-fingerprint.ts) | Active targets, fingerprint, hide/show diff. See [schema-fingerprint.md](./schema-fingerprint.md) |
 | [`src/utils/field-descriptor-utils.ts`](../src/utils/field-descriptor-utils.ts) | Template-default field detection |
 | [`src/components/form-container.tsx`](../src/components/form-container.tsx) | Main-form wiring |
-| [`src/components/form-values-watcher.tsx`](../src/components/form-values-watcher.tsx) | Discriminant + draft side effects |
+| [`src/components/form-values-watcher.tsx`](../src/components/form-values-watcher.tsx) | Discriminant side effects |
 | [`src/components/popin-form-session.tsx`](../src/components/popin-form-session.tsx) | Second hook instance for popin scope |
 
 ---

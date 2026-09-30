@@ -42,10 +42,10 @@ Read this table first. The diagrams below use these file names as the nodes.
 | `src/utils/schema-fingerprint.ts` | Which fields are validation targets, and the diff between the previous and next set. Walkthrough: [schema-fingerprint.md](./schema-fingerprint.md) |
 | `src/utils/template-evaluator.ts` | Handlebars for defaults, hidden/disabled/readonly, and URLs |
 | `src/hooks/use-deferred-form-values.ts` | `form.watch` deferred to a microtask, so subscribers do not update during `Controller` render |
-| `src/components/form-values-watcher.tsx` | Effects only (renders `null`): draft on every change; discriminant callback only when a discriminant field changed |
+| `src/components/form-values-watcher.tsx` | Effects only (renders `null`): discriminant callback only when a discriminant field changed. Draft is not on this path |
 | `src/hooks/use-draft-save.ts` | Debounced, dirty-field draft POST. `flushDraftSave` runs before rehydration |
 | `src/context/form-status-context.tsx` | One status map (`hidden` / `disabled` / `readonly`) for blocks and fields. Does **not** change values |
-| `src/components/form-presentation.tsx` | Reads block status from the map and renders `Block` |
+| `src/components/form-presentation.tsx` | Reads block status from the map, renders `Block`, and calls `onFieldBlur` so draft save runs on blur |
 | `src/components/block.tsx` | Reads field status (`statusMode="context"` on the main form) and renders fields |
 | `src/components/field-wrapper.tsx` | Skips hidden fields; delegates to the typed field component |
 | `src/hooks/use-field-error.ts` | One `useFormState` subscription per field |
@@ -162,7 +162,7 @@ sequenceDiagram
   Hook->>Hook: merge savedFormData over defaults
   Hook->>Live: descriptor, caseContext, defaults
   Live-->>Hook: resolver, applyMembershipChanges, refreshSchema
-  Hook->>RHF: useForm(defaultValues, resolver, mode onChange)
+  Hook->>RHF: useForm(defaultValues, resolver, mode onBlur)
   Hook->>Member: subscribe
 
   Member->>RHF: getValues
@@ -170,7 +170,7 @@ sequenceDiagram
   Note over Member: First pass hides already-hidden fields.<br/>Does not validate visible fields.
 
   RHF-->>Watcher: deferred values
-  Note over Watcher: previousValues is null → store baseline<br/>onFormChange only, no discriminant
+  Note over Watcher: previousValues is null → store baseline<br/>no discriminant callback
 
   RHF-->>Status: deferred values
   Status->>Status: evaluate hidden / disabled / readonly
@@ -195,42 +195,29 @@ A non-discriminant edit stays in react-hook-form. Three listeners hear it. Redux
 flowchart LR
   user["User types"]
   field["field-wrapper.tsx<br/>Controller"]
-  rhf["react-hook-form<br/>values + onChange validate"]
-  resolver["use-live-zod-resolver.ts<br/>resolver"]
-  finger["schema-fingerprint.ts"]
-  schema["form-descriptor-integration.ts<br/>buildZodSchemaFromDescriptor"]
-  err["use-field-error.ts"]
+  rhf["react-hook-form<br/>values; validation waits for blur"]
   member["useFormMembershipSync<br/>applyMembershipChanges"]
   deferred["use-deferred-form-values.ts"]
   watcher["form-values-watcher.tsx"]
-  draft["use-draft-save.ts"]
   status["form-status-context.tsx"]
   ui["form-presentation.tsx<br/>block.tsx"]
   redux["form-dux.ts formData"]
 
   user --> field --> rhf
-  rhf --> resolver
-  resolver --> finger
-  finger -->|"fingerprint changed"| schema
-  finger -->|"unchanged"| resolver
-  schema --> resolver
-  rhf --> err --> field
-
   rhf --> member
   member -->|"targets unchanged: return"| member
 
   rhf --> deferred
   deferred --> watcher
-  watcher -->|"not a discriminant"| draft
   deferred --> status
   status -->|"status bits unchanged:<br/>memo Block / FieldWrapper skip"| ui
 
   watcher -.->|"no dispatch"| redux
 ```
 
-- **`use-field-error.ts`** re-renders only the field whose error changed.
+- **`use-field-error.ts`** does not see a new error on the keystroke. Errors update when the field blurs.
 - **`useFormMembershipSync`** compares validation targets. If the set is the same, it does nothing.
-- **`form-values-watcher.tsx`** calls `onFormChange` → **`use-draft-save.ts`**. Draft save is debounced and skipped when the form is not dirty.
+- **`form-values-watcher.tsx`** does nothing for a non-discriminant edit. Draft save waits for field blur in **`form-presentation.tsx`**, then **`use-draft-save.ts`** debounces and skips when the form is not dirty.
 - **`form-status-context.tsx`** rebuilds the status map. Unchanged `hidden` / `disabled` / `readonly` objects are reused, so memoized blocks and fields skip render.
 - **`form-dux.ts`** `formData` is untouched.
 
@@ -309,7 +296,6 @@ sequenceDiagram
   RHF-->>Watcher: deferred values
   Note over Watcher: haveDiscriminantFieldsChanged<br/>wait until the next macrotask
 
-  Watcher->>Draft: onFormChange
   Watcher->>Container: onDiscriminantChange(values)
 
   Container->>Draft: flushDraftSave
@@ -331,7 +317,7 @@ sequenceDiagram
   Note over RHF: values unchanged
 ```
 
-- **`form-values-watcher.tsx`** compares the previous and current values with `haveDiscriminantFieldsChanged`. Draft notification runs before the discriminant callback, in the same turn.
+- **`form-values-watcher.tsx`** compares the previous and current values with `haveDiscriminantFieldsChanged`, then calls `onDiscriminantChange`.
 - **`form-container.tsx`** `handleDiscriminantChange` flushes the draft, writes the snapshot, derives context, then calls both rehydrate hooks.
 - **`use-debounced-rehydration.ts`** updates `caseContext` in Redux immediately and POSTs rules after 500ms. A newer discriminant change cancels the pending POST.
 - **`use-form-descriptor.ts`** receives the new descriptor as an argument. It does not call `useForm` again.

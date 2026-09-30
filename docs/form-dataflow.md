@@ -139,7 +139,8 @@ useEffect(() => {
    const form = useForm<FieldValues>({
      defaultValues: initialValues,
      resolver: zodResolver(zodSchema),  // Zod schema for validation
-     mode: 'onChange',  // Validate on change for immediate feedback
+     mode: 'onBlur',  // Validate when the field blurs
+     reValidateMode: 'onBlur',
    });
    ```
 
@@ -238,7 +239,7 @@ useEffect(() => {
 2. Field component updates via react-hook-form
 3. react-hook-form:
    - Updates field value in internal state
-   - Triggers validation (mode: 'onChange')
+   - Triggers validation when the field blurs (mode: 'onBlur')
    - Updates `formState.errors` if validation fails
    - Triggers re-render of components watching this field
 
@@ -750,7 +751,7 @@ User types in field
     ↓
 react-hook-form updates value
     ↓
-Validation runs (onChange mode)
+Validation runs when the field blurs (onBlur mode)
     ↓
 form.watch() triggers re-render
     ↓

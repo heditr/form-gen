@@ -50,6 +50,8 @@ export interface FormPresentationProps {
   mergedDescriptor: GlobalFormDescriptor | null;
   onLoadDataSource: (fieldPath: string, url: string, auth?: { type: 'bearer' | 'apikey'; token?: string; headerName?: string }) => void;
   dataSourceCache: Record<string, unknown>;
+  /** Called when focus leaves a control inside the main form. */
+  onFieldBlur?: () => void;
 }
 
 /**
@@ -111,6 +113,10 @@ function FormInner({
     [discriminantFields, caseContext, syncFormData, rehydrate, flushDraftSave]
   );
 
+  const handleFieldBlur = useCallback(() => {
+    saveDraft(form.getValues() as Partial<FormData>);
+  }, [form, saveDraft]);
+
   const presentationProps = useMemo(
     () => ({
       form,
@@ -120,8 +126,9 @@ function FormInner({
       mergedDescriptor,
       onLoadDataSource: loadDataSource,
       dataSourceCache,
+      onFieldBlur: handleFieldBlur,
     }),
-    [form, visibleBlocks, visibleFields, isRehydrating, mergedDescriptor, loadDataSource, dataSourceCache]
+    [form, visibleBlocks, visibleFields, isRehydrating, mergedDescriptor, loadDataSource, dataSourceCache, handleFieldBlur]
   );
 
   // useWatch isolated in FormValuesWatcher - when form values change, only
@@ -133,7 +140,6 @@ function FormInner({
         form={form}
         discriminantFields={discriminantFields}
         onDiscriminantChange={handleDiscriminantChange}
-        onFormChange={saveDraft}
       />
       <FormStatusProvider form={form} caseContext={caseContext} descriptor={mergedDescriptor}>
         <PopinManagerProvider

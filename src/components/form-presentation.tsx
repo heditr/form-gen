@@ -82,6 +82,7 @@ function FormPresentation({
   mergedDescriptor,
   onLoadDataSource,
   dataSourceCache,
+  onFieldBlur,
 }: FormPresentationProps) {
   const statusContext = useContext(FormStatusContext);
   const formContext = statusContext?.formContext ?? formContextProp ?? {};
@@ -95,7 +96,14 @@ function FormPresentation({
   }
 
   return (
-    <form data-testid="form-presentation" className="form-presentation" onSubmit={form.handleSubmit(() => {})}>
+    <form
+      data-testid="form-presentation"
+      className="form-presentation"
+      onSubmit={form.handleSubmit(() => {})}
+      onBlur={() => {
+        onFieldBlur?.();
+      }}
+    >
       {mergedDescriptor.blocks.map((block) => {
         if (block.popin) {
           return null;

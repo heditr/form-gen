@@ -1,7 +1,8 @@
 /**
  * Tests for FormValuesWatcher component
  *
- * Verifies onFormChange and onDiscriminantChange using previous vs next form values.
+ * Verifies onDiscriminantChange using previous vs next form values.
+ * Value changes do not schedule draft saves; those run on main-form blur.
  */
 
 import { StrictMode } from 'react';
@@ -17,11 +18,9 @@ const discriminantFields: FieldDescriptor[] = [
 
 function Wrapper({
   onDiscriminantChange,
-  onFormChange,
   fields = discriminantFields,
 }: {
   onDiscriminantChange?: (d: Partial<FormData>) => void;
-  onFormChange?: (d: Partial<FormData>) => void;
   fields?: FieldDescriptor[];
 }) {
   const form = useForm({
@@ -34,7 +33,6 @@ function Wrapper({
         form={form}
         discriminantFields={fields}
         onDiscriminantChange={onDiscriminantChange}
-        onFormChange={onFormChange}
       />
       <button
         type="button"
@@ -62,21 +60,7 @@ async function flushDeferredWatch() {
 }
 
 describe('FormValuesWatcher', () => {
-  test('given onFormChange callback, should invoke it when form values change', async () => {
-    const onFormChange = vi.fn();
-
-    const { getByTestId } = render(<Wrapper onFormChange={onFormChange} />);
-    await flushDeferredWatch();
-
-    await act(async () => {
-      getByTestId('set-email').click();
-    });
-    await flushDeferredWatch();
-
-    expect(onFormChange).toHaveBeenCalled();
-  });
-
-  test('given no onFormChange callback, should not throw', async () => {
+  test('given no onDiscriminantChange callback, should not throw', async () => {
     expect(() => {
       render(<Wrapper />);
     }).not.toThrow();
@@ -85,18 +69,11 @@ describe('FormValuesWatcher', () => {
 
   test('given initial mount, should not invoke onDiscriminantChange', async () => {
     const onDiscriminantChange = vi.fn();
-    const onFormChange = vi.fn();
 
-    render(
-      <Wrapper
-        onDiscriminantChange={onDiscriminantChange}
-        onFormChange={onFormChange}
-      />,
-    );
+    render(<Wrapper onDiscriminantChange={onDiscriminantChange} />);
     await flushDeferredWatch();
 
     expect(onDiscriminantChange).not.toHaveBeenCalled();
-    expect(onFormChange).toHaveBeenCalled();
   });
 
   test('given only non-discriminant field changes, should not invoke onDiscriminantChange', async () => {
@@ -115,24 +92,13 @@ describe('FormValuesWatcher', () => {
     expect(onDiscriminantChange).not.toHaveBeenCalled();
   });
 
-  test('given discriminant field changes, should invoke onFormChange before onDiscriminantChange', async () => {
-    const callOrder: string[] = [];
-    const onFormChange = vi.fn(() => {
-      callOrder.push('draft');
-    });
-    const onDiscriminantChange = vi.fn(() => {
-      callOrder.push('rehydrate');
-    });
+  test('given discriminant field changes, should invoke onDiscriminantChange', async () => {
+    const onDiscriminantChange = vi.fn();
 
     const { getByTestId } = render(
-      <Wrapper
-        onDiscriminantChange={onDiscriminantChange}
-        onFormChange={onFormChange}
-      />,
+      <Wrapper onDiscriminantChange={onDiscriminantChange} />,
     );
     await flushDeferredWatch();
-    callOrder.length = 0;
-    onFormChange.mockClear();
     onDiscriminantChange.mockClear();
 
     await act(async () => {
@@ -140,13 +106,9 @@ describe('FormValuesWatcher', () => {
     });
     await flushDeferredWatch();
 
-    expect(onFormChange).toHaveBeenCalledWith(
-      expect.objectContaining({ jurisdiction: 'CA' }),
-    );
     expect(onDiscriminantChange).toHaveBeenCalledWith(
       expect.objectContaining({ jurisdiction: 'CA' }),
     );
-    expect(callOrder).toEqual(['draft', 'rehydrate']);
   });
 
   test('given StrictMode remount, should still invoke onDiscriminantChange', async () => {
@@ -174,7 +136,7 @@ describe('FormValuesWatcher', () => {
     const second = vi.fn();
 
     const { getByTestId, rerender } = render(
-      <Wrapper onDiscriminantChange={first} onFormChange={vi.fn()} />,
+      <Wrapper onDiscriminantChange={first} />,
     );
     await flushDeferredWatch();
 
@@ -183,7 +145,7 @@ describe('FormValuesWatcher', () => {
     });
 
     // Simulate parent re-render with a new callback before the deferred notify runs
-    rerender(<Wrapper onDiscriminantChange={second} onFormChange={vi.fn()} />);
+    rerender(<Wrapper onDiscriminantChange={second} />);
     await flushDeferredWatch();
 
     expect(first.mock.calls.length + second.mock.calls.length).toBeGreaterThan(0);

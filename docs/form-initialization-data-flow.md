@@ -220,7 +220,8 @@ Finally:
 const form = useForm<FieldValues>({
   defaultValues: initialValues,
   resolver: zodResolver(zodSchema),
-  mode: 'onChange',
+  mode: 'onBlur',
+  reValidateMode: 'onBlur',
 });
 ```
 

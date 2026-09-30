@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Draft mode adds descriptor-driven autosave for the **main form**. On each main-form value change, the engine can send a debounced HTTP draft request, but only when the relevant changed fields are valid.
+Draft mode adds descriptor-driven autosave for the **main form**. When a main-form field blurs, the engine can send a debounced HTTP draft request, but only when the relevant changed fields are valid. Typing alone does not schedule a draft.
 
 This behavior is configured in the descriptor through `draft` and is independent from final submission (`submission`).
 
@@ -25,16 +25,17 @@ Draft mode is declared in `src/types/form-descriptor.ts`:
 
 ## Runtime Components
 
-### 1) Change Detection Layer
+### 1) Blur Trigger
 
-File: `src/components/form-values-watcher.tsx`
+File: `src/components/form-presentation.tsx`
 
-`FormValuesWatcher` now exposes two callbacks:
+The main `<form>` calls `onFieldBlur` on `focusout` (React `onBlur` bubbles from child controls). `FormContainer` and the demo pages pass:
 
-- `onDiscriminantChange(formData)` for rehydration/context behavior
-- `onFormChange(formData)` for generic form-wide side effects (draft mode uses this)
+```ts
+onFieldBlur={() => saveDraft(form.getValues())}
+```
 
-`useWatch` subscribes to form values and forwards updates through `onFormChange`.
+`FormValuesWatcher` is discriminant-only. Value changes do not call `saveDraft`.
 
 ### 2) Main Form Wiring
 
@@ -43,7 +44,7 @@ File: `src/components/form-container.tsx`
 Main form flow initializes draft save like this:
 
 - `useDraftSave({ form, draftConfig: mergedDescriptor?.draft })`
-- Passes `saveDraft` into `FormValuesWatcher` as `onFormChange`
+- Passes `saveDraft` into `FormPresentation` as `onFieldBlur`
 
 If `mergedDescriptor?.draft` is undefined, draft save is a no-op.
 
@@ -53,7 +54,7 @@ File: `src/hooks/use-draft-save.ts`
 
 `useDraftSave` implements draft-mode control logic:
 
-1. Receive latest form values from `onFormChange`
+1. Receive latest form values from a main-form field blur
 2. Debounce saves (`draftConfig.debounceMs ?? 1000`)
 3. Deduplicate identical payloads (`JSON.stringify` hash comparison)
 4. Validate only dirty fields (`form.trigger(dirtyPaths)`) before HTTP call
@@ -65,7 +66,7 @@ Important behavior:
 - Draft mode skips initial load when the form is not dirty (`formState.isDirty === false`)
 - Draft mode validates only dirty fields, avoiding untouched-field errors
 - Draft mode does not override or force RHF error display policy
-- Validation UI remains controlled by RHF mode (`onChange`, `onBlur`, etc.)
+- Validation UI is controlled by RHF `mode: 'onBlur'` and `reValidateMode: 'onBlur'`
 - Network calls happen only for valid snapshots
 - If a debounced save is pending during unmount/remount, the hook flushes that pending save to avoid dropped draft requests
 
@@ -89,13 +90,13 @@ This keeps draft and submit transport behavior aligned.
 
 ## Why Draft Mode Affects Main Form Only
 
-Draft autosave is intentionally connected only to the main-form watcher path.
+Draft autosave is intentionally connected only to the main form element.
 
 ### Main form path (draft enabled)
 
 - `FormContainer` creates main RHF form (`useFormDescriptor`)
-- `FormValuesWatcher` observes that form
-- `onFormChange -> saveDraft` drives autosave
+- `FormPresentation` owns the only `<form>`
+- Field blur → `onFieldBlur` → `saveDraft` drives autosave
 
 ### Popin path (draft not enabled)
 
@@ -106,19 +107,19 @@ Popins use a **separate** RHF instance (`popinForm`) managed inside `PopinManage
 Key constraints that keep draft out of popins:
 
 - Popin form values are local while dialog is open
-- Popin changes are not wired to main-form `onFormChange`
-- Popin side effects happen on explicit Validate/Submit actions, not every field change
+- Popin changes are not wired to the main form's `onFieldBlur`
+- Popin side effects happen on explicit Validate/Submit actions, not every field blur
 - No `useDraftSave` wiring exists for `popinForm`
 
-Result: typing in popin fields does not trigger draft autosave.
+Result: editing popin fields does not trigger draft autosave.
 
 ## End-to-End Flow
 
 ```mermaid
 flowchart TD
   descriptor[DescriptorWithDraftConfig] --> formContainer[FormContainer]
-  formContainer --> watcher[FormValuesWatcher]
-  watcher -->|onFormChange(formData)| draftHook[useDraftSave]
+  formContainer --> presentation[FormPresentation]
+  presentation -->|onFieldBlur| draftHook[useDraftSave]
   draftHook --> debounce[DebounceAndDedupe]
   debounce --> dirtyCheck{formState.isDirty?}
   dirtyCheck -->|no| skipDirty[Skip]
@@ -157,7 +158,9 @@ Draft mode is covered by:
   - optional config no-op
 - `src/utils/submission-orchestrator.test.ts`
   - `submitDraft` request and error handling
+- `src/components/form-presentation.test.tsx`
+  - `onFieldBlur` runs on focusout, not on change
 - `src/components/form-values-watcher.test.tsx`
-  - `onFormChange` callback behavior
+  - discriminant callback only; value changes do not draft
 
 These tests ensure draft mode is reliable and does not regress existing submit/popin behavior.

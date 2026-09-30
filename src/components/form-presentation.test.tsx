@@ -6,6 +6,7 @@
  */
 
 import { describe, test, expect, vi } from 'vitest';
+import { render, fireEvent } from '@testing-library/react';
 import FormPresentation from './form-presentation';
 import type { FormPresentationProps } from './form-container';
 import type { GlobalFormDescriptor } from '@/types/form-descriptor';
@@ -136,5 +137,17 @@ describe('FormPresentation', () => {
   test('given isRehydrating, should show loading state', () => {
     // Component should handle rehydrating state
     expect(FormPresentation).toBeDefined();
+  });
+
+  test('given focus leaves a control, should invoke onFieldBlur', () => {
+    const onFieldBlur = vi.fn();
+    const props = createProps({ onFieldBlur });
+    const { getByTestId } = render(<FormPresentation {...props} />);
+
+    fireEvent.change(getByTestId('form-presentation'));
+    expect(onFieldBlur).not.toHaveBeenCalled();
+
+    fireEvent.focusOut(getByTestId('form-presentation'));
+    expect(onFieldBlur).toHaveBeenCalledTimes(1);
   });
 });

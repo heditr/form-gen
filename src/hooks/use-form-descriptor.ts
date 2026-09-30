@@ -126,7 +126,8 @@ export function useFormDescriptor(
   const form = useForm<FieldValues>({
     defaultValues: initialValues,
     resolver,
-    mode: 'onChange',
+    mode: 'onBlur',
+    reValidateMode: 'onBlur',
   });
 
   useFormMembershipSync(

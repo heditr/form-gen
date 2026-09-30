@@ -2,6 +2,7 @@
  * useDraftSave Hook
  *
  * Debounced, validity-gated draft autosave for the main form.
+ * Callers invoke saveDraft when a main-form field blurs, not on each value change.
  * On each call to saveDraft(formValues):
  *  1. Cancels any pending debounced call
  *  2. Stores the latest values

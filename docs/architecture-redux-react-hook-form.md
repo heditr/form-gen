@@ -14,7 +14,8 @@ This document explains how Redux and react-hook-form work together in the KYC Fo
 // Initialize react-hook-form
 const form = useForm<FieldValues>({
   defaultValues,
-  mode: 'onChange', // Validate on change for immediate feedback
+  mode: 'onBlur', // Validate when the field blurs
+  reValidateMode: 'onBlur',
 });
 ```
 
@@ -98,7 +99,8 @@ const { form } = useFormDescriptor(mergedDescriptor, {
 // Inside useFormDescriptor (line 49)
 const form = useForm<FieldValues>({
   defaultValues,  // Extracted from descriptor
-  mode: 'onChange',
+  mode: 'onBlur',
+  reValidateMode: 'onBlur',
 });
 ```
 

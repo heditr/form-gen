@@ -545,6 +545,10 @@ function FormContainerWithSubmissionComponent({
     await submitHandler(e);
   }, [form, mergedDescriptor, caseContext, orchestrator, onSubmissionStateChange]);
 
+  const handleFieldBlur = useCallback(() => {
+    saveDraft(form.getValues() as Partial<FormData>);
+  }, [form, saveDraft]);
+
   const presentationProps = useMemo(
     () => ({
       form,
@@ -554,8 +558,9 @@ function FormContainerWithSubmissionComponent({
       mergedDescriptor,
       onLoadDataSource: loadDataSource,
       dataSourceCache,
+      onFieldBlur: handleFieldBlur,
     }),
-    [form, visibleBlocks, visibleFields, isRehydrating, mergedDescriptor, loadDataSource, dataSourceCache]
+    [form, visibleBlocks, visibleFields, isRehydrating, mergedDescriptor, loadDataSource, dataSourceCache, handleFieldBlur]
   );
 
   return (
@@ -564,7 +569,6 @@ function FormContainerWithSubmissionComponent({
         form={form}
         discriminantFields={discriminantFields}
         onDiscriminantChange={handleDiscriminantChange}
-        onFormChange={saveDraft}
       />
       <FormStatusProvider form={form} caseContext={caseContext} descriptor={mergedDescriptor}>
         <PopinManagerProvider

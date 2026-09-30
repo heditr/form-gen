@@ -531,8 +531,8 @@ export interface SubmissionConfig {
  * Draft autosave configuration
  *
  * Extends SubmissionConfig with an optional debounce interval. When present on a
- * descriptor, the form engine will debounce field changes and issue a draft-save
- * HTTP request whenever the current form data passes validation.
+ * descriptor, the form engine will debounce main-form field blurs and issue a
+ * draft-save HTTP request whenever the current form data passes validation.
  *
  * @property debounceMs - Milliseconds to debounce between draft saves (default: 1000)
  */

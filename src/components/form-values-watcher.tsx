@@ -1,8 +1,9 @@
 /**
- * Form Values Watcher — side effects only (discriminant detection, draft save).
+ * Form Values Watcher — discriminant detection only.
  *
- * On value changes, draft (`onFormChange`) is always triggered before
- * rehydration (`onDiscriminantChange`) when a discriminant field changed.
+ * Draft saves are scheduled from the main form's blur handler, not from value
+ * changes. When a discriminant field changes, onDiscriminantChange runs on the
+ * next macrotask. The container flushes any pending draft before rehydration.
  */
 
 import { useEffect, useRef } from 'react';
@@ -15,23 +16,19 @@ export interface FormValuesWatcherProps {
   form: UseFormReturn<FieldValues>;
   discriminantFields?: FieldDescriptor[];
   onDiscriminantChange?: (formData: Partial<FormData>) => void;
-  onFormChange?: (formData: Partial<FormData>) => void;
 }
 
 export default function FormValuesWatcher({
   form,
   discriminantFields = [],
   onDiscriminantChange,
-  onFormChange,
 }: FormValuesWatcherProps) {
   const watchedValues = useDeferredFormValues(form);
   const previousValuesRef = useRef<Partial<FormData> | null>(null);
   const onDiscriminantChangeRef = useRef(onDiscriminantChange);
-  const onFormChangeRef = useRef(onFormChange);
 
   useEffect(() => {
     onDiscriminantChangeRef.current = onDiscriminantChange;
-    onFormChangeRef.current = onFormChange;
   });
 
   useEffect(() => {
@@ -48,7 +45,6 @@ export default function FormValuesWatcher({
     // Establish baseline on first observation — not a user change
     if (previousValues === null) {
       previousValuesRef.current = currentValues;
-      onFormChangeRef.current?.(currentValues);
       return;
     }
 
@@ -59,16 +55,13 @@ export default function FormValuesWatcher({
 
     if (!shouldNotifyDiscriminant) {
       previousValuesRef.current = currentValues;
-      onFormChangeRef.current?.(currentValues);
       return;
     }
 
     // Defer baseline advance until notify runs so Strict Mode remount /
     // parent callback identity churn cannot swallow the change after clearTimeout.
-    // Draft must run before rehydration in the same turn.
     const id = setTimeout(() => {
       previousValuesRef.current = currentValues;
-      onFormChangeRef.current?.(currentValues);
       onDiscriminantChangeRef.current?.(currentValues);
     }, 0);
 

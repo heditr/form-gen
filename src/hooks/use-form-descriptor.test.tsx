@@ -6,6 +6,8 @@
  */
 
 import { describe, test, expect, beforeAll } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { Controller } from 'react-hook-form';
 import {
   extractDefaultValues,
   getFieldValidationRules,
@@ -15,6 +17,7 @@ import {
 import type { GlobalFormDescriptor } from '@/types/form-descriptor';
 import { registerHandlebarsHelpers } from '@/utils/handlebars-helpers';
 import type { FormContext } from '@/utils/template-evaluator';
+import { useFormDescriptor } from './use-form-descriptor';
 
 describe('form descriptor integration', () => {
   beforeAll(() => {
@@ -473,4 +476,60 @@ describe('form descriptor integration', () => {
   // 3. The useEffect syncs all form values (including arrays) to Redux via onDiscriminantChange
   // 4. savedFormData merge logic preserves arrays from Redux on remount
   // Integration tests in repeatable-field-group.test.tsx verify the end-to-end behavior
+});
+
+describe('useFormDescriptor validation timing', () => {
+  beforeAll(() => {
+    registerHandlebarsHelpers();
+  });
+
+  test('given invalid input, should show the error on blur and not while typing', async () => {
+    const descriptor: GlobalFormDescriptor = {
+      blocks: [
+        {
+          id: 'block1',
+          title: 'Block 1',
+          fields: [
+            {
+              id: 'email',
+              type: 'text',
+              label: 'Email',
+              validation: [{ type: 'required', message: 'Email is required' }],
+            },
+          ],
+        },
+      ],
+      submission: { url: '/api/submit', method: 'POST' },
+    };
+
+    function Harness() {
+      const { form } = useFormDescriptor(descriptor);
+      const message = form.formState.errors.email?.message;
+
+      return (
+        <>
+          <Controller
+            name="email"
+            control={form.control}
+            render={({ field }) => (
+              <input aria-label="Email" {...field} value={field.value ?? ''} />
+            )}
+          />
+          <p data-testid="email-error">{typeof message === 'string' ? message : ''}</p>
+        </>
+      );
+    }
+
+    render(<Harness />);
+    const input = screen.getByLabelText('Email');
+
+    fireEvent.change(input, { target: { value: '' } });
+    expect(screen.getByTestId('email-error')).toHaveTextContent('');
+
+    fireEvent.blur(input);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('email-error')).toHaveTextContent('Email is required');
+    });
+  });
 });
