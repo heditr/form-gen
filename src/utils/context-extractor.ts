@@ -34,6 +34,9 @@ export function initializeCaseContext(casePrefill: CasePrefill): CaseContext {
   if (casePrefill.signatories !== undefined && Array.isArray(casePrefill.signatories)) {
     context.signatories = casePrefill.signatories;
   }
+  if (casePrefill.contactGroupId !== undefined && Array.isArray(casePrefill.contactGroupId)) {
+    context.contactGroupId = casePrefill.contactGroupId;
+  }
 
   return context;
 }

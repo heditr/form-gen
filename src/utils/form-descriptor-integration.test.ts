@@ -2423,6 +2423,75 @@ describe('form descriptor integration', () => {
       expect(consoleErrorSpy).not.toHaveBeenCalled();
       consoleErrorSpy.mockRestore();
     });
+
+    test('given an inner repeatable source with @index, should seed from the open popin instance', () => {
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'contacts-instance',
+            title: 'Contact',
+            repeatable: true,
+            fields: [
+              {
+                id: 'emergency-contacts.emergencyName',
+                type: 'text',
+                label: 'Full Name',
+                repeatableGroupId: 'emergency-contacts',
+                repeatableDefaultSource: 'caseContext.contactGroupId.@index.emergencyContacts',
+                validation: [],
+              },
+              {
+                id: 'emergency-contacts.emergencyPhone',
+                type: 'text',
+                label: 'Phone',
+                repeatableGroupId: 'emergency-contacts',
+                validation: [],
+              },
+            ],
+          },
+        ],
+        submission: { url: '/api/submit', method: 'POST' },
+      };
+
+      const context: FormContext = {
+        caseContext: {
+          contactGroupId: [
+            {
+              emergencyContacts: [{ emergencyName: 'Alice', emergencyPhone: '111' }],
+            },
+            {
+              emergencyContacts: [
+                { emergencyName: 'Jane', emergencyPhone: '098' },
+                { emergencyName: 'John', emergencyPhone: '123' },
+              ],
+            },
+          ],
+        },
+      };
+
+      const openedInstance = extractDefaultValues(descriptor, context, {
+        scope: 'popin',
+        index: 1,
+      });
+      expect(openedInstance['emergency-contacts']).toEqual([
+        { emergencyName: 'Jane', emergencyPhone: '098' },
+        { emergencyName: 'John', emergencyPhone: '123' },
+      ]);
+
+      const firstInstance = extractDefaultValues(descriptor, context, {
+        scope: 'popin',
+        index: 0,
+      });
+      expect(firstInstance['emergency-contacts']).toEqual([
+        { emergencyName: 'Alice', emergencyPhone: '111' },
+      ]);
+
+      const createMode = extractDefaultValues(descriptor, context, {
+        scope: 'popin',
+        index: -1,
+      });
+      expect(createMode['emergency-contacts']).toEqual([]);
+    });
   });
 
   describe('buildAutoFillPatchFromSelection', () => {

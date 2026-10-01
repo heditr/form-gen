@@ -57,6 +57,19 @@ export async function GET(): Promise<NextResponse<DemoPrefillResponse | { error:
           attentionTo: 'KYC Operations',
         },
       ],
+      contactGroupId: [
+        {
+          name: 'Ada',
+          emergencyContacts: [{ emergencyName: 'Alice', emergencyPhone: '111' }],
+        },
+        {
+          name: 'Grace',
+          emergencyContacts: [
+            { emergencyName: 'Jane', emergencyPhone: '098' },
+            { emergencyName: 'John', emergencyPhone: '123' },
+          ],
+        },
+      ],
       signatories: [
         {
           name: 'Ada Lovelace',

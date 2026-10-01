@@ -643,8 +643,15 @@ function FormContainerWithSubmissionWithHook({
     [dispatch]
   );
 
+  const contactSeedKey = !mergedDescriptor
+    ? 'no-descriptor'
+    : Array.isArray(caseContext.contactGroupId)
+      ? `ready-${caseContext.contactGroupId.length}`
+      : 'descriptor-only';
+
   return (
     <FormContainerWithSubmissionComponent
+      key={contactSeedKey}
       mergedDescriptor={mergedDescriptor}
       visibleBlocks={visibleBlocks}
       visibleFields={visibleFields}

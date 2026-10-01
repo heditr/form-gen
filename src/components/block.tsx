@@ -12,7 +12,7 @@ import type { FormContext } from '@/utils/template-evaluator';
 import { evaluateHiddenStatus, evaluateDisabledStatus, evaluateReadonlyStatus } from '@/utils/template-evaluator';
 import { resolveFieldStatus, type StatusMode } from '@/utils/resolve-field-status';
 import { useOptionalFormStatusContext } from '@/context/form-status-context';
-import { isRepeatableBlock, isRepeatablePopinBlock, groupFieldsByRepeatableGroupId, buildAutoFillPatchFromSelection } from '@/utils/form-descriptor-integration';
+import { isRepeatableBlock, isRepeatablePopinBlock, groupFieldsByRepeatableGroupId, buildAutoFillPatchFromSelection, repeatableGroupDefaultSource } from '@/utils/form-descriptor-integration';
 import { buildBlockLayoutRows } from '@/utils/block-layout';
 import { cn } from '@/lib/utils';
 import FieldWrapper from './field-wrapper';
@@ -217,6 +217,12 @@ function Block({
             const groupHidden = evaluateHiddenStatus(block, formContext);
             const groupDisabled = evaluateDisabledStatus(block, formContext) || isDisabled;
             const groupReadonly = evaluateReadonlyStatus(block, formContext) || isReadonly;
+
+            const groupSource = repeatableGroupDefaultSource(fields, block.repeatableDefaultSource);
+            const seedsFromOpenInstance = Boolean(groupSource?.includes('@index'));
+            if (renderRepeatablesAsSummary && seedsFromOpenInstance) {
+              return null;
+            }
 
             if (renderRepeatablesAsSummary && isRepeatablePopinBlock(block)) {
               return (

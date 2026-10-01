@@ -86,6 +86,25 @@ describe('context extractor', () => {
         { name: 'Alan Turing', role: 'officer', email: 'alan.turing@example.com' },
       ]);
     });
+
+    test('given CasePrefill with contactGroupId, should copy contacts into context', () => {
+      const casePrefill: CasePrefill = {
+        contactGroupId: [
+          {
+            name: 'Grace',
+            emergencyContacts: [{ emergencyName: 'Jane', emergencyPhone: '098' }],
+          },
+        ],
+      };
+      const context = initializeCaseContext(casePrefill);
+
+      expect(context.contactGroupId).toEqual([
+        {
+          name: 'Grace',
+          emergencyContacts: [{ emergencyName: 'Jane', emergencyPhone: '098' }],
+        },
+      ]);
+    });
   });
 
   describe('identifyDiscriminantFields', () => {

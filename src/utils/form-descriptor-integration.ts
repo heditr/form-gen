@@ -18,7 +18,7 @@ import type {
   FieldDescriptor,
 } from '@/types/form-descriptor';
 import { convertToReactHookFormRules, convertToZodSchema } from './validation-rule-adapter';
-import { evaluateDefaultValue } from './default-value-evaluator';
+import { bindTemplateIndex, evaluateDefaultValue } from './default-value-evaluator';
 import { evaluateTemplate } from './template-evaluator';
 import type { FormContext } from './template-evaluator';
 import { evaluateHiddenStatus } from './template-evaluator';
@@ -29,8 +29,9 @@ type ValidationScope = 'main' | 'popin';
 export interface ExtractDefaultValuesOptions {
   scope?: ValidationScope;
   /**
-   * Outer popin / flattened-instance row index. Applied only to non-repeatable
-   * field defaults. Inner repeatable groups always bind their own loop index.
+   * Open popin instance index. Binds `@index` in a group's repeatableDefaultSource
+   * and in non-repeatable field defaults. Field defaults inside an inner repeatable
+   * group still bind `@index` to that group's own row.
    */
   index?: number;
 }
@@ -183,17 +184,37 @@ function getNestedValue(
   let current: unknown = source;
 
   for (const part of parts) {
-    if (
-      !current ||
-      typeof current !== 'object' ||
-      Array.isArray(current)
-    ) {
+    if (current == null || typeof current !== 'object') {
       return undefined;
+    }
+    if (Array.isArray(current)) {
+      if (!/^\d+$/.test(part)) {
+        return undefined;
+      }
+      current = current[Number(part)];
+      continue;
     }
     current = (current as Record<string, unknown>)[part];
   }
 
   return current;
+}
+
+/**
+ * Source path for a repeatable group. A field-level path wins over the block path.
+ */
+export function repeatableGroupDefaultSource(
+  fields: FieldDescriptor[],
+  blockSource?: string
+): string | undefined {
+  for (const field of fields) {
+    const fieldSource = field.repeatableDefaultSource?.trim();
+    if (fieldSource) {
+      return fieldSource;
+    }
+  }
+  const source = blockSource?.trim();
+  return source || undefined;
 }
 
 function defaultStatusContext(
@@ -235,15 +256,28 @@ function shouldSkipHiddenDefault(field: FieldDescriptor, statusContext: FormCont
  */
 function resolveCaseContextPath(
   sourceTemplate: string,
-  context: FormContext
+  context: FormContext,
+  index?: number
 ): unknown {
-  const path = sourceTemplate.includes('{{') && sourceTemplate.includes('}}')
-    ? evaluateTemplate(sourceTemplate, context).trim()
-    : sourceTemplate.trim();
+  let template = sourceTemplate.trim();
+  if (template.includes('@index')) {
+    if (typeof index !== 'number' || index < 0) {
+      return undefined;
+    }
+    template = bindTemplateIndex(template, index);
+  }
 
-  if (!path) {
+  const evaluated = template.includes('{{') && template.includes('}}')
+    ? evaluateTemplate(template, context).trim()
+    : template;
+
+  if (!evaluated) {
     return undefined;
   }
+
+  const path = evaluated.startsWith('caseContext.')
+    ? evaluated.slice('caseContext.'.length)
+    : evaluated;
 
   return getNestedValue(
     context.caseContext as Record<string, unknown> | undefined,
@@ -394,9 +428,14 @@ export function extractDefaultValues(
         }
 
         // Fill repeatable group from caseContext when repeatableDefaultSource is set (Handlebars template → path)
-        const sourceTemplate = block.repeatableDefaultSource;
+        const sourceTemplate = repeatableGroupDefaultSource(fields, block.repeatableDefaultSource);
         if (sourceTemplate) {
-          const sourceArray = resolveCaseContextPath(sourceTemplate, context);
+          if (sourceTemplate.includes('@index') && (typeof outerIndex !== 'number' || outerIndex < 0)) {
+            (defaultValues as Record<string, unknown>)[groupId] = [];
+            processedRepeatableGroups.add(groupId);
+            continue;
+          }
+          const sourceArray = resolveCaseContextPath(sourceTemplate, context, outerIndex);
           if (Array.isArray(sourceArray) && sourceArray.length > 0) {
             const baseFieldId = (f: FieldDescriptor) =>
               f.id.startsWith(`${groupId}.`) ? f.id.slice(groupId.length + 1) : f.id;

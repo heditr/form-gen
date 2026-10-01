@@ -370,6 +370,9 @@ export interface ButtonConfig {
  * @property file - Optional file upload configuration (only for file type fields)
  * @property document - Optional Document Card configuration (only for document type fields)
  * @property repeatableGroupId - Optional identifier to associate this field with a repeatable group
+ * @property repeatableDefaultSource - Optional caseContext path for this field's repeatable group.
+ *   `@index` is the open popin instance (e.g. 'caseContext.contactGroupId.@index.emergencyContacts').
+ *   When set on any field in a group, it overrides the block-level source for that group.
  * @property defaultValue - Optional default value or Handlebars template (e.g. '{{caseContext.email}}').
  *   In repeatable groups with repeatableDefaultSource, use '@index' in the template (e.g. '{{caseContext.addresses.@index.street}}');
  *   @index is replaced with the row index (0, 1, …) when evaluating.
@@ -397,6 +400,11 @@ export interface FieldDescriptor {
   file?: FileFieldConfig;
   document?: DocumentCardConfig;
   repeatableGroupId?: string;
+  /**
+   * CaseContext path that seeds this field's repeatable group.
+   * `@index` binds to the open popin instance, not the inner row.
+   */
+  repeatableDefaultSource?: string;
   autoFill?: AutoFillConfig;
   manualLookup?: ManualLookupConfig;
   layout?: FieldLayoutConfig;
@@ -609,6 +617,8 @@ export interface SubFormDescriptor {
  *   Used with repeatableDefaultSource in the descriptor to fill the repeatable block at initial page load.
  * @property signatories - Optional array of signatory objects for the repeatable signatories block.
  *   Keys may differ from field ids; field defaultValues use `@index` to map them at load.
+ * @property contactGroupId - Optional contacts. Each row may include emergencyContacts for the
+ *   inner repeatable group, seeded with caseContext.contactGroupId.@index.emergencyContacts.
  */
 export interface CasePrefill {
   incorporationCountry?: string;
@@ -617,6 +627,7 @@ export interface CasePrefill {
   needSignature?: boolean;
   addresses?: Array<Record<string, unknown>>;
   signatories?: Array<Record<string, unknown>>;
+  contactGroupId?: Array<Record<string, unknown>>;
 }
 
 /**

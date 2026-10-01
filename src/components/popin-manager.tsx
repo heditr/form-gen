@@ -127,6 +127,9 @@ export function PopinManagerProvider({
             : f.id;
           return { ...f, id: baseId, repeatableGroupId: undefined };
         });
+      const nestedFields = block.fields.filter(
+        (field) => field.repeatableGroupId && field.repeatableGroupId !== groupId
+      );
       return {
         version: mergedDescriptor.version,
         blocks: [
@@ -134,7 +137,8 @@ export function PopinManagerProvider({
             id: `${block.id}-instance`,
             title: block.title,
             layout: block.layout,
-            fields: instanceFields,
+            ...(nestedFields.length > 0 ? { repeatable: true } : {}),
+            fields: [...instanceFields, ...nestedFields],
           },
         ],
         submission: mergedDescriptor.submission,

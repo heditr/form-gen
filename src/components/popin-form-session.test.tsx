@@ -737,3 +737,144 @@ describe('PopinFormSession', () => {
     });
   });
 });
+
+describe('PopinFormSession inner repeatable seed', () => {
+  const contactCaseContext = {
+    contactGroupId: [
+      {
+        name: 'Ada',
+        emergencyContacts: [{ emergencyName: 'Alice', emergencyPhone: '111' }],
+      },
+      {
+        name: 'Grace',
+        emergencyContacts: [
+          { emergencyName: 'Jane', emergencyPhone: '098' },
+          { emergencyName: 'John', emergencyPhone: '123' },
+        ],
+      },
+    ],
+  } as CaseContext;
+
+  const contactBlock: BlockDescriptor = {
+    id: 'contacts-block',
+    title: 'Contacts',
+    repeatable: true,
+    repeatablePopin: true,
+    fields: [
+      {
+        id: 'contactGroupId.name',
+        type: 'text',
+        label: 'Contact Name',
+        repeatableGroupId: 'contactGroupId',
+        validation: [],
+      },
+      {
+        id: 'contactGroupId.emergency-contacts.emergencyName',
+        type: 'text',
+        label: 'Full Name',
+        repeatableGroupId: 'emergency-contacts',
+        repeatableDefaultSource: 'caseContext.contactGroupId.@index.emergencyContacts',
+        validation: [],
+      },
+      {
+        id: 'contactGroupId.emergency-contacts.emergencyPhone',
+        type: 'text',
+        label: 'Emergency Phone',
+        repeatableGroupId: 'emergency-contacts',
+        validation: [],
+      },
+    ],
+  };
+
+  const instanceDescriptor: GlobalFormDescriptor = {
+    version: '1.0.0',
+    blocks: [
+      {
+        id: 'contacts-block-instance',
+        title: 'Contacts',
+        repeatable: true,
+        fields: [
+          {
+            id: 'name',
+            type: 'text',
+            label: 'Contact Name',
+            validation: [],
+          },
+          {
+            id: 'emergency-contacts.emergencyName',
+            type: 'text',
+            label: 'Full Name',
+            repeatableGroupId: 'emergency-contacts',
+            repeatableDefaultSource: 'caseContext.contactGroupId.@index.emergencyContacts',
+            validation: [],
+          },
+          {
+            id: 'emergency-contacts.emergencyPhone',
+            type: 'text',
+            label: 'Emergency Phone',
+            repeatableGroupId: 'emergency-contacts',
+            validation: [],
+          },
+        ],
+      },
+    ],
+    submission: { url: '/api/submit', method: 'POST' },
+  };
+
+  test('given an open contact instance, should seed its emergency contacts and keep them on validate', async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    let mainForm: UseFormReturn<FieldValues> | undefined;
+
+    function Harness() {
+      mainForm = useForm({
+        defaultValues: {
+          contactGroupId: [{ name: 'Ada' }, { name: 'Grace' }],
+        },
+      });
+
+      return (
+        <PopinFormSession
+          resolvedBlock={{ block: contactBlock, isHidden: false, isDisabled: false }}
+          popinDescriptor={instanceDescriptor}
+          mainForm={mainForm}
+          initialFormContext={{}}
+          caseContext={contactCaseContext}
+          popinEditContext={{ groupId: 'contactGroupId', index: 1 }}
+          popinLoadData={null}
+          isLoadingPopinData={false}
+          onLoadDataSource={() => {}}
+          dataSourceCache={{}}
+          onClose={() => {}}
+          onValidated={async () => {}}
+        />
+      );
+    }
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <Harness />
+      </QueryClientProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('Jane')).toBeInTheDocument();
+    });
+    expect(screen.getByDisplayValue('John')).toBeInTheDocument();
+    expect(screen.queryByDisplayValue('Alice')).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Validate' }));
+
+    await waitFor(() => {
+      const rows = mainForm?.getValues('contactGroupId') as Array<Record<string, unknown>>;
+      expect(rows[1]['emergency-contacts']).toEqual([
+        { emergencyName: 'Jane', emergencyPhone: '098' },
+        { emergencyName: 'John', emergencyPhone: '123' },
+      ]);
+    });
+    const rows = mainForm?.getValues('contactGroupId') as Array<Record<string, unknown>>;
+    expect(rows[0]).toEqual({ name: 'Ada' });
+    expect(rows[1]).toMatchObject({ name: 'Grace' });
+  });
+});

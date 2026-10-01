@@ -640,6 +640,43 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
           fields: [],
         },
         {
+          id: 'contacts-block',
+          title: 'Contacts',
+          description:
+            'Each summary opens that contact. Emergency contacts are seeded from caseContext.contactGroupId.@index.emergencyContacts.',
+          repeatable: true,
+          repeatablePopin: true,
+          repeatableSummaryTemplate: '{{#if name}}{{name}}{{else}}New contact{{/if}}',
+          repeatableDefaultSource: 'contactGroupId',
+          minInstances: 0,
+          maxInstances: 5,
+          fields: [
+            {
+              id: 'contactGroupId.name',
+              type: 'text',
+              label: 'Contact Name',
+              repeatableGroupId: 'contactGroupId',
+              validation: [],
+            },
+            {
+              id: 'emergency-contacts.emergencyName',
+              type: 'text',
+              label: 'Emergency Contact Name',
+              description: 'Seeded from the open contact row in case context',
+              repeatableGroupId: 'emergency-contacts',
+              repeatableDefaultSource: 'caseContext.contactGroupId.@index.emergencyContacts',
+              validation: [],
+            },
+            {
+              id: 'emergency-contacts.emergencyPhone',
+              type: 'text',
+              label: 'Emergency Contact Phone',
+              repeatableGroupId: 'emergency-contacts',
+              validation: [],
+            },
+          ],
+        },
+        {
           id: 'corporation-details',
           title: 'Corporation Details',
           description: 'Additional information for corporations',
