@@ -5,7 +5,7 @@
  * Handles visibility and disabled states with smooth animations.
  */
 
-import { useEffect, useState, useRef, useMemo, memo } from 'react';
+import { Fragment, useEffect, useState, useRef, useMemo, memo } from 'react';
 import type { BlockDescriptor, GlobalFormDescriptor, FormData } from '@/types/form-descriptor';
 import type { UseFormReturn, FieldValues } from 'react-hook-form';
 import type { FormContext } from '@/utils/template-evaluator';
@@ -14,6 +14,7 @@ import { resolveFieldStatus, type StatusMode } from '@/utils/resolve-field-statu
 import { useOptionalFormStatusContext } from '@/context/form-status-context';
 import { isRepeatableBlock, isRepeatablePopinBlock, groupFieldsByRepeatableGroupId, buildAutoFillPatchFromSelection, repeatableGroupDefaultSource } from '@/utils/form-descriptor-integration';
 import { buildBlockLayoutRows } from '@/utils/block-layout';
+import { buildPlainNestedPlacement } from '@/utils/nested-block-placement';
 import { cn } from '@/lib/utils';
 import FieldWrapper from './field-wrapper';
 import RepeatableFieldGroup from './repeatable-field-group';
@@ -40,7 +41,13 @@ export interface BlockProps {
    * Use this on the main form; popin dialogs should always render inline fields.
    */
   renderRepeatablesAsSummary?: boolean;
+  /** Descriptor used to resolve `nestedBlocks` by id. */
+  descriptor?: GlobalFormDescriptor | null;
+  /** Block ids already on this render path, so a cycle cannot recurse. */
+  nestedAncestorIds?: readonly string[];
 }
+
+const emptyAncestorIds: readonly string[] = [];
 
 /**
  * Block Component
@@ -59,6 +66,8 @@ function Block({
   renderRepeatablesAsSummary,
   statusMode = 'local',
   isReadonly = false,
+  descriptor = null,
+  nestedAncestorIds = emptyAncestorIds,
 }: BlockProps) {
   const ancestorStatus = useOptionalFormStatusContext();
   const statusContext = statusMode === 'context' ? ancestorStatus : null;
@@ -84,6 +93,13 @@ function Block({
     }
     return block.fields.filter(f => !f.repeatableGroupId);
   }, [block.fields, isRepeatable]);
+
+  const blocksById = useMemo(
+    () => new Map((descriptor?.blocks ?? []).map((item) => [item.id, item])),
+    [descriptor]
+  );
+
+  const ancestorIds = useMemo(() => new Set(nestedAncestorIds), [nestedAncestorIds]);
 
   // Handle smooth enter/exit animations
   useEffect(() => {
@@ -256,9 +272,17 @@ function Block({
             );
           })
         ) : null}
-        {/* Render non-repeatable fields */}
+        {/* Render non-repeatable fields, with nested blocks between them on a plain parent */}
         {(() => {
           const layoutMode = block.layout?.mode ?? 'default';
+          const placement = isRepeatable
+            ? [{ kind: 'fields' as const, fields: nonRepeatableFields }]
+            : buildPlainNestedPlacement({
+                block,
+                fields: nonRepeatableFields,
+                blocksById,
+                ancestorIds,
+              });
 
           const renderField = (field: (typeof nonRepeatableFields)[number]) => {
             const fieldStatus = resolveFieldStatus({
@@ -286,49 +310,95 @@ function Block({
             );
           };
 
-          if (layoutMode !== 'grid') {
-            return nonRepeatableFields.map(renderField);
-          }
+          const renderFieldGroup = (fields: typeof nonRepeatableFields, segmentIndex: number) => {
+            if (layoutMode !== 'grid') {
+              return fields.map(renderField);
+            }
 
-          const rows = buildBlockLayoutRows(block, nonRepeatableFields);
-          const columns = block.layout?.columns ?? 1;
-          const gap = block.layout?.gap ?? 'md';
-          const gapYClass =
-            gap === 'sm' ? 'gap-y-2' : gap === 'lg' ? 'gap-y-6' : 'gap-y-4';
-
-          const gridColsClass =
-            columns === 1
-              ? 'md:grid-cols-1'
-              : columns === 2
-              ? 'md:grid-cols-2'
-              : 'md:grid-cols-3';
-
-          return rows.map((row, rowIndex) => {
-            const rowGridColsClass =
-              row.gridColumns === 1
+            const rows = buildBlockLayoutRows(block, fields);
+            const columns = block.layout?.columns ?? 1;
+            const gap = block.layout?.gap ?? 'md';
+            const gapYClass =
+              gap === 'sm' ? 'gap-y-2' : gap === 'lg' ? 'gap-y-6' : 'gap-y-4';
+            const gridColsClass =
+              columns === 1
                 ? 'md:grid-cols-1'
-                : row.gridColumns === 2
+                : columns === 2
                 ? 'md:grid-cols-2'
-                : row.gridColumns === 3
-                ? 'md:grid-cols-3'
-                : gridColsClass;
+                : 'md:grid-cols-3';
+
+            return rows.map((row, rowIndex) => {
+              const rowGridColsClass =
+                row.gridColumns === 1
+                  ? 'md:grid-cols-1'
+                  : row.gridColumns === 2
+                  ? 'md:grid-cols-2'
+                  : row.gridColumns === 3
+                  ? 'md:grid-cols-3'
+                  : gridColsClass;
+
+              return (
+                <div
+                  key={`segment-${segmentIndex}-row-${rowIndex}`}
+                  className={cn(
+                    'grid grid-cols-1',
+                    rowGridColsClass,
+                    'gap-x-4',
+                    gapYClass
+                  )}
+                >
+                  {row.slots.map((slot, slotIndex) => (
+                    <div key={`slot-${slotIndex}`} className={slot.colSpan ? `col-span-${slot.colSpan}` : undefined}>
+                      {slot.fields.map(renderField)}
+                    </div>
+                  ))}
+                </div>
+              );
+            });
+          };
+
+          const nestedBlockStatus = (nested: BlockDescriptor) => {
+            if (statusMode === 'context' && statusContext) {
+              return statusContext.getBlockStatus(nested.id);
+            }
+            return {
+              hidden: evaluateHiddenStatus(nested, formContext),
+              disabled: evaluateDisabledStatus(nested, formContext),
+              readonly: evaluateReadonlyStatus(nested, formContext),
+            };
+          };
+
+          return placement.map((segment, segmentIndex) => {
+            if (segment.kind === 'fields') {
+              return (
+                <Fragment key={`fields-${segmentIndex}`}>
+                  {renderFieldGroup(segment.fields, segmentIndex)}
+                </Fragment>
+              );
+            }
+
+            const ownStatus = nestedBlockStatus(segment.block);
+            if (ownStatus.hidden) {
+              return null;
+            }
 
             return (
-            <div
-              key={`row-${rowIndex}`}
-              className={cn(
-                'grid grid-cols-1',
-                rowGridColsClass,
-                'gap-x-4',
-                gapYClass
-              )}
-            >
-              {row.slots.map((slot, slotIndex) => (
-                <div key={`slot-${slotIndex}`} className={slot.colSpan ? `col-span-${slot.colSpan}` : undefined}>
-                  {slot.fields.map(renderField)}
-                </div>
-              ))}
-            </div>
+              <div key={segment.block.id} className="w-full">
+                <Block
+                  block={segment.block}
+                  descriptor={descriptor}
+                  nestedAncestorIds={[...nestedAncestorIds, block.id]}
+                  isDisabled={isDisabled || ownStatus.disabled}
+                  isHidden={false}
+                  isReadonly={isReadonly || ownStatus.readonly}
+                  statusMode={statusMode}
+                  form={form}
+                  formContext={formContext}
+                  onLoadDataSource={onLoadDataSource}
+                  dataSourceCache={dataSourceCache}
+                  renderRepeatablesAsSummary={renderRepeatablesAsSummary}
+                />
+              </div>
             );
           });
         })()}

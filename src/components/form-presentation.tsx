@@ -33,12 +33,14 @@ function resolveBlockStatus(
 
 function FormPresentationBlock({
   block,
+  descriptor,
   form,
   formContext,
   onLoadDataSource,
   dataSourceCache,
 }: {
   block: BlockDescriptor;
+  descriptor: FormPresentationProps['mergedDescriptor'];
   form: FormPresentationProps['form'];
   formContext: FormPresentationProps['formContext'];
   onLoadDataSource: FormPresentationProps['onLoadDataSource'];
@@ -58,6 +60,7 @@ function FormPresentationBlock({
   return (
     <Block
       block={block}
+      descriptor={descriptor}
       isDisabled={isDisabled}
       isHidden={false}
       isReadonly={isReadonly}
@@ -119,6 +122,7 @@ function FormPresentation({
           <MemoFormPresentationBlock
             key={block.id}
             block={block}
+            descriptor={mergedDescriptor}
             form={form}
             formContext={formContext}
             onLoadDataSource={onLoadDataSource}

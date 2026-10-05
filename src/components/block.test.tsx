@@ -6,9 +6,11 @@
  */
 
 import { describe, test, expect, vi } from 'vitest';
+import { render } from '@testing-library/react';
 import Block from './block';
 import type { BlockProps } from './block';
-import type { BlockDescriptor } from '@/types/form-descriptor';
+import type { BlockDescriptor, GlobalFormDescriptor } from '@/types/form-descriptor';
+import { FormStatusContext } from '@/context/form-status-context';
 import { useForm } from 'react-hook-form';
 
 // Mock react-hook-form
@@ -304,5 +306,285 @@ describe('Block', () => {
     
     // Component should evaluate disabled status using array length
     expect(Block).toBeDefined();
+  });
+
+  describe('plain nested blocks', () => {
+    const textField = (id: string, label = id): BlockDescriptor['fields'][number] => ({
+      id,
+      type: 'text',
+      label,
+      validation: [],
+    });
+
+    const nestedBlock = (
+      id: string,
+      fieldId: string,
+      status?: BlockDescriptor['status']
+    ): BlockDescriptor => ({
+      id,
+      title: id,
+      fields: [textField(fieldId)],
+      ...(status ? { status } : {}),
+    });
+
+    const parentBlock = (
+      nestedBlocks: NonNullable<BlockDescriptor['nestedBlocks']>
+    ): BlockDescriptor => ({
+      id: 'parent',
+      title: 'Parent',
+      fields: [textField('city', 'City'), textField('name', 'Name')],
+      nestedBlocks,
+    });
+
+    const descriptorFor = (blocks: BlockDescriptor[]): GlobalFormDescriptor => ({
+      blocks,
+      submission: { url: '/api/submit', method: 'POST' },
+    });
+
+    const renderParent = ({
+      block,
+      blocks,
+      isDisabled = false,
+      isHidden = false,
+      formContext = {},
+      statusMode = 'local' as const,
+      statusForBlock,
+    }: {
+      block: BlockDescriptor;
+      blocks: BlockDescriptor[];
+      isDisabled?: boolean;
+      isHidden?: boolean;
+      formContext?: BlockProps['formContext'];
+      statusMode?: 'local' | 'context';
+      statusForBlock?: (blockId: string) => { hidden: boolean; disabled: boolean; readonly: boolean };
+    }) => {
+      const element = (
+        <Block
+          {...createProps({
+            block,
+            descriptor: descriptorFor(blocks),
+            isDisabled,
+            isHidden,
+            formContext,
+            statusMode,
+            dataSourceCache: {},
+          })}
+        />
+      );
+
+      if (statusMode !== 'context') {
+        return render(element);
+      }
+
+      const visible = { hidden: false, disabled: false, readonly: false };
+      return render(
+        <FormStatusContext.Provider
+          value={{
+            formContext,
+            getBlockStatus: (blockId) => statusForBlock?.(blockId) ?? visible,
+            getFieldStatus: () => visible,
+          }}
+        >
+          {element}
+        </FormStatusContext.Provider>
+      );
+    };
+
+    const placementIds = (container: HTMLElement) =>
+      [...container.querySelectorAll('[data-testid^="block-"], [data-testid^="field-"]')]
+        .map((element) => element.getAttribute('data-testid'))
+        .filter(
+          (id): id is string =>
+            Boolean(id) && !id.startsWith('block-title-') && id !== 'block-parent'
+        );
+
+    test('given a nested block at the top, should render it before the parent fields', () => {
+      const notes = nestedBlock('notes', 'note');
+      const { container } = renderParent({
+        block: parentBlock([{ blockId: 'notes', position: 'top' }]),
+        blocks: [parentBlock([{ blockId: 'notes', position: 'top' }]), notes],
+      });
+
+      expect(placementIds(container)).toEqual([
+        'block-notes',
+        'field-note',
+        'field-city',
+        'field-name',
+      ]);
+    });
+
+    test('given a nested block at the bottom, should render it after the parent fields', () => {
+      const notes = nestedBlock('notes', 'note');
+      const block = parentBlock([{ blockId: 'notes', position: 'bottom' }]);
+      const { container } = renderParent({ block, blocks: [block, notes] });
+
+      expect(placementIds(container)).toEqual([
+        'field-city',
+        'field-name',
+        'block-notes',
+        'field-note',
+      ]);
+    });
+
+    test('given insertBefore, should render the nested block before that field', () => {
+      const notes = nestedBlock('notes', 'note');
+      const block = parentBlock([{ blockId: 'notes', insertBefore: 'name' }]);
+      const { container } = renderParent({ block, blocks: [block, notes] });
+
+      expect(placementIds(container)).toEqual([
+        'field-city',
+        'block-notes',
+        'field-note',
+        'field-name',
+      ]);
+    });
+
+    test('given insertAfter, should render the nested block after that field', () => {
+      const notes = nestedBlock('notes', 'note');
+      const block = parentBlock([{ blockId: 'notes', insertAfter: 'city' }]);
+      const { container } = renderParent({ block, blocks: [block, notes] });
+
+      expect(placementIds(container)).toEqual([
+        'field-city',
+        'block-notes',
+        'field-note',
+        'field-name',
+      ]);
+    });
+
+    test('given two nested blocks on the same slot, should render them in nestedBlocks order', () => {
+      const alpha = nestedBlock('alpha', 'alpha-note');
+      const beta = nestedBlock('beta', 'beta-note');
+      const block = parentBlock([
+        { blockId: 'alpha', position: 'bottom' },
+        { blockId: 'beta', position: 'bottom' },
+      ]);
+      const { container } = renderParent({ block, blocks: [block, alpha, beta] });
+
+      expect(placementIds(container)).toEqual([
+        'field-city',
+        'field-name',
+        'block-alpha',
+        'field-alpha-note',
+        'block-beta',
+        'field-beta-note',
+      ]);
+    });
+
+    test('given insertAfter one field and insertBefore the next, should keep those as separate slots', () => {
+      const beforeName = nestedBlock('before-name', 'before-note');
+      const afterCity = nestedBlock('after-city', 'after-note');
+      const block = parentBlock([
+        { blockId: 'before-name', insertBefore: 'name' },
+        { blockId: 'after-city', insertAfter: 'city' },
+      ]);
+      const { container } = renderParent({
+        block,
+        blocks: [block, beforeName, afterCity],
+      });
+
+      expect(placementIds(container)).toEqual([
+        'field-city',
+        'block-after-city',
+        'field-after-note',
+        'block-before-name',
+        'field-before-note',
+        'field-name',
+      ]);
+    });
+
+    test('given a hidden parent, should render neither the parent nor its nested block', () => {
+      const notes = nestedBlock('notes', 'note');
+      const block = parentBlock([{ blockId: 'notes', position: 'top' }]);
+      const { queryByTestId } = renderParent({
+        block,
+        blocks: [block, notes],
+        isHidden: true,
+      });
+
+      expect(queryByTestId('block-parent')).not.toBeInTheDocument();
+      expect(queryByTestId('block-notes')).not.toBeInTheDocument();
+      expect(queryByTestId('field-city')).not.toBeInTheDocument();
+    });
+
+    test('given a hidden nested block, should leave the parent fields and omit that slot', () => {
+      const notes = nestedBlock('notes', 'note', { hidden: '{{hideNotes}}' });
+      const block = parentBlock([{ blockId: 'notes', position: 'top' }]);
+      const { queryByTestId } = renderParent({
+        block,
+        blocks: [block, notes],
+        formContext: { hideNotes: true },
+      });
+
+      expect(queryByTestId('field-city')).toBeInTheDocument();
+      expect(queryByTestId('field-name')).toBeInTheDocument();
+      expect(queryByTestId('block-notes')).not.toBeInTheDocument();
+    });
+
+    test('given a hidden nested block in the status map, should omit that slot', () => {
+      const notes = nestedBlock('notes', 'note');
+      const block = parentBlock([{ blockId: 'notes', position: 'bottom' }]);
+      const { queryByTestId } = renderParent({
+        block,
+        blocks: [block, notes],
+        statusMode: 'context',
+        statusForBlock: (blockId) => ({
+          hidden: blockId === 'notes',
+          disabled: false,
+          readonly: false,
+        }),
+      });
+
+      expect(queryByTestId('field-city')).toBeInTheDocument();
+      expect(queryByTestId('block-notes')).not.toBeInTheDocument();
+    });
+
+    test('given a disabled parent, should disable the nested block fields too', () => {
+      const notes = nestedBlock('notes', 'note');
+      const block = parentBlock([{ blockId: 'notes', position: 'bottom' }]);
+      const { getByTestId } = renderParent({
+        block,
+        blocks: [block, notes],
+        isDisabled: true,
+      });
+
+      expect(getByTestId('field-city')).toHaveAttribute('data-disabled', 'true');
+      expect(getByTestId('field-note')).toHaveAttribute('data-disabled', 'true');
+    });
+
+    test('given a disabled nested block, should disable only that block', () => {
+      const notes = nestedBlock('notes', 'note', { disabled: '{{disableNotes}}' });
+      const block = parentBlock([{ blockId: 'notes', position: 'bottom' }]);
+      const { getByTestId } = renderParent({
+        block,
+        blocks: [block, notes],
+        formContext: { disableNotes: true },
+      });
+
+      expect(getByTestId('field-city')).toHaveAttribute('data-disabled', 'false');
+      expect(getByTestId('field-note')).toHaveAttribute('data-disabled', 'true');
+    });
+
+    test('given a grid parent, should keep the nested block outside the field grid', () => {
+      const notes = nestedBlock('notes', 'note');
+      const block: BlockDescriptor = {
+        ...parentBlock([{ blockId: 'notes', insertBefore: 'name' }]),
+        layout: { mode: 'grid', columns: 2 },
+        fields: [
+          { ...textField('city', 'City'), layout: { width: 'half' } },
+          { ...textField('name', 'Name'), layout: { width: 'half' } },
+        ],
+      };
+      const { container } = renderParent({ block, blocks: [block, notes] });
+      const nested = container.querySelector('[data-testid="block-notes"]');
+
+      expect(nested?.closest('.grid')).toBeNull();
+      expect(placementIds(container)).toEqual([
+        'field-city',
+        'block-notes',
+        'field-note',
+        'field-name',
+      ]);
+    });
   });
 });
