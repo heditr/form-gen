@@ -95,6 +95,12 @@ function FormPresentation({
     );
   }
 
+  const nestedBlockIds = new Set(
+    mergedDescriptor.blocks.flatMap((block) =>
+      (block.nestedBlocks ?? []).map((entry) => entry.blockId)
+    )
+  );
+
   return (
     <form
       data-testid="form-presentation"
@@ -105,7 +111,7 @@ function FormPresentation({
       }}
     >
       {mergedDescriptor.blocks.map((block) => {
-        if (block.popin) {
+        if (block.popin || nestedBlockIds.has(block.id)) {
           return null;
         }
 

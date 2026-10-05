@@ -139,6 +139,49 @@ describe('FormPresentation', () => {
     expect(FormPresentation).toBeDefined();
   });
 
+  test('given a block referenced by nestedBlocks, should omit it from the main form and still render unreferenced blocks', () => {
+    const descriptor = createMockDescriptor();
+    descriptor.blocks = [
+      {
+        ...descriptor.blocks[0],
+        id: 'parent',
+        title: 'Parent',
+        nestedBlocks: [{ blockId: 'nested', position: 'bottom' }],
+      },
+      {
+        id: 'nested',
+        title: 'Nested',
+        fields: [
+          {
+            id: 'nested-field',
+            type: 'text',
+            label: 'Nested field',
+            validation: [],
+          },
+        ],
+      },
+      {
+        id: 'sibling',
+        title: 'Sibling',
+        fields: [
+          {
+            id: 'sibling-field',
+            type: 'text',
+            label: 'Sibling field',
+            validation: [],
+          },
+        ],
+      },
+    ];
+    const { queryByTestId } = render(
+      <FormPresentation {...createProps({ mergedDescriptor: descriptor })} />
+    );
+
+    expect(queryByTestId('block-parent')).toBeInTheDocument();
+    expect(queryByTestId('block-sibling')).toBeInTheDocument();
+    expect(queryByTestId('block-nested')).not.toBeInTheDocument();
+  });
+
   test('given focus leaves a control, should invoke onFieldBlur', () => {
     const onFieldBlur = vi.fn();
     const props = createProps({ onFieldBlur });
