@@ -461,6 +461,24 @@ export interface PopinSubmitConfig {
 export type QueryInvalidationMap = Record<string, Array<Array<string | number>>>;
 
 /**
+ * A block rendered inside another block.
+ *
+ * Exactly one of `position`, `insertBefore`, or `insertAfter` is set.
+ * The referenced block stays its own declaration and keeps its own title,
+ * fields, limits, and layout.
+ */
+export interface NestedBlockReference {
+  /** Id of the block to render inside the parent. The block stays in `descriptor.blocks`. */
+  blockId: string;
+  /** Render at the top or bottom of the parent block. Mutually exclusive with the anchor fields. */
+  position?: 'top' | 'bottom';
+  /** Render immediately before this field id on the parent block. */
+  insertBefore?: string;
+  /** Render immediately after this field id on the parent block. */
+  insertAfter?: string;
+}
+
+/**
  * Block descriptor definition
  * 
  * @property id - Unique identifier for the block
@@ -485,6 +503,8 @@ export type QueryInvalidationMap = Record<string, Array<Array<string | number>>>
  *   that nested path when it is an array of objects.
  * @property repeatablePopin - If true with repeatable, each instance is edited via popin; summaries shown inline, click to edit
  * @property repeatableSummaryTemplate - Optional Handlebars template for summary text per instance (e.g. "{{name}} ({{role}})")
+ * @property nestedBlocks - Optional references to other blocks rendered inside this block.
+ *   Each entry names one block and exactly one placement. The referenced block keeps its own descriptor.
  */
 export interface BlockDescriptor {
   id: string;
@@ -505,6 +525,7 @@ export interface BlockDescriptor {
   repeatableDefaultSource?: string;
   repeatablePopin?: boolean;
   repeatableSummaryTemplate?: string;
+  nestedBlocks?: NestedBlockReference[];
   layout?: {
     mode?: 'default' | 'grid';
     columns?: 1 | 2 | 3;

@@ -244,6 +244,24 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
       );
     }
 
+    try {
+      const { assertNestedBlocks } = await import('@/utils/nested-block-resolver');
+      resolvedDescriptor = assertNestedBlocks(resolvedDescriptor);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to validate nested blocks';
+      console.error('Error validating nested blocks:', error);
+
+      return NextResponse.json(
+        { error: errorMessage },
+        {
+          status: 500,
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+    }
+
     return NextResponse.json(resolvedDescriptor, {
       status: 200,
       headers: {
