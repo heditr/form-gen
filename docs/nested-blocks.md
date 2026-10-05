@@ -123,4 +123,12 @@ The parent id is not a wrapper around those values.
 
 ## Repeatable popin
 
-`assertNestedBlocks` allows a repeatable popin to list `nestedBlocks`, and it checks row clashes for that case. The open-instance dialog does not place those blocks yet. `Block` only runs the placement walk for a plain parent, and `FormPresentation` already hides the referenced block on the main form. A nested block declared on a repeatable popin is therefore accepted at load and not drawn until the dialog path is built.
+`assertNestedBlocks` allows a repeatable popin to list `nestedBlocks`, and it checks row clashes for that case.
+
+Opening a row builds an instance descriptor in `buildRepeatablePopinInstanceDescriptor` (`src/utils/popin-instance-descriptor.ts`):
+
+- `blocks[0]` is the shell. Its id is `${parent.id}-instance`. Title, description, and layout stay the parent's. Fields are the opened group only, with the group prefix removed and `repeatableGroupId` cleared. The shell keeps `nestedBlocks`. It does not take the parent's min, max, or `repeatable: true` merely because a nested block exists.
+- Each referenced block follows unchanged, with its own title, min, max, layout, source, and fields.
+- A same-block group that is not a nested block stays on the shell. That is what still sets `repeatable: true`.
+
+The dialog still renders only `blocks[0]`, so the nested block is not drawn inside the popin yet. `FormPresentation` also hides it on the main form.
