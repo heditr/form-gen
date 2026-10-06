@@ -483,4 +483,57 @@ describe('omitStatusHiddenFormValues', () => {
     expect(omitStatusHiddenFormValues(descriptor, alreadyClean)).toBe(alreadyClean);
     expect(omitStatusHiddenFormValues(null, visible)).toBe(visible);
   });
+
+  test('given a hidden nested block, should drop its key from each parent row', () => {
+    const descriptor: GlobalFormDescriptor = {
+      blocks: [
+        {
+          id: 'contacts-block',
+          title: 'Contacts',
+          repeatable: true,
+          repeatablePopin: true,
+          fields: [
+            {
+              id: 'contactGroupId.name',
+              type: 'text',
+              label: 'Name',
+              repeatableGroupId: 'contactGroupId',
+              validation: [],
+            },
+          ],
+          nestedBlocks: [{ blockId: 'emergency-contacts-block', position: 'bottom' }],
+        },
+        {
+          id: 'emergency-contacts-block',
+          title: 'Emergency contacts',
+          repeatable: true,
+          status: { hidden: 'true' },
+          fields: [
+            {
+              id: 'emergency-contacts.emergencyName',
+              type: 'text',
+              label: 'Name',
+              repeatableGroupId: 'emergency-contacts',
+              validation: [],
+            },
+          ],
+        },
+      ],
+      submission: { url: '/api/submit', method: 'POST' },
+    };
+
+    expect(
+      omitStatusHiddenFormValues(descriptor, {
+        contactGroupId: [
+          { name: 'Ada' },
+          {
+            name: 'Grace',
+            'emergency-contacts': [{ emergencyName: 'Jane' }],
+          },
+        ],
+      })
+    ).toEqual({
+      contactGroupId: [{ name: 'Ada' }, { name: 'Grace' }],
+    });
+  });
 });

@@ -407,9 +407,17 @@ export function extractDefaultValues(
 
   const defaultValues: Partial<FormData> = {};
   const processedRepeatableGroups = new Set<string>();
+  const nestedOnMain = new Set(
+    scope === 'main'
+      ? repeatablePopinNestedPlacements(descriptor).map((placement) => placement.nestedBlockId)
+      : []
+  );
 
   for (const block of descriptor.blocks) {
     if (!shouldIncludeBlockInScope(block, scope)) {
+      continue;
+    }
+    if (nestedOnMain.has(block.id)) {
       continue;
     }
 
@@ -761,6 +769,58 @@ export function isRepeatablePopinBlock(block: BlockDescriptor): boolean {
   return block.repeatable === true && block.repeatablePopin === true;
 }
 
+export interface RepeatablePopinNestedPlacement {
+  nestedBlockId: string;
+  parentGroupId: string;
+  nestedBlock: BlockDescriptor;
+}
+
+function outerRepeatableGroupId(block: BlockDescriptor): string | undefined {
+  const groups = groupFieldsByRepeatableGroupId(block.fields);
+  const ids = Object.keys(groups);
+  if (ids.length === 0) {
+    return undefined;
+  }
+  if (ids.length === 1) {
+    return ids[0];
+  }
+  return (
+    ids.find((id) => {
+      const source = repeatableGroupDefaultSource(groups[id], block.repeatableDefaultSource);
+      return !source?.includes('@index');
+    }) ?? ids[0]
+  );
+}
+
+/**
+ * Blocks drawn inside a repeatable popin. On the main form their values live
+ * on the parent row, not as their own top-level keys.
+ */
+export function repeatablePopinNestedPlacements(
+  descriptor: GlobalFormDescriptor | null
+): RepeatablePopinNestedPlacement[] {
+  if (!descriptor) {
+    return [];
+  }
+
+  const blocksById = new Map(descriptor.blocks.map((block) => [block.id, block]));
+  return descriptor.blocks.flatMap((block) => {
+    if (!isRepeatablePopinBlock(block) || !block.nestedBlocks?.length) {
+      return [];
+    }
+    const parentGroupId = outerRepeatableGroupId(block);
+    if (!parentGroupId) {
+      return [];
+    }
+    return block.nestedBlocks.flatMap((entry) => {
+      const nestedBlock = blocksById.get(entry.blockId);
+      return nestedBlock
+        ? [{ nestedBlockId: nestedBlock.id, parentGroupId, nestedBlock }]
+        : [];
+    });
+  });
+}
+
 /**
  * Group fields by their repeatableGroupId
  * 
@@ -816,6 +876,13 @@ export function buildZodSchemaFromDescriptor(
   const schemaShape: Record<string, z.ZodTypeAny> = {};
   const processedRepeatableGroups = new Set<string>();
   const nonRepeatableTree: SchemaTreeObject = {};
+  const nestedPlacements = scope === 'main' ? repeatablePopinNestedPlacements(descriptor) : [];
+  const nestedBlockIds = new Set(nestedPlacements.map((placement) => placement.nestedBlockId));
+  const nestedByParentGroup = nestedPlacements.reduce((map, placement) => {
+    const current = map.get(placement.parentGroupId) ?? [];
+    map.set(placement.parentGroupId, [...current, placement.nestedBlock]);
+    return map;
+  }, new Map<string, BlockDescriptor[]>());
 
   const addSchemaToTree = (
     tree: SchemaTreeObject,
@@ -859,8 +926,48 @@ export function buildZodSchemaFromDescriptor(
     return z.object(shape);
   };
 
+  const arraySchemaForGroup = (owner: BlockDescriptor, fields: FieldDescriptor[]) => {
+    const groupId = fields[0]?.repeatableGroupId ?? '';
+    const groupTree: SchemaTreeObject = {};
+    for (const field of fields) {
+      if (field.type === 'button' || isSubmitSkippedFieldType(field.type)) {
+        continue;
+      }
+      if (evaluateHiddenStatus(field, formContext)) {
+        continue;
+      }
+      const baseFieldId = field.id.startsWith(`${groupId}.`)
+        ? field.id.slice(groupId.length + 1)
+        : field.id;
+      const fieldType = field.type as Exclude<typeof field.type, 'button'>;
+      const fieldRules = evaluateValidationArrayTemplate(field.validation, formContext);
+      const fieldSchema = convertToZodSchema(fieldRules, fieldType);
+      if (baseFieldId.includes('.')) {
+        addSchemaToTree(groupTree, baseFieldId, fieldSchema);
+      } else {
+        groupTree[baseFieldId] = fieldSchema;
+      }
+    }
+
+    let arraySchema = z.array(schemaTreeToZod(groupTree));
+    if (owner.minInstances !== undefined) {
+      arraySchema = arraySchema.min(owner.minInstances, {
+        message: `At least ${owner.minInstances} instance(s) required`,
+      });
+    }
+    if (owner.maxInstances !== undefined) {
+      arraySchema = arraySchema.max(owner.maxInstances, {
+        message: `At most ${owner.maxInstances} instance(s) allowed`,
+      });
+    }
+    return arraySchema;
+  };
+
   for (const block of descriptor.blocks) {
     if (!shouldIncludeBlockInScope(block, scope)) {
+      continue;
+    }
+    if (nestedBlockIds.has(block.id)) {
       continue;
     }
 
@@ -904,8 +1011,26 @@ export function buildZodSchemaFromDescriptor(
           }
         }
         
-        // Create array schema for this repeatable group
-        const rowSchema = schemaTreeToZod(groupTree);
+        // Create array schema for this repeatable group.
+        // A nested block's array is an optional key on this row, with that block's own limits.
+        const rowShape: Record<string, z.ZodTypeAny> = {};
+        for (const [key, node] of Object.entries(groupTree)) {
+          rowShape[key] = schemaTreeToZod(node);
+        }
+        for (const nested of nestedByParentGroup.get(groupId) ?? []) {
+          if (evaluateHiddenStatus(nested, formContext) || !isRepeatableBlock(nested)) {
+            continue;
+          }
+          const nestedGroups = groupFieldsByRepeatableGroupId(nested.fields);
+          for (const [nestedGroupId, nestedFields] of Object.entries(nestedGroups)) {
+            if (processedRepeatableGroups.has(nestedGroupId)) {
+              continue;
+            }
+            rowShape[nestedGroupId] = arraySchemaForGroup(nested, nestedFields).optional();
+            processedRepeatableGroups.add(nestedGroupId);
+          }
+        }
+        const rowSchema = z.object(rowShape);
         let arraySchema = z.array(rowSchema);
         
         // Apply array-level validation (minInstances/maxInstances)

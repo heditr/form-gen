@@ -2,7 +2,9 @@
 
 A block can render another block inside itself. The parent lists references. The referenced block stays one declaration in `descriptor.blocks` and keeps its own title, description, status, layout, fields, and, when it is repeatable, its own limits and source.
 
-Nesting changes where the block is drawn. It does not wrap that block's values under the parent. A nested block's fields and repeatable group stay on their own form keys.
+On a plain parent, nesting changes where the block is drawn. That block's fields and repeatable group stay on their own form keys.
+
+On a repeatable popin, the nested block's values are part of the open row. A nested repeatable group is a key on that row, not a second array beside the parent group.
 
 This is separate from same-block `repeatableGroupId` groups, which [nested-repeatable-in-repeatable-popin.md](nested-repeatable-in-repeatable-popin.md) describes. It is also separate from `subFormRef` (sibling blocks spliced onto the main list) and `repeatableBlockRef` (fields copied onto the parent).
 
@@ -117,9 +119,26 @@ Disabled and readonly fields still submit. Hiding a block only removes it from t
 
 ## Form values
 
-On a plain parent, nesting is visual. The nested block's field ids are the form keys, exactly as they would be if the block were rendered at the top level. A repeatable nested block's group id is still that group's key on the form.
+On a plain parent, nesting is visual. The nested block's field ids are the form keys, exactly as they would be if the block were rendered at the top level. A repeatable nested block's group id is still that group's key on the form. The parent id is not a wrapper around those values.
 
-The parent id is not a wrapper around those values.
+On a repeatable popin, main-form defaults store only the parent rows. The nested rows stay on `caseContext` until that contact is opened. The main-form schema does not emit the nested group at the top level. It composes the nested array into the parent row. The key is optional, so an unopened row with no nested array still passes. When the key is present, the nested block's min and max apply. The parent's min and max stay on the parent array.
+
+```typescript
+contactGroupId: [
+  { name: 'Ada' },
+  {
+    name: 'Grace',
+    'emergency-contacts': [
+      { emergencyName: 'Jane', emergencyPhone: '098' },
+      { emergencyName: 'John', emergencyPhone: '123' },
+    ],
+  },
+]
+```
+
+`'emergency-contacts'` is the nested block's own group id. Opening index `1` seeds only Grace's list, because `@index` in that block's `repeatableDefaultSource` is the open parent. `@index` inside an inner field `defaultValue` is the inner row. Create mode (`index < 0`) leaves a source that contains `@index` unresolved, so the nested array is `[]`.
+
+In the popin, the instance descriptor's schema uses the nested block's min and max for that array. A hidden nested block drops its key from each parent row on the main form, and from the popin value when the instance descriptor is used.
 
 ## Repeatable popin
 

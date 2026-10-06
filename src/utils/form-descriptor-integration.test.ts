@@ -10,6 +10,7 @@ import { z } from 'zod';
 import type { BlockDescriptor, GlobalFormDescriptor, FormData } from '@/types/form-descriptor';
 import type { FormContext } from '@/utils/template-evaluator';
 import { registerHandlebarsHelpers } from '@/utils/handlebars-helpers';
+import { buildRepeatablePopinInstanceDescriptor } from './popin-instance-descriptor';
 import {
   isRepeatableBlock,
   isRepeatablePopinBlock,
@@ -2491,6 +2492,195 @@ describe('form descriptor integration', () => {
         index: -1,
       });
       expect(createMode['emergency-contacts']).toEqual([]);
+    });
+  });
+
+  describe('nested block inside a repeatable popin', () => {
+    const textField = (
+      id: string,
+      repeatableGroupId: string,
+      defaultValue?: string
+    ): BlockDescriptor['fields'][number] => ({
+      id,
+      type: 'text',
+      label: id,
+      repeatableGroupId,
+      validation: [],
+      ...(defaultValue ? { defaultValue } : {}),
+    });
+
+    const emergencyBlock = (
+      fields?: BlockDescriptor['fields']
+    ): BlockDescriptor => ({
+      id: 'emergency-contacts-block',
+      title: 'Emergency contacts',
+      repeatable: true,
+      minInstances: 1,
+      maxInstances: 2,
+      repeatableDefaultSource: 'caseContext.contactGroupId.@index.emergencyContacts',
+      fields: fields ?? [
+        textField('emergency-contacts.emergencyName', 'emergency-contacts'),
+        textField('emergency-contacts.emergencyPhone', 'emergency-contacts'),
+      ],
+    });
+
+    const contactsBlock = (): BlockDescriptor => ({
+      id: 'contacts-block',
+      title: 'Contacts',
+      repeatable: true,
+      repeatablePopin: true,
+      minInstances: 0,
+      maxInstances: 5,
+      repeatableDefaultSource: 'contactGroupId',
+      fields: [textField('contactGroupId.name', 'contactGroupId')],
+      nestedBlocks: [{ blockId: 'emergency-contacts-block', position: 'bottom' }],
+    });
+
+    const mainDescriptor = (emergency = emergencyBlock()): GlobalFormDescriptor => ({
+      blocks: [contactsBlock(), emergency],
+      submission: { url: '/api/submit', method: 'POST' },
+    });
+
+    const caseContext: FormContext = {
+      caseContext: {
+        contactGroupId: [
+          {
+            name: 'Ada',
+            emergencyContacts: [{ emergencyName: 'Alice', emergencyPhone: '111' }],
+          },
+          {
+            name: 'Grace',
+            emergencyContacts: [
+              { emergencyName: 'Jane', emergencyPhone: '098' },
+              { emergencyName: 'John', emergencyPhone: '123' },
+            ],
+          },
+        ],
+        emergencyContacts: [
+          { emergencyName: 'Alice', emergencyPhone: '111' },
+          { emergencyName: 'Bob', emergencyPhone: '222' },
+        ],
+      },
+    };
+
+    const oneContact = { emergencyName: 'Jane', emergencyPhone: '098' };
+
+    test('given popin scope, should apply the nested block min and max', () => {
+      const descriptor = mainDescriptor();
+      const instance = buildRepeatablePopinInstanceDescriptor({
+        block: descriptor.blocks[0],
+        groupId: 'contactGroupId',
+        descriptor,
+      });
+      const schema = buildZodSchemaFromDescriptor(instance, {}, 'popin');
+
+      expect(schema.safeParse({ name: 'Grace', 'emergency-contacts': [] }).success).toBe(false);
+      expect(
+        schema.safeParse({ name: 'Grace', 'emergency-contacts': [oneContact] }).success
+      ).toBe(true);
+      expect(
+        schema.safeParse({
+          name: 'Grace',
+          'emergency-contacts': [oneContact, oneContact, oneContact],
+        }).success
+      ).toBe(false);
+    });
+
+    test('given main scope, should keep the nested group on the parent row and optional when missing', () => {
+      const schema = buildZodSchemaFromDescriptor(mainDescriptor());
+
+      expect(
+        schema.safeParse({ contactGroupId: [], 'emergency-contacts': [] }).success
+      ).toBe(true);
+      expect(schema.safeParse({ contactGroupId: [{ name: 'Ada' }] }).success).toBe(true);
+      expect(
+        schema.safeParse({
+          contactGroupId: [{ name: 'Grace', 'emergency-contacts': [] }],
+        }).success
+      ).toBe(false);
+      expect(
+        schema.safeParse({
+          contactGroupId: [{ name: 'Grace', 'emergency-contacts': [oneContact] }],
+        }).success
+      ).toBe(true);
+      expect(
+        schema.safeParse({
+          contactGroupId: [{
+            name: 'Grace',
+            'emergency-contacts': [oneContact, oneContact, oneContact],
+          }],
+        }).success
+      ).toBe(false);
+      expect(
+        schema.safeParse({
+          contactGroupId: Array.from({ length: 6 }, () => ({ name: 'Pat' })),
+        }).success
+      ).toBe(false);
+    });
+
+    test('given main scope, should default only the parent rows', () => {
+      expect(extractDefaultValues(mainDescriptor(), caseContext)).toEqual({
+        contactGroupId: [{ name: 'Ada' }, { name: 'Grace' }],
+      });
+    });
+
+    test('given the open popin index, should seed that row and leave create mode empty', () => {
+      const descriptor = mainDescriptor();
+      const instance = buildRepeatablePopinInstanceDescriptor({
+        block: descriptor.blocks[0],
+        groupId: 'contactGroupId',
+        descriptor,
+      });
+
+      expect(
+        extractDefaultValues(instance, caseContext, { scope: 'popin', index: 1 })[
+          'emergency-contacts'
+        ]
+      ).toEqual([
+        { emergencyName: 'Jane', emergencyPhone: '098' },
+        { emergencyName: 'John', emergencyPhone: '123' },
+      ]);
+      expect(
+        extractDefaultValues(instance, caseContext, { scope: 'popin', index: 0 })[
+          'emergency-contacts'
+        ]
+      ).toEqual([{ emergencyName: 'Alice', emergencyPhone: '111' }]);
+      expect(
+        extractDefaultValues(instance, caseContext, { scope: 'popin', index: -1 })[
+          'emergency-contacts'
+        ]
+      ).toEqual([]);
+    });
+
+    test('given an inner field default, should bind @index to the inner row', () => {
+      const emergency = emergencyBlock([
+        textField(
+          'emergency-contacts.emergencyName',
+          'emergency-contacts',
+          '{{caseContext.emergencyContacts.@index.emergencyName}}'
+        ),
+        textField(
+          'emergency-contacts.emergencyPhone',
+          'emergency-contacts',
+          '{{caseContext.emergencyContacts.@index.emergencyPhone}}'
+        ),
+      ]);
+      emergency.repeatableDefaultSource = 'emergencyContacts';
+      const descriptor = mainDescriptor(emergency);
+      const instance = buildRepeatablePopinInstanceDescriptor({
+        block: descriptor.blocks[0],
+        groupId: 'contactGroupId',
+        descriptor,
+      });
+
+      expect(
+        extractDefaultValues(instance, caseContext, { scope: 'popin', index: 99 })[
+          'emergency-contacts'
+        ]
+      ).toEqual([
+        { emergencyName: 'Alice', emergencyPhone: '111' },
+        { emergencyName: 'Bob', emergencyPhone: '222' },
+      ]);
     });
   });
 
