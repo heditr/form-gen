@@ -201,18 +201,9 @@ function getNestedValue(
 }
 
 /**
- * Source path for a repeatable group. A field-level path wins over the block path.
+ * Source path for a repeatable group. It is the block's repeatableDefaultSource.
  */
-export function repeatableGroupDefaultSource(
-  fields: FieldDescriptor[],
-  blockSource?: string
-): string | undefined {
-  for (const field of fields) {
-    const fieldSource = field.repeatableDefaultSource?.trim();
-    if (fieldSource) {
-      return fieldSource;
-    }
-  }
+export function repeatableGroupDefaultSource(blockSource?: string): string | undefined {
   const source = blockSource?.trim();
   return source || undefined;
 }
@@ -436,7 +427,7 @@ export function extractDefaultValues(
         }
 
         // Fill repeatable group from caseContext when repeatableDefaultSource is set (Handlebars template → path)
-        const sourceTemplate = repeatableGroupDefaultSource(fields, block.repeatableDefaultSource);
+        const sourceTemplate = repeatableGroupDefaultSource(block.repeatableDefaultSource);
         if (sourceTemplate) {
           if (sourceTemplate.includes('@index') && (typeof outerIndex !== 'number' || outerIndex < 0)) {
             (defaultValues as Record<string, unknown>)[groupId] = [];
@@ -786,7 +777,7 @@ function outerRepeatableGroupId(block: BlockDescriptor): string | undefined {
   }
   return (
     ids.find((id) => {
-      const source = repeatableGroupDefaultSource(groups[id], block.repeatableDefaultSource);
+      const source = repeatableGroupDefaultSource(block.repeatableDefaultSource);
       return !source?.includes('@index');
     }) ?? ids[0]
   );

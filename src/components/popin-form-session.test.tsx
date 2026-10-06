@@ -773,7 +773,6 @@ describe('PopinFormSession inner repeatable seed', () => {
         type: 'text',
         label: 'Full Name',
         repeatableGroupId: 'emergency-contacts',
-        repeatableDefaultSource: 'caseContext.contactGroupId.@index.emergencyContacts',
         validation: [],
       },
       {
@@ -793,6 +792,7 @@ describe('PopinFormSession inner repeatable seed', () => {
         id: 'contacts-block-instance',
         title: 'Contacts',
         repeatable: true,
+        repeatableDefaultSource: 'caseContext.contactGroupId.@index.emergencyContacts',
         fields: [
           {
             id: 'name',
@@ -805,7 +805,6 @@ describe('PopinFormSession inner repeatable seed', () => {
             type: 'text',
             label: 'Full Name',
             repeatableGroupId: 'emergency-contacts',
-            repeatableDefaultSource: 'caseContext.contactGroupId.@index.emergencyContacts',
             validation: [],
           },
           {

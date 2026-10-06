@@ -2432,13 +2432,13 @@ describe('form descriptor integration', () => {
             id: 'contacts-instance',
             title: 'Contact',
             repeatable: true,
+            repeatableDefaultSource: 'caseContext.contactGroupId.@index.emergencyContacts',
             fields: [
               {
                 id: 'emergency-contacts.emergencyName',
                 type: 'text',
                 label: 'Full Name',
                 repeatableGroupId: 'emergency-contacts',
-                repeatableDefaultSource: 'caseContext.contactGroupId.@index.emergencyContacts',
                 validation: [],
               },
               {

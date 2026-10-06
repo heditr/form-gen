@@ -236,7 +236,7 @@ function Block({
             const groupDisabled = evaluateDisabledStatus(block, formContext) || isDisabled;
             const groupReadonly = evaluateReadonlyStatus(block, formContext) || isReadonly;
 
-            const groupSource = repeatableGroupDefaultSource(fields, block.repeatableDefaultSource);
+            const groupSource = repeatableGroupDefaultSource(block.repeatableDefaultSource);
             const seedsFromOpenInstance = Boolean(groupSource?.includes('@index'));
             if (renderRepeatablesAsSummary && seedsFromOpenInstance) {
               return null;
