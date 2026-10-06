@@ -650,6 +650,7 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
           repeatableDefaultSource: 'contactGroupId',
           minInstances: 0,
           maxInstances: 5,
+          nestedBlocks: [{ blockId: 'emergency-contacts-block', position: 'bottom' }],
           fields: [
             {
               id: 'contactGroupId.name',
@@ -658,14 +659,25 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
               repeatableGroupId: 'contactGroupId',
               validation: [],
             },
+          ],
+        },
+        {
+          id: 'emergency-contacts-block',
+          title: 'Emergency contacts',
+          description: 'Seeded from the open contact row in case context',
+          repeatable: true,
+          minInstances: 1,
+          maxInstances: 2,
+          layout: { mode: 'grid', columns: 2 },
+          repeatableDefaultSource: 'caseContext.contactGroupId.@index.emergencyContacts',
+          fields: [
             {
               id: 'emergency-contacts.emergencyName',
               type: 'text',
               label: 'Emergency Contact Name',
-              description: 'Seeded from the open contact row in case context',
               repeatableGroupId: 'emergency-contacts',
-              repeatableDefaultSource: 'caseContext.contactGroupId.@index.emergencyContacts',
               validation: [],
+              layout: { width: 'half' },
             },
             {
               id: 'emergency-contacts.emergencyPhone',
@@ -673,6 +685,7 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
               label: 'Emergency Contact Phone',
               repeatableGroupId: 'emergency-contacts',
               validation: [],
+              layout: { width: 'half' },
             },
           ],
         },
