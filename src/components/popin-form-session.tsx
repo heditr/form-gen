@@ -355,6 +355,7 @@ export default function PopinFormSession({
         ) : (
           <Block
             block={popinDescriptor.blocks[0] ?? resolvedBlock.block}
+            descriptor={popinDescriptor}
             isDisabled={resolvedBlock.isDisabled}
             isHidden={false}
             form={popinForm}

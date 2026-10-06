@@ -586,5 +586,69 @@ describe('Block', () => {
         'field-name',
       ]);
     });
+
+    test('given an inline repeatable shell, should place its nested block', () => {
+      const notes = nestedBlock('notes', 'note');
+      const block: BlockDescriptor = {
+        id: 'parent',
+        title: 'Parent',
+        repeatable: true,
+        fields: [
+          textField('city', 'City'),
+          {
+            id: 'phones.number',
+            type: 'text',
+            label: 'Phone',
+            repeatableGroupId: 'phones',
+            validation: [],
+          },
+        ],
+        nestedBlocks: [{ blockId: 'notes', position: 'bottom' }],
+      };
+      const { container } = render(
+        <Block
+          {...createProps({
+            block,
+            descriptor: descriptorFor([block, notes]),
+            renderRepeatablesAsSummary: false,
+          })}
+        />
+      );
+
+      expect(placementIds(container)).toEqual(['field-city', 'block-notes', 'field-note']);
+      expect(container.querySelector('[data-testid="repeatable-group-phones"]')).not.toBeNull();
+    });
+
+    test('given a repeatable popin summary, should not place its nested block among the rows', () => {
+      const notes = nestedBlock('notes', 'note');
+      const block: BlockDescriptor = {
+        id: 'parent',
+        title: 'Parent',
+        repeatable: true,
+        repeatablePopin: true,
+        fields: [
+          {
+            id: 'contactGroupId.name',
+            type: 'text',
+            label: 'Name',
+            repeatableGroupId: 'contactGroupId',
+            validation: [],
+          },
+        ],
+        nestedBlocks: [{ blockId: 'notes', position: 'bottom' }],
+      };
+      const { container } = render(
+        <Block
+          {...createProps({
+            block,
+            descriptor: descriptorFor([block, notes]),
+            renderRepeatablesAsSummary: true,
+          })}
+        />
+      );
+
+      expect(container.querySelector('[data-testid="block-notes"]')).toBeNull();
+      expect(container.querySelector('[data-testid="repeatable-popin-summary-contactGroupId"]')).not.toBeNull();
+    });
   });
 });

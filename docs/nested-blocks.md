@@ -21,12 +21,14 @@ nestedBlocks?: Array<{
 
 Each entry sets exactly one placement:
 
-| Placement | Where the nested block is drawn |
-| --- | --- |
-| `position: "top"` | Before the parent's fields |
-| `position: "bottom"` | After the parent's fields |
-| `insertBefore` | Immediately before that field id |
-| `insertAfter` | Immediately after that field id |
+
+| Placement            | Where the nested block is drawn  |
+| -------------------- | -------------------------------- |
+| `position: "top"`    | Before the parent's fields       |
+| `position: "bottom"` | After the parent's fields        |
+| `insertBefore`       | Immediately before that field id |
+| `insertAfter`        | Immediately after that field id  |
+
 
 `insertBefore` and `insertAfter` name a field on the parent block itself. That field must exist once, and it must not carry `repeatableGroupId`.
 
@@ -57,19 +59,21 @@ Both global-descriptor routes run `assertNestedBlocks` after `resolveSubForms` a
 
 A valid descriptor is returned unchanged. An invalid one throws `NestedBlockDescriptorError` (`error-causes`), and the route responds with 500.
 
-| Code | What is wrong |
-| --- | --- |
-| `NESTED_BLOCK_PLACEMENT` | The entry sets no placement, more than one, or a `position` other than `top` or `bottom` |
-| `NESTED_BLOCK_NOT_FOUND` | `blockId` is not in `descriptor.blocks` |
-| `NESTED_BLOCK_DUPLICATE_USE` | The same block is nested more than once |
-| `NESTED_BLOCK_CYCLE` | A block nests itself, or a chain of references loops |
-| `NESTED_BLOCK_PARENT_KIND` | The parent is not a plain block or a repeatable popin |
-| `NESTED_BLOCK_NESTED_KIND` | The nested block is a popin (`popin` or `repeatablePopin`) |
-| `NESTED_BLOCK_GROUP` | A repeatable nested block does not have exactly one `repeatableGroupId` |
-| `NESTED_BLOCK_REF_HOST` | The nested block still has `repeatableBlockRef` |
-| `NESTED_BLOCK_ANCHOR` | The anchor field is missing, duplicated, or belongs to a repeatable group |
-| `NESTED_BLOCK_FIELD_CLASH` | On a repeatable popin row, a nested field or group key collides with a shell field |
-| `NESTED_BLOCK_GROUP_CLASH` | A nested group id equals a group id already on the popin parent |
+
+| Code                         | What is wrong                                                                            |
+| ---------------------------- | ---------------------------------------------------------------------------------------- |
+| `NESTED_BLOCK_PLACEMENT`     | The entry sets no placement, more than one, or a `position` other than `top` or `bottom` |
+| `NESTED_BLOCK_NOT_FOUND`     | `blockId` is not in `descriptor.blocks`                                                  |
+| `NESTED_BLOCK_DUPLICATE_USE` | The same block is nested more than once                                                  |
+| `NESTED_BLOCK_CYCLE`         | A block nests itself, or a chain of references loops                                     |
+| `NESTED_BLOCK_PARENT_KIND`   | The parent is not a plain block or a repeatable popin                                    |
+| `NESTED_BLOCK_NESTED_KIND`   | The nested block is a popin (`popin` or `repeatablePopin`)                               |
+| `NESTED_BLOCK_GROUP`         | A repeatable nested block does not have exactly one `repeatableGroupId`                  |
+| `NESTED_BLOCK_REF_HOST`      | The nested block still has `repeatableBlockRef`                                          |
+| `NESTED_BLOCK_ANCHOR`        | The anchor field is missing, duplicated, or belongs to a repeatable group                |
+| `NESTED_BLOCK_FIELD_CLASH`   | On a repeatable popin row, a nested field or group key collides with a shell field       |
+| `NESTED_BLOCK_GROUP_CLASH`   | A nested group id equals a group id already on the popin parent                          |
+
 
 A parent in this version is a plain block, or a block with `repeatable: true` and `repeatablePopin: true`. A repeatable parent that is not a popin is rejected. A standalone `popin: true` parent is rejected.
 
@@ -101,19 +105,21 @@ Legal name
 City
 ```
 
-A repeatable block does not run this walk. Its nested entries are not drawn among its summary rows. See the last section.
+A repeatable summary does not run this walk, so nested entries stay off the summary rows. The open popin does run it. See the last section.
 
 ## Status
 
 Status is the nested block's own status, read from the status map when `statusMode` is `"context"`, or from the block's templates otherwise.
 
-| State | What is drawn |
-| --- | --- |
-| Hidden parent | The parent is not rendered, so neither are its nested blocks |
-| Hidden nested block | That slot renders nothing. The parent's fields stay |
-| Disabled parent | `isDisabled` is passed into the nested `Block`, so its fields are disabled too |
-| Disabled nested block | Only that block's fields are disabled |
-| Readonly parent or nested block | Readonly cascades the same way as disabled |
+
+| State                           | What is drawn                                                                  |
+| ------------------------------- | ------------------------------------------------------------------------------ |
+| Hidden parent                   | The parent is not rendered, so neither are its nested blocks                   |
+| Hidden nested block             | That slot renders nothing. The parent's fields stay                            |
+| Disabled parent                 | `isDisabled` is passed into the nested `Block`, so its fields are disabled too |
+| Disabled nested block           | Only that block's fields are disabled                                          |
+| Readonly parent or nested block | Readonly cascades the same way as disabled                                     |
+
 
 Disabled and readonly fields still submit. Hiding a block only removes it from the page. It does not, by itself, drop that block's keys from the schema.
 
@@ -150,4 +156,6 @@ Opening a row builds an instance descriptor in `buildRepeatablePopinInstanceDesc
 - Each referenced block follows unchanged, with its own title, min, max, layout, source, and fields.
 - A same-block group that is not a nested block stays on the shell. That is what still sets `repeatable: true`.
 
-The dialog still renders only `blocks[0]`, so the nested block is not drawn inside the popin yet. `FormPresentation` also hides it on the main form.
+The dialog renders the shell through `Block` and passes the instance descriptor, with `renderRepeatablesAsSummary={false}`. The shell places each nested block at its configured slot. Those later blocks are not drawn again after the shell. A repeatable summary on the main form still does not place them among its rows. `FormPresentation` also hides a referenced block as its own section.
+
+The dialog chrome title stays the parent title. Inside the body, a nested repeatable block shows its title once, from `RepeatableFieldGroup`. Add and remove labels, min, max, and layout come from that nested block.

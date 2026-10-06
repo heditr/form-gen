@@ -201,6 +201,8 @@ function Block({
     }
   };
 
+  const repeatableGroupPrintsTitle = isRepeatable && nestedAncestorIds.length > 0;
+
   return (
     <div
       data-testid={`block-${block.id}`}
@@ -213,7 +215,7 @@ function Block({
         isDisabled && 'opacity-60 pointer-events-none'
       )}
     >
-      {block.title && (
+      {block.title && !repeatableGroupPrintsTitle && (
         <h2
           data-testid={`block-title-${block.id}`}
           className="block-title text-xl font-semibold mb-2"
@@ -221,7 +223,7 @@ function Block({
           {block.title}
         </h2>
       )}
-      {block.description && (
+      {block.description && !repeatableGroupPrintsTitle && (
         <p className="block-description text-sm text-muted-foreground mb-4">
           {block.description}
         </p>
@@ -275,9 +277,10 @@ function Block({
         {/* Render non-repeatable fields, with nested blocks between them on a plain parent */}
         {(() => {
           const layoutMode = block.layout?.mode ?? 'default';
-          const placement = isRepeatable
-            ? [{ kind: 'fields' as const, fields: nonRepeatableFields }]
-            : buildPlainNestedPlacement({
+          const placement =
+            isRepeatable && renderRepeatablesAsSummary !== false
+              ? [{ kind: 'fields' as const, fields: nonRepeatableFields }]
+              : buildPlainNestedPlacement({
                 block,
                 fields: nonRepeatableFields,
                 blocksById,
