@@ -142,7 +142,7 @@ contactGroupId: [
 ]
 ```
 
-`'emergency-contacts'` is the nested block's own group id. Opening index `1` seeds only Grace's list, because `@index` in that block's `repeatableDefaultSource` is the open parent. `@index` inside an inner field `defaultValue` is the inner row. Create mode (`index < 0`) leaves a source that contains `@index` unresolved, so the nested array is `[]`.
+`'emergency-contacts'` is the nested block's own group id. Opening index `1` seeds only Grace's list, because `@index` in that block's `repeatableDefaultSource` is the open parent. `@index` inside an inner field `defaultValue` is the inner row. Create mode (`index < 0`) leaves a source that contains `@index` unresolved, so the nested array is `[]`. Validate writes that popin object onto the open index, or appends it when the index is new, and leaves every other parent row as it was.
 
 In the popin, the instance descriptor's schema uses the nested block's min and max for that array. A hidden nested block drops its key from each parent row on the main form, and from the popin value when the instance descriptor is used.
 

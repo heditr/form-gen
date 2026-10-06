@@ -1021,4 +1021,126 @@ describe('PopinFormSession nested block', () => {
     });
     expect(screen.getByRole('button', { name: 'Add Emergency contacts' })).toBeEnabled();
   });
+
+  test('given edit of contact index 1, should seed only that row and leave the other unchanged on validate', async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    let mainForm: UseFormReturn<FieldValues> | undefined;
+
+    function Harness() {
+      mainForm = useForm({
+        defaultValues: {
+          contactGroupId: [{ name: 'Ada' }, { name: 'Grace' }],
+        },
+      });
+
+      return (
+        <PopinFormSession
+          resolvedBlock={{ block: parentBlock, isHidden: false, isDisabled: false }}
+          popinDescriptor={instanceDescriptor}
+          mainForm={mainForm}
+          initialFormContext={{}}
+          caseContext={contactCaseContext}
+          popinEditContext={{ groupId: 'contactGroupId', index: 1 }}
+          popinLoadData={null}
+          isLoadingPopinData={false}
+          onLoadDataSource={() => {}}
+          dataSourceCache={{}}
+          onClose={() => {}}
+          onValidated={async () => {}}
+        />
+      );
+    }
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <Harness />
+      </QueryClientProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('Jane')).toBeInTheDocument();
+    });
+    expect(screen.getByDisplayValue('John')).toBeInTheDocument();
+    expect(screen.queryByDisplayValue('Alice')).not.toBeInTheDocument();
+
+    const phone = screen.getByDisplayValue('098');
+    await userEvent.clear(phone);
+    await userEvent.type(phone, '555');
+    await userEvent.click(screen.getByRole('button', { name: 'Validate' }));
+
+    await waitFor(() => {
+      const rows = mainForm?.getValues('contactGroupId') as Array<Record<string, unknown>>;
+      expect(rows[1]['emergency-contacts']).toEqual([
+        { emergencyName: 'Jane', emergencyPhone: '555' },
+        { emergencyName: 'John', emergencyPhone: '123' },
+      ]);
+    });
+    const rows = mainForm?.getValues('contactGroupId') as Array<Record<string, unknown>>;
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toEqual({ name: 'Ada' });
+    expect(rows[1]).toMatchObject({ name: 'Grace' });
+  });
+
+  test('given create mode, should start the nested array empty and append only that row', async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    let mainForm: UseFormReturn<FieldValues> | undefined;
+    const createDescriptor: GlobalFormDescriptor = {
+      ...instanceDescriptor,
+      blocks: instanceDescriptor.blocks.map((block) =>
+        block.id === 'emergency-contacts-block' ? { ...block, minInstances: 0 } : block
+      ),
+    };
+
+    function Harness() {
+      mainForm = useForm({
+        defaultValues: {
+          contactGroupId: [{ name: 'Ada' }, { name: 'Grace' }],
+        },
+      });
+
+      return (
+        <PopinFormSession
+          resolvedBlock={{ block: parentBlock, isHidden: false, isDisabled: false }}
+          popinDescriptor={createDescriptor}
+          mainForm={mainForm}
+          initialFormContext={{}}
+          caseContext={contactCaseContext}
+          popinEditContext={{ groupId: 'contactGroupId', index: -1 }}
+          popinLoadData={null}
+          isLoadingPopinData={false}
+          onLoadDataSource={() => {}}
+          dataSourceCache={{}}
+          onClose={() => {}}
+          onValidated={async () => {}}
+        />
+      );
+    }
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <Harness />
+      </QueryClientProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText(/No instances yet/)).toBeInTheDocument();
+    });
+    expect(screen.queryByDisplayValue('Jane')).not.toBeInTheDocument();
+    expect(screen.queryByDisplayValue('Alice')).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Validate' }));
+
+    await waitFor(() => {
+      const rows = mainForm?.getValues('contactGroupId') as Array<Record<string, unknown>>;
+      expect(rows).toHaveLength(3);
+    });
+    const rows = mainForm?.getValues('contactGroupId') as Array<Record<string, unknown>>;
+    expect(rows[0]).toEqual({ name: 'Ada' });
+    expect(rows[1]).toEqual({ name: 'Grace' });
+    expect(rows[2]).toEqual({ name: '', 'emergency-contacts': [] });
+  });
 });
