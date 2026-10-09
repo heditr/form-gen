@@ -11,6 +11,7 @@ import {
   isRepeatableBlock,
   groupFieldsByRepeatableGroupId,
   isSubmitSkippedFieldType,
+  repeatablePopinNestedPlacements,
 } from '@/utils/form-descriptor-integration';
 
 export type ValidationScope = 'main' | 'popin';
@@ -162,6 +163,12 @@ export function omitStatusHiddenFormValues(
   const source = formValues as Record<string, unknown>;
   const formContext = buildFormContextFromValues(formValues, caseContext);
   const deletions: HiddenDeletion[] = [];
+  const placementByNestedId = new Map(
+    (scope === 'main' ? repeatablePopinNestedPlacements(descriptor) : []).map((placement) => [
+      placement.nestedBlockId,
+      placement,
+    ])
+  );
 
   for (const block of descriptor.blocks) {
     if (!shouldIncludeBlockInScope(block, scope)) {
@@ -169,6 +176,31 @@ export function omitStatusHiddenFormValues(
     }
 
     const blockHidden = evaluateHiddenStatus(block, formContext);
+    const placement = placementByNestedId.get(block.id);
+    if (placement) {
+      if (blockHidden) {
+        const rows = source[placement.parentGroupId];
+        const nestedGroupIds = Object.keys(groupFieldsByRepeatableGroupId(block.fields));
+        if (Array.isArray(rows)) {
+          rows.forEach((row, rowIndex) => {
+            if (!row || typeof row !== 'object' || Array.isArray(row)) {
+              return;
+            }
+            nestedGroupIds.forEach((nestedGroupId) => {
+              if (Object.prototype.hasOwnProperty.call(row, nestedGroupId)) {
+                deletions.push({
+                  kind: 'row',
+                  groupId: placement.parentGroupId,
+                  rowIndex,
+                  path: nestedGroupId,
+                });
+              }
+            });
+          });
+        }
+      }
+      continue;
+    }
 
     if (isRepeatableBlock(block)) {
       const groups = groupFieldsByRepeatableGroupId(block.fields);
@@ -268,9 +300,14 @@ export function collectStatusHiddenFieldIds(
   }
 
   const hiddenIds: string[] = [];
+  const nestedOnMain = new Set(
+    (scope === 'main' ? repeatablePopinNestedPlacements(descriptor) : []).map(
+      (placement) => placement.nestedBlockId
+    )
+  );
 
   for (const block of descriptor.blocks) {
-    if (!shouldIncludeBlockInScope(block, scope)) {
+    if (!shouldIncludeBlockInScope(block, scope) || nestedOnMain.has(block.id)) {
       continue;
     }
 
@@ -318,9 +355,14 @@ export function collectValidationTargets(
   }
 
   const targets: ValidationTarget[] = [];
+  const nestedOnMain = new Set(
+    (scope === 'main' ? repeatablePopinNestedPlacements(descriptor) : []).map(
+      (placement) => placement.nestedBlockId
+    )
+  );
 
   for (const block of descriptor.blocks) {
-    if (!shouldIncludeBlockInScope(block, scope)) {
+    if (!shouldIncludeBlockInScope(block, scope) || nestedOnMain.has(block.id)) {
       continue;
     }
 

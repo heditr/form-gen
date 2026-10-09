@@ -137,4 +137,60 @@ describe('GET /api/form/global-descriptor-demo', () => {
     const rows = defaultValues.signatories as Array<Record<string, unknown>>;
     expect(rows[0]?.powerOfAttorney).toBe('POA-1843-ADA');
   });
+
+  test('given contacts, should nest emergency contacts and leave contact-info on the same block', async () => {
+    const response = await GET(new Request('http://localhost:3000/api/form/global-descriptor-demo'));
+    const descriptor = (await response.json()) as GlobalFormDescriptor;
+
+    const contacts = descriptor.blocks.find((block) => block.id === 'contacts-block');
+    const emergency = descriptor.blocks.find((block) => block.id === 'emergency-contacts-block');
+    const contactInfo = descriptor.blocks.find((block) => block.id === 'contact-info');
+
+    expect(contacts?.fields.map((field) => field.id)).toEqual(['contactGroupId.name']);
+    expect(contacts?.nestedBlocks).toEqual([
+      { blockId: 'emergency-contacts-block', position: 'bottom' },
+    ]);
+    expect(contacts?.minInstances).toBe(0);
+    expect(contacts?.maxInstances).toBe(5);
+
+    expect(emergency?.title).toBe('Emergency contacts');
+    expect(emergency?.repeatable).toBe(true);
+    expect(emergency?.repeatablePopin).toBeUndefined();
+    expect(emergency?.minInstances).toBe(1);
+    expect(emergency?.maxInstances).toBe(2);
+    expect(emergency?.layout).toEqual({ mode: 'grid', columns: 2 });
+    expect(emergency?.repeatableDefaultSource).toBe(
+      'caseContext.contactGroupId.@index.emergencyContacts'
+    );
+    expect(emergency?.fields.map((field) => field.id)).toEqual([
+      'emergency-contacts.emergencyName',
+      'emergency-contacts.emergencyPhone',
+    ]);
+
+    expect(
+      contactInfo?.fields.some((field) => field.repeatableGroupId === 'emergency-contacts')
+    ).toBe(true);
+    expect(contactInfo?.nestedBlocks).toBeUndefined();
+
+    const defaults = extractDefaultValues(descriptor, {
+      caseContext: {
+        contactGroupId: [
+          {
+            name: 'Ada',
+            emergencyContacts: [{ emergencyName: 'Alice', emergencyPhone: '111' }],
+          },
+          {
+            name: 'Grace',
+            emergencyContacts: [
+              { emergencyName: 'Jane', emergencyPhone: '098' },
+              { emergencyName: 'John', emergencyPhone: '123' },
+            ],
+          },
+        ],
+      },
+    });
+
+    expect(defaults.contactGroupId).toEqual([{ name: 'Ada' }, { name: 'Grace' }]);
+    expect(defaults['emergency-contacts']).toBeUndefined();
+  });
 });

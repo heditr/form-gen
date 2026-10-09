@@ -15,7 +15,8 @@ import type { FormContext } from '@/utils/template-evaluator';
 import { resolveBlockById } from '@/utils/block-resolver';
 import { loadPopinData } from '@/utils/popin-load-loader';
 import { invalidateConfiguredQueryKeys, getQueryInvalidationKeys } from '@/utils/invalidate-query-keys';
-import { isRepeatableBlock, groupFieldsByRepeatableGroupId } from '@/utils/form-descriptor-integration';
+import { isRepeatableBlock } from '@/utils/form-descriptor-integration';
+import { buildRepeatablePopinInstanceDescriptor } from '@/utils/popin-instance-descriptor';
 import { useOptionalFormStatusContext } from '@/context/form-status-context';
 import {
   Dialog,
@@ -113,36 +114,11 @@ export function PopinManagerProvider({
     const block = resolvedBlock.block;
 
     if (popinEditContext && isRepeatableBlock(block)) {
-      const { groupId } = popinEditContext;
-      const fieldGroups = groupFieldsByRepeatableGroupId(block.fields);
-      const groupFields = fieldGroups[groupId];
-      if (!groupFields?.length) {
-        return null;
-      }
-      const instanceFields = groupFields
-        .filter((f) => f.type !== 'button')
-        .map((f) => {
-          const baseId = f.id.startsWith(`${groupId}.`)
-            ? f.id.slice(groupId.length + 1)
-            : f.id;
-          return { ...f, id: baseId, repeatableGroupId: undefined };
-        });
-      const nestedFields = block.fields.filter(
-        (field) => field.repeatableGroupId && field.repeatableGroupId !== groupId
-      );
-      return {
-        version: mergedDescriptor.version,
-        blocks: [
-          {
-            id: `${block.id}-instance`,
-            title: block.title,
-            layout: block.layout,
-            ...(nestedFields.length > 0 ? { repeatable: true } : {}),
-            fields: [...instanceFields, ...nestedFields],
-          },
-        ],
-        submission: mergedDescriptor.submission,
-      } as GlobalFormDescriptor;
+      return buildRepeatablePopinInstanceDescriptor({
+        block,
+        groupId: popinEditContext.groupId,
+        descriptor: mergedDescriptor,
+      });
     }
 
     return {
