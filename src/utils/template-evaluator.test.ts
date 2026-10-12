@@ -60,8 +60,8 @@ describe('template evaluator', () => {
       expect(result).toBe('');
     });
 
-    test('given repeated template evaluation, should compile template only once', () => {
-      const compileSpy = vi.spyOn(Handlebars, 'compile');
+    test('given repeated template evaluation, should parse template only once', () => {
+      const parseSpy = vi.spyOn(Handlebars, 'parse');
       const template = 'Hello {{name}}';
       const context = { name: 'World' };
 
@@ -69,8 +69,16 @@ describe('template evaluator', () => {
       evaluateTemplate(template, context);
       evaluateTemplate(template, { name: 'Again' });
 
-      expect(compileSpy).toHaveBeenCalledTimes(1);
-      compileSpy.mockRestore();
+      expect(parseSpy).toHaveBeenCalledTimes(1);
+      parseSpy.mockRestore();
+    });
+
+    test('given a zero value, should treat it as present inside if', () => {
+      expect(evaluateTemplate('{{#if count}}yes{{else}}no{{/if}}', { count: 0 })).toBe('yes');
+    });
+
+    test('given an empty array, should treat it as empty inside if', () => {
+      expect(evaluateTemplate('{{#if items}}yes{{else}}no{{/if}}', { items: [] })).toBe('no');
     });
   });
 

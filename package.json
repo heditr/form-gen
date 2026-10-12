@@ -9,7 +9,8 @@
     "lint": "eslint",
     "test": "vitest",
     "test:watch": "vitest --watch",
-    "test:ui": "vitest --ui"
+    "test:ui": "vitest --ui",
+    "test:e2e:csp": "CSP_E2E_BUILD=1 npm run build && playwright test e2e/csp-template-eval.spec.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

@@ -666,7 +666,7 @@ case applyRulesUpdate().type: {
 **Role**: Evaluate Handlebars templates with form context
 
 **Responsibilities**:
-- Compile and evaluate Handlebars templates
+- Parse and interpret Handlebars templates without `eval` (see [csp-safe-template-evaluation.md](./csp-safe-template-evaluation.md))
 - Evaluate hidden/disabled/readonly status templates
 - Parse boolean results from template strings
 - Handle template errors gracefully

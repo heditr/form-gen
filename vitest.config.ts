@@ -12,6 +12,7 @@ export default defineConfig({
       '**/node_modules/**',
       '**/.next/**',
       'test-autocomplete-transparency.spec.ts',
+      'e2e/**',
     ],
     setupFiles: ['./src/test/setup.ts'],
   },

@@ -1,5 +1,7 @@
 ## Why we call `ensureHandlebarsHelpersRegistered()` at evaluation time
 
+Template evaluation no longer compiles Handlebars. `evaluateTemplate()` parses an AST and runs it in `src/utils/template-runtime.ts`, which calls the helper functions directly. See [csp-safe-template-evaluation.md](./csp-safe-template-evaluation.md). The notes below describe why registration used to sit on that boundary, and why `registerHandlebarsHelpers()` is still idempotent for any caller that compiles a template itself.
+
 ### The “weirdness” you’re noticing
 
 It can look odd that `evaluateTemplate()` calls `ensureHandlebarsHelpersRegistered()` every time:

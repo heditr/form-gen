@@ -6,26 +6,25 @@
 
 import Handlebars from 'handlebars';
 import type { BlockDescriptor, FieldDescriptor } from '@/types/form-descriptor';
-import { ensureHandlebarsHelpersRegistered } from './handlebars-helpers';
+import { renderTemplate, type TemplateNode } from './template-runtime';
 
-const templateCompileCache = new Map<string, Handlebars.TemplateDelegate>();
+const templateParseCache = new Map<string, TemplateNode>();
 
 /**
- * Clear the Handlebars compile cache (for tests).
+ * Clear the template parse cache (for tests).
  */
 export function clearTemplateCompileCache(): void {
-  templateCompileCache.clear();
+  templateParseCache.clear();
 }
 
-function getCompiledTemplate(template: string): Handlebars.TemplateDelegate {
-  const cached = templateCompileCache.get(template);
+function getParsedTemplate(template: string): TemplateNode {
+  const cached = templateParseCache.get(template);
   if (cached) {
     return cached;
   }
-  ensureHandlebarsHelpersRegistered();
-  const compiled = Handlebars.compile(template);
-  templateCompileCache.set(template, compiled);
-  return compiled;
+  const parsed = Handlebars.parse(template) as TemplateNode;
+  templateParseCache.set(template, parsed);
+  return parsed;
 }
 
 /**
@@ -64,9 +63,8 @@ export function evaluateTemplate(template: string | undefined, context: FormCont
   }
 
   try {
-    const compiled = getCompiledTemplate(template);
-    const result = compiled(context);
-    return result;
+    const parsed = getParsedTemplate(template);
+    return renderTemplate(parsed, context);
   } catch (error) {
     console.error('Error evaluating template:', error, 'Template:', template, 'Context:', context);
     return '';

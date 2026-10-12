@@ -5,9 +5,8 @@
  * into arrays of {label, value} objects for use in form fields.
  */
 
-import Handlebars from 'handlebars';
 import type { DataSourceConfig, FieldItem } from '@/types/form-descriptor';
-import type { FormContext } from './template-evaluator';
+import { evaluateTemplate, type FormContext } from './template-evaluator';
 
 /**
  * Extract array from response using iteratorTemplate or direct access
@@ -42,8 +41,7 @@ function extractArray(
 
   // Template contains Handlebars syntax - evaluate it
   try {
-    const compiledIterator = Handlebars.compile(iteratorTemplate);
-    const iteratorResult = compiledIterator(fullContext);
+    const iteratorResult = evaluateTemplate(iteratorTemplate, fullContext);
     
     // Handlebars always returns a string, but we can check if it's a path
     // If the result is a string path, navigate to it
@@ -153,14 +151,12 @@ export function transformItem(
   context: FormContext
 ): FieldItem {
   try {
-    const compiled = Handlebars.compile(itemsTemplate);
-    const itemContext: FormContext = { 
-      ...context, 
-      item: item as FormContext, 
-      ...(typeof item === 'object' && item !== null ? item as Record<string, FormContext> : {}) 
+    const itemContext: FormContext = {
+      ...context,
+      item: item as FormContext,
+      ...(typeof item === 'object' && item !== null ? item as Record<string, FormContext> : {}),
     };
-    
-    const result = compiled(itemContext);
+    const result = evaluateTemplate(itemsTemplate, itemContext);
     
     // Try to parse as JSON first (e.g., {"label":"...","value":"..."})
     try {
