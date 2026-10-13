@@ -18,14 +18,14 @@ interface ErrorResponse {
 
 export async function POST(
   request: Request,
-  context: { params: { caseId: string } }
+  context: { params: Promise<{ caseId: string }> }
 ): Promise<NextResponse<{ documents: unknown[] } | ErrorResponse>> {
   try {
     if (request.method !== 'POST') {
       return NextResponse.json({ error: 'Method not allowed' }, { status: 405 });
     }
 
-    const { caseId } = context.params;
+    const { caseId } = await context.params;
     if (!caseId || typeof caseId !== 'string') {
       return NextResponse.json({ error: 'Missing caseId' }, { status: 400 });
     }

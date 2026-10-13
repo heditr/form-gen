@@ -10,8 +10,9 @@
  *
  * The walk supports content, comments, mustaches, and the block helpers
  * `if`, `unless`, and `each`. Expressions are paths, literals, and
- * subexpressions for the helpers in this file (`eq`, `json`, `lookup`, and
- * the rest). Hash arguments and unknown nodes throw.
+ * subexpressions for the helpers in this file (`eq`, `json`, `jsonItems`,
+ * `item`, `itemIf`, `radioGroup`, `withChildren`, `lookup`, and the rest).
+ * Hash arguments and unknown nodes throw.
  *
  * A step-by-step fixture is in `docs/template-runtime.md`.
  */
@@ -24,12 +25,17 @@ import {
   gteHelper,
   isEmptyHelper,
   isSafeHtml,
+  itemHelper,
+  itemIfHelper,
   jsonHelper,
+  jsonItemsHelper,
   ltHelper,
   lteHelper,
   neHelper,
   notHelper,
   orHelper,
+  radioGroupHelper,
+  withChildrenHelper,
 } from './handlebars-helpers';
 
 type Comparable = string | number | boolean | null | undefined;
@@ -44,7 +50,7 @@ type StripFlags = {
  *
  * Only the fields this walker reads are listed. `program` is the block body.
  * `inverse` is the `{{else}}` body. `parts` is a path split on `.`.
- * `depth` is how many `../` segments the path has. `data` is true for `@index`.
+ * `depth` is how many `../` segments the path has. `data` is true for `@first`.
  * `escaped` is false for `{{{raw}}}`. `strip` is the `~` whitespace flags.
  */
 export type TemplateNode = {
@@ -69,6 +75,21 @@ export type TemplateNode = {
 
 type Helper = (...args: unknown[]) => unknown;
 
+/**
+ * Data frame for one `{{#each}}` iteration.
+ *
+ * `@index` and `@key` are the position. `@first` and `@last` mark the ends.
+ * `@root` is the context passed to `renderTemplate`. `depth` on an `@` path
+ * selects a parent frame (`@../first`).
+ */
+type EachFrame = {
+  root: unknown;
+  index: number;
+  key: number;
+  first: boolean;
+  last: boolean;
+};
+
 const helpers: Record<string, Helper> = {
   eq: (left, right) => eqHelper(left as Comparable, right as Comparable),
   ne: (left, right) => neHelper(left as Comparable, right as Comparable),
@@ -82,6 +103,11 @@ const helpers: Record<string, Helper> = {
   contains: (collection, value) => containsHelper(collection, value),
   isEmpty: (value) => isEmptyHelper(value),
   json: (value, fallback) => jsonHelper(value, fallback),
+  jsonItems: (...items) => jsonItemsHelper(...items),
+  item: (label, value) => itemHelper(label, value),
+  itemIf: (cond, id, label, value) => itemIfHelper(cond, id, label, value),
+  radioGroup: (id, ...items) => radioGroupHelper(id, ...items),
+  withChildren: (parent, children) => withChildrenHelper(parent, children),
   lookup: (collection, key) => {
     if (collection == null || typeof collection !== 'object') {
       return undefined;
@@ -130,15 +156,31 @@ function helperName(path: TemplateNode | undefined): string | undefined {
 }
 
 /**
+ * Read `@first`, `@last`, `@index`, `@key`, or `@root` from the each frames.
+ * No frame means the path is outside `{{#each}}`, so the value is missing.
+ */
+function lookupData(frames: EachFrame[], path: TemplateNode): unknown {
+  const depth = path.depth ?? 0;
+  let current: unknown = frames[frames.length - 1 - depth];
+  for (const part of path.parts ?? []) {
+    if (current == null || typeof current !== 'object') {
+      return undefined;
+    }
+    current = (current as Record<string, unknown>)[part];
+  }
+  return current;
+}
+
+/**
  * Read a path from the context stack.
  *
  * The current frame is the last entry. `depth` 1 reads the parent (`../`).
- * An empty `parts` list is `{{this}}`. `@data` paths return `undefined`;
- * repeatable rows rewrite `@index` to `index` before parse.
+ * An empty `parts` list is `{{this}}`. `@` paths read the each data frame.
+ * Repeatable rows still rewrite a path-segment `@index` to a number before parse.
  */
-function lookupPath(stack: unknown[], path: TemplateNode): unknown {
+function lookupPath(stack: unknown[], frames: EachFrame[], path: TemplateNode): unknown {
   if (path.data) {
-    return undefined;
+    return lookupData(frames, path);
   }
   const depth = path.depth ?? 0;
   let current = stack[stack.length - 1 - depth];
@@ -159,7 +201,7 @@ function lookupPath(stack: unknown[], path: TemplateNode): unknown {
  * Evaluate one expression to a raw value (not an escaped string).
  * Subexpression params are evaluated first, then the helper is called.
  */
-function evalExpr(node: TemplateNode, stack: unknown[]): unknown {
+function evalExpr(node: TemplateNode, stack: unknown[], frames: EachFrame[]): unknown {
   assertNoHash(node);
   switch (node.type) {
     case 'SubExpression': {
@@ -167,10 +209,10 @@ function evalExpr(node: TemplateNode, stack: unknown[]): unknown {
       if (!name || !helpers[name]) {
         throw new Error(`Unsupported helper ${node.path?.original ?? name}`);
       }
-      return helpers[name](...(node.params ?? []).map((param) => evalExpr(param, stack)));
+      return helpers[name](...(node.params ?? []).map((param) => evalExpr(param, stack, frames)));
     }
     case 'PathExpression':
-      return lookupPath(stack, node);
+      return lookupPath(stack, frames, node);
     case 'StringLiteral':
     case 'NumberLiteral':
     case 'BooleanLiteral':
@@ -200,29 +242,29 @@ function stringifyOutput(value: unknown, escaped: boolean): string {
  * Anything else is a path lookup. Output is HTML-escaped unless the value
  * is safe HTML (`json`) or the mustache is `{{{raw}}}`.
  */
-function renderMustache(node: TemplateNode, stack: unknown[]): string {
+function renderMustache(node: TemplateNode, stack: unknown[], frames: EachFrame[]): string {
   assertNoHash(node);
   const name = helperName(node.path);
   const params = node.params ?? [];
   if (name && helpers[name]) {
-    const value = helpers[name](...params.map((param) => evalExpr(param, stack)));
+    const value = helpers[name](...params.map((param) => evalExpr(param, stack, frames)));
     return stringifyOutput(value, node.escaped !== false);
   }
   if (params.length > 0 || !node.path) {
     throw new Error(`Unsupported helper ${name ?? 'unknown'}`);
   }
-  return stringifyOutput(lookupPath(stack, node.path), node.escaped !== false);
+  return stringifyOutput(lookupPath(stack, frames, node.path), node.escaped !== false);
 }
 
 /**
  * Render `{{#if}}`, `{{#unless}}`, or `{{#each}}`.
  * `each` pushes the current item onto the context stack for the inner program.
  */
-function renderBlock(node: TemplateNode, stack: unknown[]): string {
+function renderBlock(node: TemplateNode, stack: unknown[], frames: EachFrame[]): string {
   assertNoHash(node);
   const name = helperName(node.path);
   if (name === 'if' || name === 'unless') {
-    const value = node.params?.[0] ? evalExpr(node.params[0], stack) : undefined;
+    const value = node.params?.[0] ? evalExpr(node.params[0], stack, frames) : undefined;
     const empty = isBlockEmpty(value);
     const useInverse = name === 'if' ? empty : !empty;
     const branch = useInverse ? node.inverse : node.program;
@@ -233,20 +275,27 @@ function renderBlock(node: TemplateNode, stack: unknown[]): string {
     const trimEnd = useInverse
       ? node.closeStrip?.open
       : (node.inverse ? node.inverseStrip?.open : node.closeStrip?.open);
-    return renderProgram(branch, stack, Boolean(trimStart), Boolean(trimEnd));
+    return renderProgram(branch, stack, frames, Boolean(trimStart), Boolean(trimEnd));
   }
   if (name === 'each') {
-    const value = node.params?.[0] ? evalExpr(node.params[0], stack) : undefined;
+    const value = node.params?.[0] ? evalExpr(node.params[0], stack, frames) : undefined;
     const items = Array.isArray(value) ? value : null;
     if (!items || items.length === 0) {
       return node.inverse
-        ? renderProgram(node.inverse, stack, Boolean(node.inverseStrip?.close), Boolean(node.closeStrip?.open))
+        ? renderProgram(node.inverse, stack, frames, Boolean(node.inverseStrip?.close), Boolean(node.closeStrip?.open))
         : '';
     }
     const rendered = items
-      .map((item) => renderProgram(
+      .map((item, index) => renderProgram(
         node.program ?? { type: 'Program', body: [] },
         [...stack, item],
+        [...frames, {
+          root: stack[0],
+          index,
+          key: index,
+          first: index === 0,
+          last: index === items.length - 1,
+        }],
         Boolean(node.openStrip?.close),
         false
       ))
@@ -263,6 +312,7 @@ function renderBlock(node: TemplateNode, stack: unknown[]): string {
 function renderProgram(
   program: TemplateNode,
   stack: unknown[],
+  frames: EachFrame[],
   trimStart = false,
   trimEnd = false
 ): string {
@@ -285,7 +335,7 @@ function renderProgram(
       if (statement.strip?.open) {
         output = output.replace(/\s+$/, '');
       }
-      output += renderMustache(statement, stack);
+      output += renderMustache(statement, stack, frames);
       trimLeading = Boolean(statement.strip?.close);
       continue;
     }
@@ -293,7 +343,7 @@ function renderProgram(
       if (statement.openStrip?.open) {
         output = output.replace(/\s+$/, '');
       }
-      output += renderBlock(statement, stack);
+      output += renderBlock(statement, stack, frames);
       trimLeading = Boolean(statement.closeStrip?.close);
       continue;
     }
@@ -306,12 +356,13 @@ function renderProgram(
  * Render a parsed program against one context object.
  *
  * The stack starts as `[context]`. Paths read that object. `{{#each}}`
- * pushes each item for the duration of that item's body.
+ * pushes each item, and sets `@index`, `@key`, `@first`, `@last`, and `@root`
+ * for that item's body.
  *
  * @param program - AST from `Handlebars.parse`
  * @param context - Root data (`formData`, `caseContext`, and field values)
  * @returns Rendered text. Normal mustaches are HTML-escaped.
  */
 export function renderTemplate(program: TemplateNode, context: unknown): string {
-  return renderProgram(program, [context]);
+  return renderProgram(program, [context], []);
 }

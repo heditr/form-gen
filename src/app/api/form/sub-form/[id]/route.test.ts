@@ -19,7 +19,7 @@ function createMockRequest(subFormId: string, method: string = 'GET'): Request {
 describe('GET /api/form/sub-form/:id', () => {
   test('given GET request with valid sub-form ID, should return SubFormDescriptor JSON', async () => {
     const request = createMockRequest('address');
-    const response = await GET(request, { params: { id: 'address' } });
+    const response = await GET(request, { params: Promise.resolve({ id: 'address' }) });
     
     expect(response).toBeInstanceOf(Response);
     expect(response.status).toBe(200);
@@ -37,7 +37,7 @@ describe('GET /api/form/sub-form/:id', () => {
 
   test('given GET request, should return valid SubFormDescriptor structure', async () => {
     const request = createMockRequest('address');
-    const response = await GET(request, { params: { id: 'address' } });
+    const response = await GET(request, { params: Promise.resolve({ id: 'address' }) });
     
     const data: SubFormDescriptor = await response.json();
     
@@ -56,7 +56,7 @@ describe('GET /api/form/sub-form/:id', () => {
 
   test('given GET request with non-existent sub-form ID, should return 404', async () => {
     const request = createMockRequest('non-existent');
-    const response = await GET(request, { params: { id: 'non-existent' } });
+    const response = await GET(request, { params: Promise.resolve({ id: 'non-existent' }) });
     
     expect(response.status).toBe(404);
     
@@ -67,7 +67,7 @@ describe('GET /api/form/sub-form/:id', () => {
 
   test('given non-GET request, should return 405 Method Not Allowed', async () => {
     const request = createMockRequest('address', 'POST');
-    const response = await GET(request, { params: { id: 'address' } });
+    const response = await GET(request, { params: Promise.resolve({ id: 'address' }) });
     
     expect(response.status).toBe(405);
     
@@ -78,7 +78,7 @@ describe('GET /api/form/sub-form/:id', () => {
 
   test('given GET request, should include proper Content-Type header', async () => {
     const request = createMockRequest('address');
-    const response = await GET(request, { params: { id: 'address' } });
+    const response = await GET(request, { params: Promise.resolve({ id: 'address' }) });
     
     const contentType = response.headers.get('Content-Type');
     expect(contentType).toBe('application/json');

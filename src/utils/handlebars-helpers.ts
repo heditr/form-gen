@@ -96,6 +96,35 @@ export function isEmptyHelper(value: unknown): boolean {
   return false;
 }
 
+/** `{label, value}`. First argument is the label. */
+export function itemHelper(label: unknown, value: unknown): { label: unknown; value: unknown } {
+  return { label, value };
+}
+
+/** `{id, label, value}` when `cond` is truthy, otherwise null. */
+export function itemIfHelper(
+  cond: unknown,
+  id: unknown,
+  label: unknown,
+  value: unknown
+): { id: unknown; label: unknown; value: unknown } | null {
+  return cond ? { id, label, value } : null;
+}
+
+/** `{id, type: 'radio', items}` with falsy items removed. */
+export function radioGroupHelper(id: unknown, ...items: unknown[]): {
+  id: unknown;
+  type: 'radio';
+  items: unknown[];
+} {
+  return { id, type: 'radio', items: items.filter(Boolean) };
+}
+
+/** `{...parent, children}` when parent is present, otherwise null. */
+export function withChildrenHelper(parent: unknown, children: unknown): unknown {
+  return parent ? { ...(parent as Record<string, unknown>), children } : null;
+}
+
 /**
  * Stringify a value for the json helper.
  * Returns safe HTML so quotes survive mustache escaping.
@@ -114,6 +143,11 @@ export function jsonHelper(value: unknown, fallback?: unknown): SafeHtml {
     const defaultFallback = Array.isArray(value) ? '[]' : '{}';
     return safeHtml(fallbackString ?? defaultFallback);
   }
+}
+
+/** Stringify every argument as one JSON array. Quotes stay unescaped. */
+export function jsonItemsHelper(...items: unknown[]): SafeHtml {
+  return jsonHelper(items);
 }
 
 /**
@@ -140,6 +174,17 @@ export function registerHandlebarsHelpers(): void {
   Handlebars.registerHelper('json', (...args: unknown[]) => {
     const values = args.slice(0, -1);
     return new Handlebars.SafeString(jsonHelper(values[0], values[1]).value);
+  });
+  Handlebars.registerHelper('item', (label, value) => itemHelper(label, value));
+  Handlebars.registerHelper('itemIf', (cond, id, label, value) => itemIfHelper(cond, id, label, value));
+  Handlebars.registerHelper('radioGroup', (...args: unknown[]) => {
+    const [id, ...items] = args.slice(0, -1);
+    return radioGroupHelper(id, ...items);
+  });
+  Handlebars.registerHelper('withChildren', (parent, children) => withChildrenHelper(parent, children));
+  Handlebars.registerHelper('jsonItems', (...args: unknown[]) => {
+    const values = args.slice(0, -1);
+    return new Handlebars.SafeString(jsonItemsHelper(...values).value);
   });
 }
 

@@ -20,7 +20,7 @@ import { getSubFormById } from './sub-form-registry';
  */
 export async function GET(
   request: Request,
-  context: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ): Promise<NextResponse<SubFormDescriptor | { error: string }>> {
   try {
     // Only allow GET method
@@ -31,7 +31,7 @@ export async function GET(
       );
     }
 
-    const { id } = context.params;
+    const { id } = await context.params;
     const subForm = getSubFormById(id);
 
     if (!subForm) {
