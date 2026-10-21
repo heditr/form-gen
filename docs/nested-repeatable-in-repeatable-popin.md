@@ -48,6 +48,8 @@ Source: `contacts-block` and `emergency-contacts-block` in that route. Prefill: 
       repeatableGroupId: 'emergency-contacts',
       validation: [],
       layout: { width: 'half' },
+      defaultValue:
+        '{{caseContext.contactGroupId.@outerIndex.emergencyContacts.@index.emergencyName}}',
     },
     {
       id: 'emergency-contacts.emergencyPhone',
@@ -56,6 +58,8 @@ Source: `contacts-block` and `emergency-contacts-block` in that route. Prefill: 
       repeatableGroupId: 'emergency-contacts',
       validation: [],
       layout: { width: 'half' },
+      defaultValue:
+        '{{caseContext.contactGroupId.@outerIndex.emergencyContacts.@index.emergencyPhone}}',
     },
   ],
 }
@@ -86,7 +90,7 @@ contactGroupId: [
 ]
 ```
 
-Row objects are copied onto form fields by base field id (`emergencyName`, `emergencyPhone`).
+A field `defaultValue` that contains `@index` or `@outerIndex` is evaluated per row. Fields without those tokens are copied from the row by base field id (`emergencyName`, `emergencyPhone`).
 
 ## What the main form does
 
@@ -123,11 +127,21 @@ The dialog title is Contacts. Inside the body, Emergency contacts shows once, wi
 
 ## How `@index` is bound
 
-`@index` in the nested block's `repeatableDefaultSource` is the open contact. For Grace that path is `caseContext.contactGroupId.1.emergencyContacts`. For Ada it is index `0`. The other contact's list is not loaded.
+`@index` in the nested block's `repeatableDefaultSource` is the open contact. For Grace that path is `caseContext.contactGroupId.1.emergencyContacts`. For Ada it is index `0`. The other contact's list is not loaded. `@outerIndex` is not an alias inside `repeatableDefaultSource`.
 
-`@index` inside an inner field `defaultValue` is the inner row. This demo does not use field `defaultValue` templates on the inner fields.
+`@index` inside an inner field `defaultValue` is the inner row. `@outerIndex` is the open popin row, so a template can remap a case-context key that is not the field id:
+
+```typescript
+defaultValue: '{{caseContext.contactGroupId.@outerIndex.emergencyContacts.@index.ecName}}'
+```
+
+Opening Grace (`index` 1) reads Jane from inner row 0 and John from inner row 1. The demo templates use `emergencyName` and `emergencyPhone`, the same keys as the prefill, so the seeded values stay Jane, John, and Alice.
+
+An unbound `@outerIndex` (main scope, or create mode where the open index is `-1`) returns the field's type default, the same rule as an unbound `@index`. When the inner source array is empty, `@outerIndex` still binds and `@index` in that fallback stays unbound.
 
 Create mode uses `index: -1`. A source that contains `@index` cannot be resolved, so the nested array starts as `[]`.
+
+Add inside the popin does not receive the outer index. A remap template on that new row returns the type default, because `@index` is unbound there as well.
 
 If this contact was already validated, the saved row is merged on top of those defaults. A later open keeps the emergency contacts the user edited.
 

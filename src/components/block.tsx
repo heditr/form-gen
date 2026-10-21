@@ -12,7 +12,8 @@ import type { FormContext } from '@/utils/template-evaluator';
 import { evaluateHiddenStatus, evaluateDisabledStatus, evaluateReadonlyStatus } from '@/utils/template-evaluator';
 import { resolveFieldStatus, type StatusMode } from '@/utils/resolve-field-status';
 import { useOptionalFormStatusContext } from '@/context/form-status-context';
-import { isRepeatableBlock, isRepeatablePopinBlock, groupFieldsByRepeatableGroupId, buildAutoFillPatchFromSelection, repeatableGroupDefaultSource } from '@/utils/form-descriptor-integration';
+import { isRepeatableBlock, isRepeatablePopinBlock, groupFieldsByRepeatableGroupId, buildAutoFillPatchFromSelection, getNestedValue, repeatableGroupDefaultSource } from '@/utils/form-descriptor-integration';
+import { clearHiddenAutoFillHoldsForSource, setHiddenAutoFillHold } from '@/utils/auto-fill-hidden-hold';
 import { buildBlockLayoutRows } from '@/utils/block-layout';
 import { buildPlainNestedPlacement } from '@/utils/nested-block-placement';
 import { cn } from '@/lib/utils';
@@ -147,9 +148,10 @@ function Block({
 
   const handleAutoFillSelection = (
     selectionFieldId: string,
-    selectedPayload: Record<string, unknown>
+    selectedPayload: Record<string, unknown> | null
   ) => {
     if (!selectedPayload) {
+      clearHiddenAutoFillHoldsForSource(form, selectionFieldId);
       return;
     }
 
@@ -183,7 +185,7 @@ function Block({
 
     const currentValues = form.getValues() as Partial<FormData>;
 
-    const patch = buildAutoFillPatchFromSelection({
+    const { patch, deferredPatch } = buildAutoFillPatchFromSelection({
       descriptor: descriptorForBlock,
       selectionFieldId,
       selectedPayload,
@@ -197,6 +199,20 @@ function Block({
         shouldDirty: true,
         shouldTouch: true,
         shouldValidate: true,
+      });
+    }
+
+    clearHiddenAutoFillHoldsForSource(form, selectionFieldId);
+    const sourceValue = form.getValues(selectionFieldId as never);
+    for (const fieldId of hiddenFieldIds) {
+      const value = getNestedValue(deferredPatch as Record<string, unknown>, fieldId);
+      if (value === undefined) {
+        continue;
+      }
+      setHiddenAutoFillHold(form, fieldId, {
+        sourceFieldId: selectionFieldId,
+        sourceValue,
+        value,
       });
     }
   };

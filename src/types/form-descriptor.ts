@@ -149,7 +149,8 @@ export interface AutoFillMapping {
  * 
  * @property mappings - Array of property mappings from selected payload → form fields
  * @property overwrite - If false, preserves existing non-empty values on target fields
- * @property respectHidden - If true (default), skips hidden target fields
+ * @property respectHidden - If true (default), hold hidden targets until they are shown.
+ *   If false, write hidden targets into live values immediately.
  * @property respectDisabled - If true (default), skips disabled target fields
  */
 export interface AutoFillConfig {
@@ -373,6 +374,10 @@ export interface ButtonConfig {
  * @property defaultValue - Optional default value or Handlebars template (e.g. '{{caseContext.email}}').
  *   In repeatable groups with repeatableDefaultSource, use '@index' in the template (e.g. '{{caseContext.addresses.@index.street}}');
  *   @index is replaced with the row index (0, 1, …) when evaluating.
+ *   Inside a nested repeatable opened from a repeatable popin, '@outerIndex' is the open popin row
+ *   and '@index' stays the inner row (e.g. '{{caseContext.contactGroupId.@outerIndex.emergencyContacts.@index.ecName}}').
+ *   An unbound or negative @outerIndex returns the field type default, same as unbound @index.
+ *   repeatableDefaultSource still binds only @index to the open row.
  */
 export interface FieldDescriptor {
   id: string;

@@ -678,6 +678,8 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
               repeatableGroupId: 'emergency-contacts',
               validation: [],
               layout: { width: 'half' },
+              defaultValue:
+                '{{caseContext.contactGroupId.@outerIndex.emergencyContacts.@index.emergencyName}}',
             },
             {
               id: 'emergency-contacts.emergencyPhone',
@@ -686,6 +688,8 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
               repeatableGroupId: 'emergency-contacts',
               validation: [],
               layout: { width: 'half' },
+              defaultValue:
+                '{{caseContext.contactGroupId.@outerIndex.emergencyContacts.@index.emergencyPhone}}',
             },
           ],
         },

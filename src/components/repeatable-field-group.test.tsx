@@ -6,28 +6,39 @@
  */
 
 import { describe, test, expect, vi, beforeAll } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import React from 'react';
 import { useForm, FormProvider } from 'react-hook-form';
 import type { UseFormReturn, FieldValues } from 'react-hook-form';
-import type { BlockDescriptor, FieldDescriptor } from '@/types/form-descriptor';
+import type { BlockDescriptor, FieldDescriptor, GlobalFormDescriptor } from '@/types/form-descriptor';
 import type { FormContext } from '@/utils/template-evaluator';
 import { registerHandlebarsHelpers } from '@/utils/handlebars-helpers';
+import { buildRepeatablePopinInstanceDescriptor } from '@/utils/popin-instance-descriptor';
 import RepeatableFieldGroup from './repeatable-field-group';
+
+type FieldWrapperMockProps = {
+  field: FieldDescriptor;
+  isHidden?: boolean;
+  isDisabled?: boolean;
+  form?: UseFormReturn<FieldValues>;
+  onAutoFillSelection?: (fieldId: string, selectedPayload: Record<string, unknown> | null) => void;
+};
 
 // Mock FieldWrapper to avoid complex dependencies in unit tests
 const fieldWrapperMock = vi.fn(
-  ({ field, isHidden, isDisabled }: { field: FieldDescriptor; isHidden?: boolean; isDisabled?: boolean }) => {
+  ({ field, isHidden, isDisabled, form }: FieldWrapperMockProps) => {
     if (isHidden) {
       return null;
     }
 
     const originalFieldId = field.id.split('.').pop() || field.id;
+    const value = form?.getValues(field.id as never);
     return (
       <div
         data-testid={`field-${originalFieldId}`}
         data-field-id={field.id}
+        data-value={value == null ? '' : String(value)}
         data-disabled={String(isDisabled || false)}
       >
         {field.label}
@@ -37,8 +48,7 @@ const fieldWrapperMock = vi.fn(
 );
 
 vi.mock('./field-wrapper', () => ({
-  default: (props: { field: FieldDescriptor; isHidden?: boolean; isDisabled?: boolean }) =>
-    fieldWrapperMock(props),
+  default: (props: FieldWrapperMockProps) => fieldWrapperMock(props),
 }));
 
 const mockInvalidateQueriesForBlock = vi.fn().mockResolvedValue(undefined);
@@ -848,5 +858,321 @@ describe('RepeatableFieldGroup', () => {
     // Note: This test verifies that errors are accessible via indexed field names
     // The actual error display is handled by individual field components
     expect(screen.getByTestId('repeatable-instance-addresses-0')).toBeInTheDocument();
+  });
+
+  test('given a nested repeatable opened from a popin, should fill the visible sibling on that row', async () => {
+    fieldWrapperMock.mockClear();
+    const emergency: BlockDescriptor = {
+      id: 'emergency-contacts-block',
+      title: 'Emergency contacts',
+      repeatable: true,
+      minInstances: 1,
+      fields: [
+        {
+          id: 'emergency-contacts.selector',
+          type: 'autocomplete',
+          label: 'Known contact',
+          repeatableGroupId: 'emergency-contacts',
+          validation: [],
+          autoFill: {
+            mappings: [{ from: 'emergencyName', to: 'emergencyName' }],
+          },
+        },
+        {
+          id: 'emergency-contacts.emergencyName',
+          type: 'text',
+          label: 'Emergency Contact Name',
+          repeatableGroupId: 'emergency-contacts',
+          validation: [],
+          status: { hidden: '{{eq @index 1}}' },
+        },
+      ],
+    };
+    const contacts: BlockDescriptor = {
+      id: 'contacts-block',
+      title: 'Contacts',
+      repeatable: true,
+      repeatablePopin: true,
+      fields: [
+        {
+          id: 'contactGroupId.name',
+          type: 'text',
+          label: 'Name',
+          repeatableGroupId: 'contactGroupId',
+          validation: [],
+        },
+      ],
+      nestedBlocks: [{ blockId: 'emergency-contacts-block', position: 'bottom' }],
+    };
+    const descriptor: GlobalFormDescriptor = {
+      blocks: [contacts, emergency],
+      submission: { url: '/api/submit', method: 'POST' },
+    };
+    const instance = buildRepeatablePopinInstanceDescriptor({
+      block: contacts,
+      groupId: 'contactGroupId',
+      descriptor,
+    });
+
+    expect(instance?.blocks[1]).toBe(emergency);
+    expect(instance?.blocks[0]?.fields.some((field) => field.autoFill)).toBe(false);
+
+    const Wrapper = () => {
+      const form = useForm({
+        defaultValues: {
+          'emergency-contacts': [
+            { selector: '', emergencyName: '' },
+            { selector: '', emergencyName: '' },
+          ],
+        },
+      }) as unknown as UseFormReturn<FieldValues>;
+      return (
+        <FormProvider {...form}>
+          <RepeatableFieldGroup
+            block={emergency}
+            groupId="emergency-contacts"
+            fields={emergency.fields}
+            isDisabled={false}
+            isHidden={false}
+            form={form}
+            formContext={{}}
+            onLoadDataSource={mockOnLoadDataSource}
+            dataSourceCache={mockDataSourceCache}
+          />
+        </FormProvider>
+      );
+    };
+
+    render(<Wrapper />);
+
+    const calls = fieldWrapperMock.mock.calls as unknown as Array<[FieldWrapperMockProps]>;
+    const hiddenName = calls.find(([props]) => props.field.id === 'emergency-contacts.1.emergencyName');
+    expect(hiddenName?.[0].isHidden).toBe(true);
+    expect(screen.getAllByTestId('field-emergencyName')).toHaveLength(1);
+
+    const selector = calls.find(([props]) => props.field.id === 'emergency-contacts.0.selector');
+    const rowForm = selector?.[0].form;
+    await act(async () => {
+      rowForm?.setValue('emergency-contacts.0.selector', 'jane');
+      selector?.[0].onAutoFillSelection?.('emergency-contacts.0.selector', { emergencyName: 'Jane' });
+    });
+
+    expect(rowForm?.getValues('emergency-contacts.0.emergencyName')).toBe('Jane');
+    expect(screen.getByTestId('field-emergencyName')).toHaveAttribute('data-value', 'Jane');
+  });
+
+  test('given a hidden sibling on a repeatable row, should store the autoFill value and reveal it when shown', async () => {
+    fieldWrapperMock.mockClear();
+    const emergency: BlockDescriptor = {
+      id: 'emergency-contacts-block',
+      title: 'Emergency contacts',
+      repeatable: true,
+      fields: [
+        {
+          id: 'emergency-contacts.selector',
+          type: 'autocomplete',
+          label: 'Known contact',
+          repeatableGroupId: 'emergency-contacts',
+          validation: [],
+          autoFill: {
+            mappings: [{ from: 'emergencyName', to: 'emergencyName' }],
+          },
+        },
+        {
+          id: 'emergency-contacts.showName',
+          type: 'checkbox',
+          label: 'Show name',
+          repeatableGroupId: 'emergency-contacts',
+          validation: [],
+        },
+        {
+          id: 'emergency-contacts.emergencyName',
+          type: 'text',
+          label: 'Emergency Contact Name',
+          repeatableGroupId: 'emergency-contacts',
+          validation: [],
+          status: { hidden: '{{#if showName}}false{{else}}true{{/if}}' },
+        },
+      ],
+    };
+
+    const Wrapper = () => {
+      const form = useForm({
+        defaultValues: {
+          'emergency-contacts': [{ selector: '', showName: false, emergencyName: '' }],
+        },
+      }) as unknown as UseFormReturn<FieldValues>;
+      return (
+        <FormProvider {...form}>
+          <RepeatableFieldGroup
+            block={emergency}
+            groupId="emergency-contacts"
+            fields={emergency.fields}
+            isDisabled={false}
+            isHidden={false}
+            form={form}
+            formContext={{}}
+            onLoadDataSource={mockOnLoadDataSource}
+            dataSourceCache={mockDataSourceCache}
+          />
+        </FormProvider>
+      );
+    };
+
+    render(<Wrapper />);
+
+    expect(screen.queryByTestId('field-emergencyName')).not.toBeInTheDocument();
+
+    const calls = fieldWrapperMock.mock.calls as unknown as Array<[FieldWrapperMockProps]>;
+    const selector = calls.find(([props]) => props.field.id === 'emergency-contacts.0.selector');
+    const rowForm = selector?.[0].form;
+    await act(async () => {
+      rowForm?.setValue('emergency-contacts.0.selector', 'jane');
+      selector?.[0].onAutoFillSelection?.('emergency-contacts.0.selector', { emergencyName: 'Jane' });
+    });
+
+    expect(rowForm?.getValues('emergency-contacts.0.emergencyName')).toBe('Jane');
+    expect(screen.queryByTestId('field-emergencyName')).not.toBeInTheDocument();
+
+    await act(async () => {
+      rowForm?.setValue('emergency-contacts.0.showName', true);
+    });
+
+    expect(screen.getByTestId('field-emergencyName')).toHaveAttribute('data-value', 'Jane');
+  });
+
+  test('given a hidden sibling filled before reveal, should remove it when the selector is cleared', async () => {
+    fieldWrapperMock.mockClear();
+    const emergency: BlockDescriptor = {
+      id: 'emergency-contacts-block',
+      title: 'Emergency contacts',
+      repeatable: true,
+      fields: [
+        {
+          id: 'emergency-contacts.selector',
+          type: 'autocomplete',
+          label: 'Known contact',
+          repeatableGroupId: 'emergency-contacts',
+          validation: [],
+          autoFill: {
+            mappings: [{ from: 'emergencyName', to: 'emergencyName' }],
+          },
+        },
+        {
+          id: 'emergency-contacts.emergencyName',
+          type: 'text',
+          label: 'Emergency Contact Name',
+          repeatableGroupId: 'emergency-contacts',
+          validation: [],
+          status: { hidden: 'true' },
+        },
+      ],
+    };
+
+    const Wrapper = () => {
+      const form = useForm({
+        defaultValues: {
+          'emergency-contacts': [{ selector: 'jane', emergencyName: '' }],
+        },
+      }) as unknown as UseFormReturn<FieldValues>;
+      return (
+        <FormProvider {...form}>
+          <RepeatableFieldGroup
+            block={emergency}
+            groupId="emergency-contacts"
+            fields={emergency.fields}
+            isDisabled={false}
+            isHidden={false}
+            form={form}
+            formContext={{}}
+            onLoadDataSource={mockOnLoadDataSource}
+            dataSourceCache={mockDataSourceCache}
+          />
+        </FormProvider>
+      );
+    };
+
+    render(<Wrapper />);
+
+    const calls = fieldWrapperMock.mock.calls as unknown as Array<[FieldWrapperMockProps]>;
+    const selector = calls.find(([props]) => props.field.id === 'emergency-contacts.0.selector');
+    const rowForm = selector?.[0].form;
+    await act(async () => {
+      selector?.[0].onAutoFillSelection?.('emergency-contacts.0.selector', { emergencyName: 'Jane' });
+    });
+
+    expect(rowForm?.getValues('emergency-contacts.0.emergencyName')).toBe('Jane');
+    expect(screen.queryByTestId('field-emergencyName')).not.toBeInTheDocument();
+
+    await act(async () => {
+      rowForm?.setValue('emergency-contacts.0.selector', '');
+      selector?.[0].onAutoFillSelection?.('emergency-contacts.0.selector', null);
+    });
+
+    expect(rowForm?.getValues('emergency-contacts.0.emergencyName')).toBe('');
+  });
+
+  test('given a visible sibling the user cleared, should leave that empty value when the selector is cleared', async () => {
+    fieldWrapperMock.mockClear();
+    const emergency: BlockDescriptor = {
+      id: 'emergency-contacts-block',
+      title: 'Emergency contacts',
+      repeatable: true,
+      fields: [
+        {
+          id: 'emergency-contacts.selector',
+          type: 'autocomplete',
+          label: 'Known contact',
+          repeatableGroupId: 'emergency-contacts',
+          validation: [],
+          autoFill: {
+            mappings: [{ from: 'emergencyName', to: 'emergencyName' }],
+          },
+        },
+        {
+          id: 'emergency-contacts.emergencyName',
+          type: 'text',
+          label: 'Emergency Contact Name',
+          repeatableGroupId: 'emergency-contacts',
+          validation: [],
+        },
+      ],
+    };
+
+    const Wrapper = () => {
+      const form = useForm({
+        defaultValues: {
+          'emergency-contacts': [{ selector: 'jane', emergencyName: '' }],
+        },
+      }) as unknown as UseFormReturn<FieldValues>;
+      return (
+        <FormProvider {...form}>
+          <RepeatableFieldGroup
+            block={emergency}
+            groupId="emergency-contacts"
+            fields={emergency.fields}
+            isDisabled={false}
+            isHidden={false}
+            form={form}
+            formContext={{}}
+            onLoadDataSource={mockOnLoadDataSource}
+            dataSourceCache={mockDataSourceCache}
+          />
+        </FormProvider>
+      );
+    };
+
+    render(<Wrapper />);
+
+    const calls = fieldWrapperMock.mock.calls as unknown as Array<[FieldWrapperMockProps]>;
+    const selector = calls.find(([props]) => props.field.id === 'emergency-contacts.0.selector');
+    const rowForm = selector?.[0].form;
+    await act(async () => {
+      selector?.[0].onAutoFillSelection?.('emergency-contacts.0.selector', { emergencyName: 'Jane' });
+      rowForm?.setValue('emergency-contacts.0.emergencyName', '');
+      selector?.[0].onAutoFillSelection?.('emergency-contacts.0.selector', null);
+    });
+
+    expect(rowForm?.getValues('emergency-contacts.0.emergencyName')).toBe('');
   });
 });

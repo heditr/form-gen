@@ -18,7 +18,7 @@ import type {
   FieldDescriptor,
 } from '@/types/form-descriptor';
 import { convertToReactHookFormRules, convertToZodSchema } from './validation-rule-adapter';
-import { bindTemplateIndex, evaluateDefaultValue } from './default-value-evaluator';
+import { bindTemplateIndex, evaluateDefaultValue, hasIndexToken } from './default-value-evaluator';
 import { evaluateTemplate } from './template-evaluator';
 import type { FormContext } from './template-evaluator';
 import { evaluateHiddenStatus } from './template-evaluator';
@@ -172,7 +172,7 @@ function setNestedValue(
  * Helper to get a nested value from an object using dot-notation path
  * (e.g. "businessAddress.line1" ← obj.businessAddress.line1).
  */
-function getNestedValue(
+export function getNestedValue(
   source: Record<string, unknown> | undefined,
   path: string
 ): unknown {
@@ -292,11 +292,27 @@ export interface AutoFillSelectionParams {
   disabledFieldIds?: string[];
 }
 
+export interface AutoFillSelectionResult {
+  /** Values to write into the form now. */
+  patch: Partial<FormData>;
+  /**
+   * Hidden targets kept out of live values when respectHidden is true.
+   * Callers hold these until the field is shown.
+   */
+  deferredPatch: Partial<FormData>;
+}
+
+const emptyAutoFillResult = (): AutoFillSelectionResult => ({
+  patch: {},
+  deferredPatch: {},
+});
+
 /**
  * Build a form value patch based on autoFill mappings defined on the selection field.
- * 
- * This function is pure: it does not mutate descriptor or form values. It returns
- * a partial FormData object that callers can apply via react-hook-form setValue().
+ *
+ * This function is pure: it does not mutate descriptor or form values.
+ * Hidden targets are returned on deferredPatch when respectHidden is true.
+ * Disabled targets are omitted from both results.
  */
 export function buildAutoFillPatchFromSelection({
   descriptor,
@@ -305,9 +321,9 @@ export function buildAutoFillPatchFromSelection({
   currentValues,
   hiddenFieldIds = [],
   disabledFieldIds = [],
-}: AutoFillSelectionParams): Partial<FormData> {
+}: AutoFillSelectionParams): AutoFillSelectionResult {
   if (!descriptor || !selectedPayload || typeof selectedPayload !== 'object' || Array.isArray(selectedPayload)) {
-    return {};
+    return emptyAutoFillResult();
   }
 
   // Find the selection field in the descriptor
@@ -323,7 +339,7 @@ export function buildAutoFillPatchFromSelection({
   const autoFill = selectionField?.autoFill;
 
   if (!autoFill || !autoFill.mappings || autoFill.mappings.length === 0) {
-    return {};
+    return emptyAutoFillResult();
   }
 
   const {
@@ -337,6 +353,7 @@ export function buildAutoFillPatchFromSelection({
   const disabledSet = new Set(respectDisabled ? disabledFieldIds : []);
 
   const patch: Record<string, unknown> = {};
+  const deferredPatch: Record<string, unknown> = {};
   const selected = selectedPayload as Record<string, unknown>;
   const current = (currentValues || {}) as Record<string, unknown>;
 
@@ -348,8 +365,7 @@ export function buildAutoFillPatchFromSelection({
       continue;
     }
 
-    // Respect hidden/disabled status when configured
-    if (hiddenSet.has(targetId) || disabledSet.has(targetId)) {
+    if (disabledSet.has(targetId)) {
       continue;
     }
 
@@ -366,10 +382,14 @@ export function buildAutoFillPatchFromSelection({
       }
     }
 
-    setNestedValue(patch, targetId, newValue);
+    const destination = hiddenSet.has(targetId) ? deferredPatch : patch;
+    setNestedValue(destination, targetId, newValue);
   }
 
-  return patch as Partial<FormData>;
+  return {
+    patch: patch as Partial<FormData>,
+    deferredPatch: deferredPatch as Partial<FormData>,
+  };
 }
 
 /**
@@ -440,10 +460,10 @@ export function extractDefaultValues(
               f.id.startsWith(`${groupId}.`) ? f.id.slice(groupId.length + 1) : f.id;
             const nonButtonFields = fields.filter(f => f.type !== 'button');
             const hasAtIndex = nonButtonFields.some(
-              f => typeof f.defaultValue === 'string' && f.defaultValue.includes('@index')
+              f => typeof f.defaultValue === 'string' && hasIndexToken(f.defaultValue)
             );
             if (hasAtIndex) {
-              // Per-row: bind @index to the inner row index i (never outerIndex)
+              // Per-row: @index is the inner row i; @outerIndex is the open popin row
               const rows = sourceArray.map((_item: Record<string, unknown>, i: number) => {
                 const row: Record<string, unknown> = {};
                 const item = sourceArray[i] as Record<string, unknown> | undefined;
@@ -452,12 +472,12 @@ export function extractDefaultValues(
                   if (shouldSkipHiddenDefault(field, defaultStatusContext(context, item, row))) {
                     continue;
                   }
-                  if (field.defaultValue !== undefined && typeof field.defaultValue === 'string' && field.defaultValue.includes('@index')) {
+                  if (field.defaultValue !== undefined && typeof field.defaultValue === 'string' && hasIndexToken(field.defaultValue)) {
                     const value = evaluateDefaultValue(
                       field.defaultValue,
                       field.type,
                       context,
-                      { index: i }
+                      { index: i, outerIndex }
                     );
                     setNestedValue(row, bid, value);
                   } else {
@@ -470,7 +490,7 @@ export function extractDefaultValues(
               });
               (defaultValues as Record<string, unknown>)[groupId] = rows;
             } else {
-              // No @index in any defaultValue: use source array as-is (normalized to field ids)
+              // No @index or @outerIndex in any defaultValue: use source array as-is (normalized to field ids)
               const normalized = sourceArray.map((item: Record<string, unknown>) => {
                 const out: Record<string, unknown> = {};
                 for (const field of nonButtonFields) {
@@ -496,7 +516,7 @@ export function extractDefaultValues(
         
         if (hasAnyDefault) {
           // Build default object for this repeatable group using base field id (no groupId prefix)
-          // Do not apply outerIndex — unbound @index returns type defaults
+          // @index stays unbound here (type default). @outerIndex still binds to the open popin row.
           const groupDefault: Record<string, unknown> = {};
           for (const field of fields) {
             if (field.type === 'button') {
@@ -512,7 +532,8 @@ export function extractDefaultValues(
               const evaluatedValue = evaluateDefaultValue(
                 field.defaultValue,
                 field.type,
-                context
+                context,
+                { outerIndex }
               );
               setNestedValue(
                 groupDefault,
@@ -611,7 +632,7 @@ export function extractDefaultValues(
             field.defaultValue,
             field.type,
             context,
-            typeof outerIndex === 'number' ? { index: outerIndex } : {}
+            typeof outerIndex === 'number' ? { index: outerIndex, outerIndex } : {}
           );
           setNestedValue(
             target,
