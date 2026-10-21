@@ -495,9 +495,12 @@ export interface NestedBlockReference {
  * @property minInstances - Optional minimum number of instances required for repeatable blocks
  * @property maxInstances - Optional maximum number of instances allowed for repeatable blocks
  * @property repeatableBlockRef - Optional ID of another block to reference and make repeatable (avoids duplicating block definitions)
- * @property repeatableDefaultSource - Optional Handlebars template that evaluates to a caseContext path
- *   (e.g. 'addresses' or 'legalEntity.addresses'). At initial load, the repeatable group is filled from
- *   that nested path when it is an array of objects.
+ * @property repeatableDefaultSource - Optional caseContext key, or a Handlebars template that evaluates
+ *   to that key (e.g. 'addresses', 'legalEntity.addresses', '{{caseContext.sourcePath}}').
+ *   A `json` helper template stringifies the array itself
+ *   (e.g. '{{json caseContext.contactGroupId.@index.emergencyContacts}}').
+ *   Extraction accepts either the key or a JSON array string. At initial load, the repeatable group
+ *   is filled from that array of objects.
  * @property repeatablePopin - If true with repeatable, each instance is edited via popin; summaries shown inline, click to edit
  * @property repeatableSummaryTemplate - Optional Handlebars template for summary text per instance (e.g. "{{name}} ({{role}})")
  * @property nestedBlocks - Optional references to other blocks rendered inside this block.

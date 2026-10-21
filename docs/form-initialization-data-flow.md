@@ -145,8 +145,8 @@ Inside `extractDefaultValues`:
 - For **repeatable blocks** (`block.repeatable === true`):
   - Group fields by `repeatableGroupId`.
   - If `block.repeatableDefaultSource` exists:
-    - Treat it as a (possibly templated) key into `caseContext` (via `evaluateTemplate`).
-    - If `caseContext[key]` is an array:
+    - Treat it as a caseContext key, a template that evaluates to that key, or a `json` helper template (or literal JSON array string). A value that parses as a JSON array is the row source; any other value is a key into `caseContext`.
+    - If the resolved value is an array:
       - If any default uses `@index`, build each row by evaluating that template per index.
       - Otherwise, normalize items into `{ baseFieldId: value }` objects.
     - Set `defaultValues[groupId]` to that array.

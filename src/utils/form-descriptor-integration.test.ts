@@ -2530,6 +2530,110 @@ describe('form descriptor integration', () => {
       });
       expect(createMode['emergency-contacts']).toEqual([]);
     });
+
+    test('given repeatableDefaultSource as a json array template, should seed the same rows as a caseContext key', () => {
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'contacts-instance',
+            title: 'Contact',
+            repeatable: true,
+            repeatableDefaultSource:
+              '{{json caseContext.contactGroupId.@index.emergencyContacts }}',
+            fields: [
+              {
+                id: 'emergency-contacts.emergencyName',
+                type: 'text',
+                label: 'Full Name',
+                repeatableGroupId: 'emergency-contacts',
+                validation: [],
+              },
+              {
+                id: 'emergency-contacts.emergencyPhone',
+                type: 'text',
+                label: 'Phone',
+                repeatableGroupId: 'emergency-contacts',
+                validation: [],
+              },
+            ],
+          },
+        ],
+        submission: { url: '/api/submit', method: 'POST' },
+      };
+
+      const context: FormContext = {
+        caseContext: {
+          contactGroupId: [
+            {
+              emergencyContacts: [{ emergencyName: 'Alice', emergencyPhone: '111' }],
+            },
+            {
+              emergencyContacts: [
+                { emergencyName: 'Jane', emergencyPhone: '098' },
+                { emergencyName: 'John', emergencyPhone: '123' },
+              ],
+            },
+          ],
+        },
+      };
+
+      const openedInstance = extractDefaultValues(descriptor, context, {
+        scope: 'popin',
+        index: 1,
+      });
+      expect(openedInstance['emergency-contacts']).toEqual([
+        { emergencyName: 'Jane', emergencyPhone: '098' },
+        { emergencyName: 'John', emergencyPhone: '123' },
+      ]);
+
+      const firstInstance = extractDefaultValues(descriptor, context, {
+        scope: 'popin',
+        index: 0,
+      });
+      expect(firstInstance['emergency-contacts']).toEqual([
+        { emergencyName: 'Alice', emergencyPhone: '111' },
+      ]);
+
+      const createMode = extractDefaultValues(descriptor, context, {
+        scope: 'popin',
+        index: -1,
+      });
+      expect(createMode['emergency-contacts']).toEqual([]);
+    });
+
+    test('given repeatableDefaultSource as a JSON array string, should fill the group from that array', () => {
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'addresses-block',
+            title: 'Addresses',
+            repeatable: true,
+            repeatableDefaultSource: '[{"street":"10 Downing St","city":"London"}]',
+            fields: [
+              {
+                id: 'street',
+                type: 'text',
+                label: 'Street',
+                repeatableGroupId: 'addresses',
+                validation: [],
+              },
+              {
+                id: 'city',
+                type: 'text',
+                label: 'City',
+                repeatableGroupId: 'addresses',
+                validation: [],
+              },
+            ],
+          },
+        ],
+        submission: { url: '/api/submit', method: 'POST' },
+      };
+
+      expect(extractDefaultValues(descriptor, { caseContext: {} }).addresses).toEqual([
+        { street: '10 Downing St', city: 'London' },
+      ]);
+    });
   });
 
   describe('nested block inside a repeatable popin', () => {

@@ -39,7 +39,7 @@ Source: `contacts-block` and `emergency-contacts-block` in that route. Prefill: 
   minInstances: 1,
   maxInstances: 2,
   layout: { mode: 'grid', columns: 2 },
-  repeatableDefaultSource: 'caseContext.contactGroupId.@index.emergencyContacts',
+  repeatableDefaultSource: '{{json caseContext.contactGroupId.@index.emergencyContacts }}',
   fields: [
     {
       id: 'emergency-contacts.emergencyName',
@@ -128,6 +128,8 @@ The dialog title is Contacts. Inside the body, Emergency contacts shows once, wi
 ## How `@index` is bound
 
 `@index` in the nested block's `repeatableDefaultSource` is the open contact. For Grace that path is `caseContext.contactGroupId.1.emergencyContacts`. For Ada it is index `0`. The other contact's list is not loaded. `@outerIndex` is not an alias inside `repeatableDefaultSource`.
+
+The same path can be declared as a key, `caseContext.contactGroupId.@index.emergencyContacts`, or stringified with the `json` helper, `{{json caseContext.contactGroupId.@index.emergencyContacts}}`. The helper writes a JSON array string. Extraction uses that array when the source parses as one, and looks up a caseContext key otherwise.
 
 `@index` inside an inner field `defaultValue` is the inner row. `@outerIndex` is the open popin row, so a template can remap a case-context key that is not the field id:
 

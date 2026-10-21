@@ -22,7 +22,7 @@ import { bindTemplateIndex, evaluateDefaultValue, hasIndexToken } from './defaul
 import { evaluateTemplate } from './template-evaluator';
 import type { FormContext } from './template-evaluator';
 import { evaluateHiddenStatus } from './template-evaluator';
-import { evaluateValidationArrayTemplate } from './array-template-evaluator';
+import { evaluateValidationArrayTemplate, parseJsonArray } from './array-template-evaluator';
 
 type ValidationScope = 'main' | 'popin';
 
@@ -242,8 +242,11 @@ function shouldSkipHiddenDefault(field: FieldDescriptor, statusContext: FormCont
 }
 
 /**
- * Resolve a caseContext path from a static string or Handlebars template.
- * Supports nested paths (e.g. "legalEntity.addresses").
+ * Resolve a repeatable or prospect source.
+ * A string that parses as a JSON array is the source itself (a `json` helper
+ * template, or a literal JSON array). Any other string is a caseContext key
+ * or path, including a template that evaluates to that key.
+ * `@index` is bound before evaluation.
  */
 function resolveCaseContextPath(
   sourceTemplate: string,
@@ -264,6 +267,11 @@ function resolveCaseContextPath(
 
   if (!evaluated) {
     return undefined;
+  }
+
+  const parsedArray = parseJsonArray(evaluated);
+  if (parsedArray) {
+    return parsedArray;
   }
 
   const path = evaluated.startsWith('caseContext.')
