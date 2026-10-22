@@ -1201,6 +1201,43 @@ describe('form descriptor integration', () => {
       expect(defaultValues.addresses).toEqual([]);
     });
 
+    test('given a repeatable block with minInstances and no defaults, should leave the group empty', () => {
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'addresses-block',
+            title: 'Addresses',
+            repeatable: true,
+            minInstances: 2,
+            fields: [
+              {
+                id: 'street',
+                type: 'text',
+                label: 'Street',
+                repeatableGroupId: 'addresses',
+                validation: [],
+              },
+              {
+                id: 'city',
+                type: 'text',
+                label: 'City',
+                repeatableGroupId: 'addresses',
+                validation: [],
+              },
+            ],
+          },
+        ],
+        submission: {
+          url: '/api/submit',
+          method: 'POST',
+        },
+      };
+
+      const defaultValues = extractDefaultValues(descriptor);
+
+      expect(defaultValues.addresses).toEqual([]);
+    });
+
     test('given a repeatable block with default values, should extract as array of objects', () => {
       const descriptor: GlobalFormDescriptor = {
         blocks: [

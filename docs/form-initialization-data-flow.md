@@ -153,7 +153,7 @@ Inside `extractDefaultValues`:
   - If no external source but some field defaults exist:
     - Build one default row from those defaults + type defaults.
   - If no defaults at all:
-    - Build an empty instance shape and repeat it `minInstances` times.
+    - Set the group to an empty array. `minInstances` stays a validation floor and does not seed blank rows.
 
 Result: **`defaultValues` is a full, context‑aware, type‑safe initial value object**.
 

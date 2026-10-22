@@ -583,38 +583,8 @@ export function extractDefaultValues(
           
           (defaultValues as Record<string, unknown>)[groupId] = [groupDefault];
         } else {
-          // No defaults - build empty instance shape (base field ids) and fill up to minInstances
-          const emptyInstance: Record<string, unknown> = {};
-          for (const field of fields) {
-            if (field.type === 'button') continue;
-            const baseFieldId = field.id.startsWith(`${groupId}.`)
-              ? field.id.slice(groupId.length + 1)
-              : field.id;
-            if (shouldSkipHiddenDefault(field, defaultStatusContext(context, undefined, emptyInstance))) {
-              continue;
-            }
-            switch (field.type) {
-              case 'checkbox':
-                setNestedValue(emptyInstance, baseFieldId, false);
-                break;
-              case 'number':
-                setNestedValue(emptyInstance, baseFieldId, 0);
-                break;
-              case 'file':
-                setNestedValue(emptyInstance, baseFieldId, null);
-                break;
-              case 'document':
-                setNestedValue(emptyInstance, baseFieldId, createDocumentCardDefaultData(field, context));
-                break;
-              default:
-                setNestedValue(emptyInstance, baseFieldId, '');
-            }
-          }
-          const min = block.minInstances ?? 0;
-          (defaultValues as Record<string, unknown>)[groupId] = Array.from(
-            { length: min },
-            () => ({ ...emptyInstance })
-          );
+          // minInstances is a validation floor, not a reason to seed blank rows
+          (defaultValues as Record<string, unknown>)[groupId] = [];
         }
         
         processedRepeatableGroups.add(groupId);
