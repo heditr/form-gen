@@ -1201,6 +1201,43 @@ describe('form descriptor integration', () => {
       expect(defaultValues.addresses).toEqual([]);
     });
 
+    test('given a repeatable block with minInstances and no defaults, should leave the group empty', () => {
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'addresses-block',
+            title: 'Addresses',
+            repeatable: true,
+            minInstances: 2,
+            fields: [
+              {
+                id: 'street',
+                type: 'text',
+                label: 'Street',
+                repeatableGroupId: 'addresses',
+                validation: [],
+              },
+              {
+                id: 'city',
+                type: 'text',
+                label: 'City',
+                repeatableGroupId: 'addresses',
+                validation: [],
+              },
+            ],
+          },
+        ],
+        submission: {
+          url: '/api/submit',
+          method: 'POST',
+        },
+      };
+
+      const defaultValues = extractDefaultValues(descriptor);
+
+      expect(defaultValues.addresses).toEqual([]);
+    });
+
     test('given a repeatable block with default values, should extract as array of objects', () => {
       const descriptor: GlobalFormDescriptor = {
         blocks: [
@@ -2362,6 +2399,43 @@ describe('form descriptor integration', () => {
       consoleErrorSpy.mockRestore();
     });
 
+    test('given flattened popin fields with @outerIndex defaults, should bind to the open row', () => {
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'signatories-block-instance',
+            title: 'Signatory',
+            fields: [
+              {
+                id: 'signatoryName',
+                type: 'text',
+                label: 'Name',
+                validation: [],
+                defaultValue: '{{caseContext.signatories.@outerIndex.name}}',
+              },
+            ],
+          },
+        ],
+        submission: { url: '/api/submit', method: 'POST' },
+      };
+
+      const context: FormContext = {
+        caseContext: {
+          signatories: [
+            { name: 'Ada' },
+            { name: 'Grace' },
+          ],
+        },
+      };
+
+      const defaultValues = extractDefaultValues(descriptor, context, {
+        scope: 'popin',
+        index: 1,
+      });
+
+      expect(defaultValues).toEqual({ signatoryName: 'Grace' });
+    });
+
     test('given inner repeatable group inside a popin, should bind @index to inner row i not outer index', () => {
       const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
       const descriptor: GlobalFormDescriptor = {
@@ -2492,6 +2566,110 @@ describe('form descriptor integration', () => {
         index: -1,
       });
       expect(createMode['emergency-contacts']).toEqual([]);
+    });
+
+    test('given repeatableDefaultSource as a json array template, should seed the same rows as a caseContext key', () => {
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'contacts-instance',
+            title: 'Contact',
+            repeatable: true,
+            repeatableDefaultSource:
+              '{{json caseContext.contactGroupId.@index.emergencyContacts }}',
+            fields: [
+              {
+                id: 'emergency-contacts.emergencyName',
+                type: 'text',
+                label: 'Full Name',
+                repeatableGroupId: 'emergency-contacts',
+                validation: [],
+              },
+              {
+                id: 'emergency-contacts.emergencyPhone',
+                type: 'text',
+                label: 'Phone',
+                repeatableGroupId: 'emergency-contacts',
+                validation: [],
+              },
+            ],
+          },
+        ],
+        submission: { url: '/api/submit', method: 'POST' },
+      };
+
+      const context: FormContext = {
+        caseContext: {
+          contactGroupId: [
+            {
+              emergencyContacts: [{ emergencyName: 'Alice', emergencyPhone: '111' }],
+            },
+            {
+              emergencyContacts: [
+                { emergencyName: 'Jane', emergencyPhone: '098' },
+                { emergencyName: 'John', emergencyPhone: '123' },
+              ],
+            },
+          ],
+        },
+      };
+
+      const openedInstance = extractDefaultValues(descriptor, context, {
+        scope: 'popin',
+        index: 1,
+      });
+      expect(openedInstance['emergency-contacts']).toEqual([
+        { emergencyName: 'Jane', emergencyPhone: '098' },
+        { emergencyName: 'John', emergencyPhone: '123' },
+      ]);
+
+      const firstInstance = extractDefaultValues(descriptor, context, {
+        scope: 'popin',
+        index: 0,
+      });
+      expect(firstInstance['emergency-contacts']).toEqual([
+        { emergencyName: 'Alice', emergencyPhone: '111' },
+      ]);
+
+      const createMode = extractDefaultValues(descriptor, context, {
+        scope: 'popin',
+        index: -1,
+      });
+      expect(createMode['emergency-contacts']).toEqual([]);
+    });
+
+    test('given repeatableDefaultSource as a JSON array string, should fill the group from that array', () => {
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'addresses-block',
+            title: 'Addresses',
+            repeatable: true,
+            repeatableDefaultSource: '[{"street":"10 Downing St","city":"London"}]',
+            fields: [
+              {
+                id: 'street',
+                type: 'text',
+                label: 'Street',
+                repeatableGroupId: 'addresses',
+                validation: [],
+              },
+              {
+                id: 'city',
+                type: 'text',
+                label: 'City',
+                repeatableGroupId: 'addresses',
+                validation: [],
+              },
+            ],
+          },
+        ],
+        submission: { url: '/api/submit', method: 'POST' },
+      };
+
+      expect(extractDefaultValues(descriptor, { caseContext: {} }).addresses).toEqual([
+        { street: '10 Downing St', city: 'London' },
+      ]);
     });
   });
 
@@ -2682,6 +2860,110 @@ describe('form descriptor integration', () => {
         { emergencyName: 'Bob', emergencyPhone: '222' },
       ]);
     });
+
+    test('given remapped case keys, should bind @outerIndex to the open contact and leave main scope untouched', () => {
+      const emergency = emergencyBlock([
+        textField(
+          'emergency-contacts.emergencyName',
+          'emergency-contacts',
+          '{{caseContext.contactGroupId.@outerIndex.emergencyContacts.@index.ecName}}'
+        ),
+      ]);
+      const descriptor = mainDescriptor(emergency);
+      const instance = buildRepeatablePopinInstanceDescriptor({
+        block: descriptor.blocks[0],
+        groupId: 'contactGroupId',
+        descriptor,
+      });
+      const remappedContext: FormContext = {
+        caseContext: {
+          contactGroupId: [
+            {
+              name: 'Ada',
+              emergencyContacts: [{ ecName: 'Alice' }],
+            },
+            {
+              name: 'Grace',
+              emergencyContacts: [{ ecName: 'Jane' }, { ecName: 'John' }],
+            },
+          ],
+        },
+      };
+
+      expect(
+        extractDefaultValues(instance, remappedContext, { scope: 'popin', index: 1 })[
+          'emergency-contacts'
+        ]
+      ).toEqual([{ emergencyName: 'Jane' }, { emergencyName: 'John' }]);
+      expect(
+        extractDefaultValues(instance, remappedContext, { scope: 'popin', index: 0 })[
+          'emergency-contacts'
+        ]
+      ).toEqual([{ emergencyName: 'Alice' }]);
+      expect(
+        extractDefaultValues(instance, remappedContext, { scope: 'popin', index: -1 })[
+          'emergency-contacts'
+        ]
+      ).toEqual([]);
+      expect(extractDefaultValues(descriptor, remappedContext)['emergency-contacts']).toBeUndefined();
+    });
+
+    test('given only @outerIndex on an inner field, should evaluate that template for each source row', () => {
+      const emergency = emergencyBlock([
+        textField(
+          'emergency-contacts.emergencyName',
+          'emergency-contacts',
+          '{{caseContext.contactGroupId.@outerIndex.name}}'
+        ),
+      ]);
+      const descriptor = mainDescriptor(emergency);
+      const instance = buildRepeatablePopinInstanceDescriptor({
+        block: descriptor.blocks[0],
+        groupId: 'contactGroupId',
+        descriptor,
+      });
+
+      expect(
+        extractDefaultValues(instance, caseContext, { scope: 'popin', index: 1 })[
+          'emergency-contacts'
+        ]
+      ).toEqual([{ emergencyName: 'Grace' }, { emergencyName: 'Grace' }]);
+    });
+
+    test('given an empty inner source, should still bind @outerIndex and leave @index unbound', () => {
+      const emergency = emergencyBlock([
+        textField(
+          'emergency-contacts.emergencyName',
+          'emergency-contacts',
+          '{{caseContext.contactGroupId.@outerIndex.name}}'
+        ),
+        textField(
+          'emergency-contacts.emergencyPhone',
+          'emergency-contacts',
+          '{{caseContext.contactGroupId.@outerIndex.emergencyContacts.@index.emergencyPhone}}'
+        ),
+      ]);
+      const descriptor = mainDescriptor(emergency);
+      const instance = buildRepeatablePopinInstanceDescriptor({
+        block: descriptor.blocks[0],
+        groupId: 'contactGroupId',
+        descriptor,
+      });
+      const emptySource: FormContext = {
+        caseContext: {
+          contactGroupId: [
+            { name: 'Ada', emergencyContacts: [] },
+            { name: 'Grace', emergencyContacts: [] },
+          ],
+        },
+      };
+
+      expect(
+        extractDefaultValues(instance, emptySource, { scope: 'popin', index: 1 })[
+          'emergency-contacts'
+        ]
+      ).toEqual([{ emergencyName: 'Grace', emergencyPhone: '' }]);
+    });
   });
 
   describe('buildAutoFillPatchFromSelection', () => {
@@ -2738,10 +3020,13 @@ describe('form descriptor integration', () => {
       });
 
       expect(patch).toEqual({
-        company: {
-          name: 'ACME Corp',
-          registrationNumber: '123456789',
+        patch: {
+          company: {
+            name: 'ACME Corp',
+            registrationNumber: '123456789',
+          },
         },
+        deferredPatch: {},
       });
     });
 
@@ -2791,9 +3076,12 @@ describe('form descriptor integration', () => {
       });
 
       expect(patch).toEqual({
-        company: {
-          headquartersCity: 'London',
+        patch: {
+          company: {
+            headquartersCity: 'London',
+          },
         },
+        deferredPatch: {},
       });
     });
 
@@ -2840,7 +3128,94 @@ describe('form descriptor integration', () => {
         hiddenFieldIds: ['company.name'],
       });
 
-      expect(patch).toEqual({});
+      expect(patch).toEqual({
+        patch: {},
+        deferredPatch: {
+          company: {
+            name: 'Hidden Corp',
+          },
+        },
+      });
+    });
+
+    test('given a disabled target, should skip it in the live patch and the deferred patch', () => {
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'company-block',
+            title: 'Company',
+            fields: [
+              {
+                id: 'companySelector',
+                type: 'autocomplete',
+                label: 'Parent company',
+                validation: [],
+                autoFill: {
+                  mappings: [{ from: 'name', to: 'company.name' }],
+                },
+              },
+              {
+                id: 'company.name',
+                type: 'text',
+                label: 'Company name',
+                validation: [],
+              },
+            ],
+          },
+        ],
+        submission: { url: '/api/submit', method: 'POST' },
+      };
+
+      const result = buildAutoFillPatchFromSelection({
+        descriptor,
+        selectionFieldId: 'companySelector',
+        selectedPayload: { name: 'Disabled Corp' },
+        disabledFieldIds: ['company.name'],
+      });
+
+      expect(result).toEqual({ patch: {}, deferredPatch: {} });
+    });
+
+    test('given respectHidden false, should write a hidden target into the live patch', () => {
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'company-block',
+            title: 'Company',
+            fields: [
+              {
+                id: 'companySelector',
+                type: 'autocomplete',
+                label: 'Parent company',
+                validation: [],
+                autoFill: {
+                  mappings: [{ from: 'name', to: 'company.name' }],
+                  respectHidden: false,
+                },
+              },
+              {
+                id: 'company.name',
+                type: 'text',
+                label: 'Company name',
+                validation: [],
+              },
+            ],
+          },
+        ],
+        submission: { url: '/api/submit', method: 'POST' },
+      };
+
+      const result = buildAutoFillPatchFromSelection({
+        descriptor,
+        selectionFieldId: 'companySelector',
+        selectedPayload: { name: 'Live Corp' },
+        hiddenFieldIds: ['company.name'],
+      });
+
+      expect(result).toEqual({
+        patch: { company: { name: 'Live Corp' } },
+        deferredPatch: {},
+      });
     });
 
     test('given overwrite=false and existing non-empty value, should preserve existing value and not overwrite', () => {
@@ -2904,9 +3279,12 @@ describe('form descriptor integration', () => {
 
       // Should not overwrite existing company.name, but should set registrationNumber
       expect(patch).toEqual({
-        company: {
-          registrationNumber: '999',
+        patch: {
+          company: {
+            registrationNumber: '999',
+          },
         },
+        deferredPatch: {},
       });
     });
 
@@ -2938,7 +3316,7 @@ describe('form descriptor integration', () => {
         selectedPayload: { name: 'ACME' },
       });
 
-      expect(patch).toEqual({});
+      expect(patch).toEqual({ patch: {}, deferredPatch: {} });
     });
   });
 });

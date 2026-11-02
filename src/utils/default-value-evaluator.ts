@@ -15,15 +15,40 @@ export interface EvaluateDefaultValueOptions {
    * without compiling (Handlebars cannot parse `foo.@index.bar`).
    */
   index?: number;
+  /**
+   * Open popin row. Binds `@outerIndex` before `@index`.
+   * Only integers >= 0 are applied; a negative or missing value leaves `@outerIndex` unbound.
+   */
+  outerIndex?: number;
+}
+
+function isBindableIndex(index: number | undefined): index is number {
+  return typeof index === 'number' && Number.isInteger(index) && index >= 0;
 }
 
 /**
- * Replace the `@index` preprocessor token with a numeric path segment.
+ * True when the template still contains `@index` or `@outerIndex`.
+ * `@outerIndex` does not contain the `@index` substring, so both tokens are checked.
+ */
+export function hasIndexToken(template: string): boolean {
+  return template.includes('@outerIndex') || template.includes('@index');
+}
+
+/**
+ * Replace preprocessor tokens with numeric path segments.
+ * `@outerIndex` is replaced first, then `@index`.
  * This is not Handlebars data-frame `@index` — it rewrites the template string
  * so `{{caseContext.items.@index.name}}` becomes `{{caseContext.items.0.name}}`.
  */
-export function bindTemplateIndex(template: string, index: number): string {
-  return template.replaceAll('@index', String(index));
+export function bindTemplateIndex(
+  template: string,
+  index?: number,
+  outerIndex?: number
+): string {
+  const withOuter = isBindableIndex(outerIndex)
+    ? template.replaceAll('@outerIndex', String(outerIndex))
+    : template;
+  return isBindableIndex(index) ? withOuter.replaceAll('@index', String(index)) : withOuter;
 }
 
 function typeDefaultForField(
@@ -74,7 +99,7 @@ function parseDateDefaultValue(value: string): Date | null {
  * @param defaultValue - The default value (can be string template or static value)
  * @param fieldType - The type of field (determines return type and conversion)
  * @param context - Form context for template evaluation
- * @param options - Optional `@index` bind for repeatable / popin instance defaults
+ * @param options - Optional `@index` and `@outerIndex` binds for repeatable / popin instance defaults
  * @returns Evaluated and type-converted default value
  */
 export function evaluateDefaultValue(
@@ -115,12 +140,11 @@ export function evaluateDefaultValue(
     return defaultValue;
   }
 
-  const { index } = options;
-  const shouldBindIndex = typeof index === 'number' && Number.isInteger(index) && index >= 0;
-  const template = shouldBindIndex ? bindTemplateIndex(defaultValue, index) : defaultValue;
+  const { index, outerIndex } = options;
+  const template = bindTemplateIndex(defaultValue, index, outerIndex);
 
-  // Unbound `@index` is a preprocessor token, not valid Handlebars — skip compile
-  if (template.includes('@index')) {
+  // Unbound `@index` / `@outerIndex` are preprocessor tokens, not valid Handlebars — skip compile
+  if (hasIndexToken(template)) {
     return typeDefaultForField(fieldType);
   }
 

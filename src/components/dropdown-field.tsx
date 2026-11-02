@@ -26,7 +26,7 @@ export interface DropdownFieldProps {
   required?: boolean;
   onLoadDataSource?: (fieldPath: string, url: string, auth?: { type: 'bearer' | 'apikey'; token?: string; headerName?: string }) => void;
   dataSourceCache?: Record<string, unknown>;
-  onAutoFillSelection?: (fieldId: string, selectedPayload: Record<string, unknown>) => void;
+  onAutoFillSelection?: (fieldId: string, selectedPayload: Record<string, unknown> | null) => void;
 }
 
 /**
@@ -158,7 +158,9 @@ export default function DropdownField({
                 const selectedItem = items.find(
                   (item) => String(item.value) === selectedValue
                 );
-                if (selectedItem) {
+                if (!selectedItem) {
+                  onAutoFillSelection(field.id, null);
+                } else {
                   const payload =
                     selectedItem.raw && typeof selectedItem.raw === 'object' && !Array.isArray(selectedItem.raw)
                       ? (selectedItem.raw as Record<string, unknown>)

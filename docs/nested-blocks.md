@@ -142,11 +142,40 @@ contactGroupId: [
 ]
 ```
 
-`'emergency-contacts'` is the nested block's own group id. Opening index `1` seeds only Grace's list, because `@index` in that block's `repeatableDefaultSource` is the open parent. `@index` inside an inner field `defaultValue` is the inner row. Create mode (`index < 0`) leaves a source that contains `@index` unresolved, so the nested array is `[]`. Validate writes that popin object onto the open index, or appends it when the index is new, and leaves every other parent row as it was.
+`'emergency-contacts'` is the nested block's own group id. Opening index `1` seeds only Grace's list, because `@index` in that block's `repeatableDefaultSource` is the open parent. That source may be the path key or `{{json caseContext.contactGroupId.@index.emergencyContacts}}`; both resolve to the same array. `@index` inside an inner field `defaultValue` is the inner row, and `@outerIndex` is that same open parent when the template remaps a case-context key. Create mode (`index < 0`) leaves a source that contains `@index` unresolved, so the nested array is `[]`. An unbound `@outerIndex` returns the field type default. Validate writes that popin object onto the open index, or appends it when the index is new, and leaves every other parent row as it was.
 
 In the popin, the instance descriptor's schema uses the nested block's min and max for that array. A hidden nested block drops its key from each parent row on the main form, and from the popin value when the instance descriptor is used.
 
 ## Repeatable popin
+
+On a plain parent the nested block is another section in the same form. On a repeatable popin the same block is drawn inside the open row, and its group key is a property of that row.
+
+```mermaid
+flowchart TB
+  subgraph descriptor ["descriptor.blocks"]
+    parent["contacts-block repeatablePopin"]
+    nested["emergency-contacts-block"]
+    parent -->|"nestedBlocks blockId"| nested
+  end
+
+  subgraph main ["Main form"]
+    summary["RepeatablePopinSummary"]
+    hidden["emergency-contacts-block skipped as its own section"]
+  end
+
+  subgraph dialog ["Open popin"]
+    instance["contacts-block-instance shell"]
+    placed["Block places emergency-contacts-block at position bottom"]
+    values["popin values: name and emergency-contacts array"]
+  end
+
+  parent --> summary
+  nested --> hidden
+  parent --> instance
+  nested --> placed
+  placed --> values
+  values -->|"Validate replaces that index on the parent array"| summary
+```
 
 `assertNestedBlocks` allows a repeatable popin to list `nestedBlocks`, and it checks row clashes for that case.
 

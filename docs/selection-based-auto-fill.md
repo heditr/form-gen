@@ -13,7 +13,7 @@ Any selection field (`dropdown` or `autocomplete`) can declare an `autoFill` con
 - When the user selects an option, the form engine:
   - Reads properties from the payload (using dot-paths, e.g. `address.city`).
   - Writes them into target fields (also addressed by dot-paths, e.g. `parentCompany.address.city`).
-  - Respects hidden/disabled status and overwrite rules.
+  - Respects disabled status and overwrite rules. Hidden targets are held until shown.
 
 Descriptor shape on a selection field:
 
@@ -54,9 +54,10 @@ Descriptor shape on a selection field:
     - `true` (default): always write the mapped value into the target field.
     - `false`: do **not** overwrite a target field if it already has a non-empty value in the current form data.
   - `respectHidden?: boolean`:
-    - `true` (default): skip targets whose field ids are currently hidden (per status templates).
+    - `true` (default): hold a target that is hidden when the option is chosen. The value is not written into flat-field form values while it stays hidden. When the field becomes visible, the held value is applied if the same selection is still set and the user has not cleared that target.
+    - `false`: write the mapped value into live values immediately, including targets that are currently hidden.
   - `respectDisabled?: boolean`:
-    - `true` (default): skip targets whose fields are currently disabled.
+    - `true` (default): skip targets whose fields are currently disabled. Disabled targets are not held.
 
 ---
 
@@ -111,7 +112,7 @@ The **`Block`** component wires UI selections to the pure helper `buildAutoFillP
 5. It calls:
 
    ```ts
-   const patch = buildAutoFillPatchFromSelection({
+   const { patch, deferredPatch } = buildAutoFillPatchFromSelection({
      descriptor: descriptorForBlock,
      selectionFieldId,
      selectedPayload,
@@ -121,13 +122,22 @@ The **`Block`** component wires UI selections to the pure helper `buildAutoFillP
    });
    ```
 
-6. It applies the returned patch back into the form with `setValue(key, value, { shouldDirty: true, shouldTouch: true, shouldValidate: true })`.
+6. It applies the live patch with `setValue(key, value, { shouldDirty: true, shouldTouch: true, shouldValidate: true })`.
+7. When `respectHidden` is true, hidden targets are stored in a hold keyed by field id, source field id, and source value. `applyMembershipChanges` writes that hold when the field becomes visible, unless a user stash exists or `getValues(sourceFieldId)` no longer equals the stored source value. Clearing the selector drops the hold.
+
+A selection inside a repeatable row, including a nested repeatable rendered in a repeatable popin, does not use `Block.handleAutoFillSelection`. `RepeatableFieldGroup` reduces `group.{index}.selector` to the base id, maps `to` paths as base ids on that row, and writes `group.{index}.{key}`. A visible sibling fills as soon as the option is chosen. `status.hidden` templates that use `@index` are rewritten to `index` before the hidden check, the same rewrite used for render. The popin instance descriptor leaves the nested block unchanged, so this is that block's own repeatable group.
+
+Per-field hidden inside a row is not a form-membership hide. The mapped value is written onto the row even while that input is hidden, and a hold of `{ sourceValue }` remembers it. The input stays empty in the UI until the status shows it, then it reads the row value. Clearing the selector before the user edits the value removes it. A value the user cleared after seeing it is left alone.
+
+`Block.handleAutoFillSelection` still does not target fields inside a nested repeatable group.
 
 **Important**:
 
-- Only **non-repeatable fields** in the block are currently considered for auto-fill.
-- Hidden/disabled targets are skipped when `respectHidden` / `respectDisabled` are `true`.
+- Disabled targets are skipped when `respectDisabled` is `true`.
+- `respectHidden: true` (default) holds hidden targets until they are visible. `respectHidden: false` writes them into live values immediately.
 - When `overwrite: false`, existing non-empty values are preserved.
+
+`@outerIndex` is not an alias inside `repeatableDefaultSource`. Add inside the popin does not receive the outer index, so a remap template on that new row returns the field type default.
 
 ---
 

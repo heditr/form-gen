@@ -669,7 +669,8 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
           minInstances: 1,
           maxInstances: 2,
           layout: { mode: 'grid', columns: 2 },
-          repeatableDefaultSource: 'caseContext.contactGroupId.@index.emergencyContacts',
+          repeatableDefaultSource:
+            '{{json caseContext.contactGroupId.@index.emergencyContacts }}',
           fields: [
             {
               id: 'emergency-contacts.emergencyName',
@@ -678,6 +679,8 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
               repeatableGroupId: 'emergency-contacts',
               validation: [],
               layout: { width: 'half' },
+              defaultValue:
+                '{{caseContext.contactGroupId.@outerIndex.emergencyContacts.@index.emergencyName}}',
             },
             {
               id: 'emergency-contacts.emergencyPhone',
@@ -686,6 +689,8 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
               repeatableGroupId: 'emergency-contacts',
               validation: [],
               layout: { width: 'half' },
+              defaultValue:
+                '{{caseContext.contactGroupId.@outerIndex.emergencyContacts.@index.emergencyPhone}}',
             },
           ],
         },

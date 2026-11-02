@@ -345,6 +345,76 @@ describe('default-value-evaluator', () => {
           expect(consoleErrorSpy).not.toHaveBeenCalled();
           consoleErrorSpy.mockRestore();
         });
+
+        test('given bindTemplateIndex with both tokens, should replace @outerIndex before @index', () => {
+          const result = bindTemplateIndex(
+            '{{caseContext.contactGroupId.@outerIndex.emergencyContacts.@index.ecName}}',
+            0,
+            1
+          );
+
+          expect(result).toBe('{{caseContext.contactGroupId.1.emergencyContacts.0.ecName}}');
+        });
+
+        test('given both index tokens, should evaluate the open row and the inner row', () => {
+          const template =
+            '{{caseContext.contactGroupId.@outerIndex.emergencyContacts.@index.ecName}}';
+          const context: FormContext = {
+            caseContext: {
+              contactGroupId: [
+                { emergencyContacts: [{ ecName: 'Alice' }] },
+                { emergencyContacts: [{ ecName: 'Jane' }, { ecName: 'John' }] },
+              ],
+            },
+          };
+
+          const result = evaluateDefaultValue(template, 'text', context, {
+            index: 1,
+            outerIndex: 1,
+          });
+
+          expect(result).toBe('John');
+        });
+
+        test('given only @outerIndex, should bind the open row', () => {
+          const template = '{{caseContext.contactGroupId.@outerIndex.name}}';
+          const context: FormContext = {
+            caseContext: {
+              contactGroupId: [{ name: 'Ada' }, { name: 'Grace' }],
+            },
+          };
+
+          const result = evaluateDefaultValue(template, 'text', context, { outerIndex: 1 });
+
+          expect(result).toBe('Grace');
+        });
+
+        test('given unbound @outerIndex template, should return type default without console.error', () => {
+          const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+          const template = '{{caseContext.contactGroupId.@outerIndex.name}}';
+          const context: FormContext = {
+            caseContext: {
+              contactGroupId: [{ name: 'Ada' }, { name: 'Grace' }],
+            },
+          };
+
+          const result = evaluateDefaultValue(template, 'text', context);
+
+          expect(result).toBe('');
+          expect(consoleErrorSpy).not.toHaveBeenCalled();
+          consoleErrorSpy.mockRestore();
+        });
+
+        test('given negative outerIndex, should leave @outerIndex unbound and return type default', () => {
+          const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+          const template = '{{caseContext.contactGroupId.@outerIndex.name}}';
+
+          const result = evaluateDefaultValue(template, 'text', {}, { outerIndex: -1 });
+
+          expect(result).toBe('');
+          expect(consoleErrorSpy).not.toHaveBeenCalled();
+          consoleErrorSpy.mockRestore();
+        });
       });
     });
   });

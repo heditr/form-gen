@@ -11,6 +11,7 @@ import {
   useLiveZodResolver,
   useFormMembershipSync,
 } from './use-live-zod-resolver';
+import { setHiddenAutoFillHold } from '@/utils/auto-fill-hidden-hold';
 
 function createToggleDescriptor(): GlobalFormDescriptor {
   return {
@@ -244,5 +245,155 @@ describe('useLiveZodResolver membership', () => {
     });
 
     expect(formResult.current.formState.errors.email).toBeUndefined();
+  });
+
+  function createHeldCompanyDescriptor(): GlobalFormDescriptor {
+    return {
+      blocks: [
+        {
+          id: 'company-block',
+          title: 'Company',
+          fields: [
+            {
+              id: 'companySelector',
+              type: 'autocomplete',
+              label: 'Company',
+              validation: [],
+            },
+            {
+              id: 'showDetails',
+              type: 'checkbox',
+              label: 'Show details',
+              validation: [],
+            },
+            {
+              id: 'companyName',
+              type: 'text',
+              label: 'Company name',
+              validation: [],
+              status: {
+                hidden: '{{#if showDetails}}false{{else}}true{{/if}}',
+              },
+            },
+          ],
+        },
+      ],
+      submission: { url: '/api/submit', method: 'POST' },
+    };
+  }
+
+  test('given a field hidden at selection, should apply the held value when it is shown', async () => {
+    const descriptor = createHeldCompanyDescriptor();
+    const { result } = renderHook(() => useLiveZodResolver({ descriptor }));
+    const { result: formResult } = renderHook(() =>
+      useForm({
+        resolver: result.current.resolver,
+        defaultValues: { companySelector: 'acme', showDetails: false, companyName: '' },
+      })
+    );
+
+    await act(async () => {
+      result.current.applyMembershipChanges(formResult.current, {
+        companySelector: 'acme',
+        showDetails: false,
+        companyName: '',
+      });
+    });
+
+    setHiddenAutoFillHold(formResult.current, 'companyName', {
+      sourceFieldId: 'companySelector',
+      sourceValue: 'acme',
+      value: 'Acme Corp',
+    });
+
+    await act(async () => {
+      formResult.current.setValue('showDetails', true);
+      result.current.applyMembershipChanges(formResult.current, {
+        companySelector: 'acme',
+        showDetails: true,
+      });
+    });
+
+    expect(formResult.current.getValues('companyName')).toBe('Acme Corp');
+  });
+
+  test('given the selector was cleared, should not apply the held autoFill value', async () => {
+    const descriptor = createHeldCompanyDescriptor();
+    const { result } = renderHook(() => useLiveZodResolver({ descriptor }));
+    const { result: formResult } = renderHook(() =>
+      useForm({
+        resolver: result.current.resolver,
+        defaultValues: { companySelector: '', showDetails: false, companyName: '' },
+      })
+    );
+
+    await act(async () => {
+      result.current.applyMembershipChanges(formResult.current, {
+        companySelector: '',
+        showDetails: false,
+        companyName: '',
+      });
+    });
+
+    setHiddenAutoFillHold(formResult.current, 'companyName', {
+      sourceFieldId: 'companySelector',
+      sourceValue: 'acme',
+      value: 'Acme Corp',
+    });
+
+    await act(async () => {
+      formResult.current.setValue('showDetails', true);
+      result.current.applyMembershipChanges(formResult.current, {
+        companySelector: '',
+        showDetails: true,
+      });
+    });
+
+    expect(formResult.current.getValues('companyName')).not.toBe('Acme Corp');
+  });
+
+  test('given the user cleared a shown target, should not refill it from the hold', async () => {
+    const descriptor = createHeldCompanyDescriptor();
+    const { result } = renderHook(() => useLiveZodResolver({ descriptor }));
+    const { result: formResult } = renderHook(() =>
+      useForm({
+        resolver: result.current.resolver,
+        defaultValues: { companySelector: 'acme', showDetails: true, companyName: 'Acme Corp' },
+      })
+    );
+
+    await act(async () => {
+      result.current.applyMembershipChanges(formResult.current, {
+        companySelector: 'acme',
+        showDetails: true,
+        companyName: 'Acme Corp',
+      });
+    });
+
+    await act(async () => {
+      formResult.current.setValue('companyName', '');
+      formResult.current.setValue('showDetails', false);
+      result.current.applyMembershipChanges(formResult.current, {
+        companySelector: 'acme',
+        showDetails: false,
+        companyName: '',
+      });
+    });
+
+    setHiddenAutoFillHold(formResult.current, 'companyName', {
+      sourceFieldId: 'companySelector',
+      sourceValue: 'acme',
+      value: 'Acme Corp',
+    });
+
+    await act(async () => {
+      formResult.current.setValue('showDetails', true);
+      result.current.applyMembershipChanges(formResult.current, {
+        companySelector: 'acme',
+        showDetails: true,
+      });
+    });
+
+    expect(formResult.current.getValues('companyName')).toBe('');
   });
 });

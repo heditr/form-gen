@@ -5,7 +5,7 @@ function hasHandlebarsSyntax(value: string): boolean {
   return value.includes('{{') && value.includes('}}');
 }
 
-function parseJsonArray(value: string): unknown[] | null {
+export function parseJsonArray(value: string): unknown[] | null {
   const trimmed = value.trim();
   if (!trimmed) {
     return [];

@@ -13,6 +13,11 @@ import FieldWrapper from './field-wrapper';
 import { evaluateHiddenStatus, evaluateDisabledStatus, evaluateReadonlyStatus } from '@/utils/template-evaluator';
 import { evaluateDefaultValue } from '@/utils/default-value-evaluator';
 import { buildAutoFillPatchFromSelection } from '@/utils/form-descriptor-integration';
+import {
+  clearRepeatableAutoFillHold,
+  getRepeatableAutoFillHold,
+  setRepeatableAutoFillHold,
+} from '@/utils/auto-fill-hidden-hold';
 import { buildBlockLayoutRows } from '@/utils/block-layout';
 import { useInvalidateQueriesForBlock, useFlushDraftSave } from './popin-manager';
 import { cn } from '@/lib/utils';
@@ -213,13 +218,27 @@ export default function RepeatableFieldGroup({
 
               const handleInstanceAutoFillSelection = (
                 selectionFieldId: string,
-                selectedPayload: Record<string, unknown>
+                selectedPayload: Record<string, unknown> | null
               ) => {
+                const basePrefix = `${groupId}.${index}.`;
                 if (!selectedPayload) {
+                  const hold = getRepeatableAutoFillHold(form, selectionFieldId);
+                  if (hold) {
+                    const row = (form.getValues(`${groupId}.${index}` as never) ?? {}) as Record<string, unknown>;
+                    for (const [key, heldValue] of Object.entries(hold.values)) {
+                      if (row[key] === heldValue) {
+                        form.setValue(`${groupId}.${index}.${key}`, '', {
+                          shouldDirty: true,
+                          shouldTouch: true,
+                          shouldValidate: true,
+                        });
+                      }
+                    }
+                    clearRepeatableAutoFillHold(form, selectionFieldId);
+                  }
                   return;
                 }
 
-                const basePrefix = `${groupId}.${index}.`;
                 const selectionBaseId = selectionFieldId.startsWith(basePrefix)
                   ? selectionFieldId.slice(basePrefix.length)
                   : selectionFieldId;
@@ -279,7 +298,7 @@ export default function RepeatableFieldGroup({
 
                 const currentValuesForInstance = (currentInstance || {}) as Partial<FormData>;
 
-                const patch = buildAutoFillPatchFromSelection({
+                const { patch, deferredPatch } = buildAutoFillPatchFromSelection({
                   descriptor: descriptorForGroup,
                   selectionFieldId: selectionBaseId,
                   selectedPayload,
@@ -288,14 +307,21 @@ export default function RepeatableFieldGroup({
                   disabledFieldIds,
                 });
 
-                for (const [key, value] of Object.entries(patch)) {
-                  const targetPath = `${groupId}.${index}.${key}`;
-                  form.setValue(targetPath, value, {
-                    shouldDirty: true,
-                    shouldTouch: true,
-                    shouldValidate: true,
-                  });
+                const written: Record<string, unknown> = {};
+                for (const source of [patch, deferredPatch]) {
+                  for (const [key, value] of Object.entries(source)) {
+                    form.setValue(`${groupId}.${index}.${key}`, value, {
+                      shouldDirty: true,
+                      shouldTouch: true,
+                      shouldValidate: true,
+                    });
+                    written[key] = value;
+                  }
                 }
+                setRepeatableAutoFillHold(form, selectionFieldId, {
+                  sourceValue: form.getValues(selectionFieldId as never),
+                  values: written,
+                });
               };
 
               return (

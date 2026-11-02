@@ -26,7 +26,7 @@ export interface FieldWrapperProps {
   formContext: FormContext;
   onLoadDataSource: (fieldPath: string, url: string, auth?: { type: 'bearer' | 'apikey'; token?: string; headerName?: string }) => void;
   dataSourceCache: Record<string, unknown>;
-  onAutoFillSelection?: (fieldId: string, selectedPayload: Record<string, unknown>) => void;
+  onAutoFillSelection?: (fieldId: string, selectedPayload: Record<string, unknown> | null) => void;
 }
 
 /**

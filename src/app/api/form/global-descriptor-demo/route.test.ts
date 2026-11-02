@@ -160,7 +160,7 @@ describe('GET /api/form/global-descriptor-demo', () => {
     expect(emergency?.maxInstances).toBe(2);
     expect(emergency?.layout).toEqual({ mode: 'grid', columns: 2 });
     expect(emergency?.repeatableDefaultSource).toBe(
-      'caseContext.contactGroupId.@index.emergencyContacts'
+      '{{json caseContext.contactGroupId.@index.emergencyContacts }}'
     );
     expect(emergency?.fields.map((field) => field.id)).toEqual([
       'emergency-contacts.emergencyName',

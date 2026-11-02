@@ -323,6 +323,26 @@ describe('DropdownField', () => {
     });
   });
 
+  test('given a cleared dropdown, should drop the autoFill payload', async () => {
+    const user = userEvent.setup();
+    const field = createMockField({
+      items: [
+        { label: 'Option 1', value: 'opt1', raw: { id: '1', name: 'Option 1' } },
+      ],
+    });
+    const form = createMockForm();
+    const onAutoFillSelection = vi.fn();
+    const props = createProps({ field, form, onAutoFillSelection });
+
+    render(<DropdownField {...props} />);
+
+    const select = screen.getByRole('combobox') as HTMLSelectElement;
+    await user.selectOptions(select, 'opt1');
+    await user.selectOptions(select, '');
+
+    expect(onAutoFillSelection).toHaveBeenLastCalledWith('test-field', null);
+  });
+
   test('given validation error, should display error from formState.errors', () => {
     const field = createMockField();
     const defaultFormState: FormState<FieldValues> = {

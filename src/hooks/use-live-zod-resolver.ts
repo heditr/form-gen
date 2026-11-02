@@ -10,6 +10,7 @@ import type { FieldValues, Resolver, UseFormReturn } from 'react-hook-form';
 import { z } from 'zod';
 import type { GlobalFormDescriptor, CaseContext, FormData } from '@/types/form-descriptor';
 import { buildZodSchemaFromDescriptor } from '@/utils/form-descriptor-integration';
+import { clearHiddenAutoFillHold, getHiddenAutoFillHold } from '@/utils/auto-fill-hidden-hold';
 import {
   buildFormContextFromValues,
   buildSchemaFingerprint,
@@ -69,6 +70,8 @@ export function useLiveZodResolver({
   const fingerprintRef = useRef('');
   const previousTargetsRef = useRef<ValidationTarget[]>([]);
   const hiddenValueStashRef = useRef<Map<string, unknown>>(new Map());
+  const seenVisibleRef = useRef<Set<string>>(new Set());
+  const userStashRef = useRef<Set<string>>(new Set());
   const applyingRef = useRef(false);
   const initializedRef = useRef(false);
   const defaultValuesRef = useRef(defaultValuesByFieldId);
@@ -137,6 +140,11 @@ export function useLiveZodResolver({
         previousTargetsRef.current,
         nextTargets
       );
+      if (isInitial) {
+        for (const target of nextTargets) {
+          seenVisibleRef.current.add(target.id);
+        }
+      }
 
       // Status-hidden fields (including file/document) for value membership.
       // Do not use "absent from Zod targets" — visible file fields are not in the schema
@@ -162,6 +170,9 @@ export function useLiveZodResolver({
           const currentValue = form.getValues(fieldId as never);
           if (currentValue !== undefined) {
             hiddenValueStashRef.current.set(fieldId, currentValue);
+            if (seenVisibleRef.current.has(fieldId)) {
+              userStashRef.current.add(fieldId);
+            }
           }
           form.unregister(fieldId as never, { keepValue: false, keepDefaultValue: false });
           form.clearErrors(fieldId as never);
@@ -169,8 +180,25 @@ export function useLiveZodResolver({
 
         for (const fieldId of fieldsToShow) {
           const stashed = hiddenValueStashRef.current.get(fieldId);
+          const userStash = userStashRef.current.has(fieldId) ? stashed : undefined;
+          const hold = getHiddenAutoFillHold(form, fieldId);
+          const sourceMatches = Boolean(
+            hold && form.getValues(hold.sourceFieldId as never) === hold.sourceValue
+          );
+          if (hold && !sourceMatches) {
+            clearHiddenAutoFillHold(form, fieldId);
+          }
+          const heldValue = sourceMatches ? hold?.value : undefined;
           const defaultValue = defaultValuesRef.current[fieldId];
-          const valueToSet = stashed !== undefined ? stashed : defaultValue;
+          const valueToSet =
+            userStash !== undefined
+              ? userStash
+              : heldValue !== undefined
+                ? heldValue
+                : stashed !== undefined
+                  ? stashed
+                  : defaultValue;
+          seenVisibleRef.current.add(fieldId);
           if (valueToSet !== undefined) {
             form.setValue(fieldId as never, valueToSet as never, {
               shouldDirty: false,

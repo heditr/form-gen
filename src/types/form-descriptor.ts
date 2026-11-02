@@ -149,7 +149,8 @@ export interface AutoFillMapping {
  * 
  * @property mappings - Array of property mappings from selected payload → form fields
  * @property overwrite - If false, preserves existing non-empty values on target fields
- * @property respectHidden - If true (default), skips hidden target fields
+ * @property respectHidden - If true (default), hold hidden targets until they are shown.
+ *   If false, write hidden targets into live values immediately.
  * @property respectDisabled - If true (default), skips disabled target fields
  */
 export interface AutoFillConfig {
@@ -373,6 +374,10 @@ export interface ButtonConfig {
  * @property defaultValue - Optional default value or Handlebars template (e.g. '{{caseContext.email}}').
  *   In repeatable groups with repeatableDefaultSource, use '@index' in the template (e.g. '{{caseContext.addresses.@index.street}}');
  *   @index is replaced with the row index (0, 1, …) when evaluating.
+ *   Inside a nested repeatable opened from a repeatable popin, '@outerIndex' is the open popin row
+ *   and '@index' stays the inner row (e.g. '{{caseContext.contactGroupId.@outerIndex.emergencyContacts.@index.ecName}}').
+ *   An unbound or negative @outerIndex returns the field type default, same as unbound @index.
+ *   repeatableDefaultSource still binds only @index to the open row.
  */
 export interface FieldDescriptor {
   id: string;
@@ -490,9 +495,12 @@ export interface NestedBlockReference {
  * @property minInstances - Optional minimum number of instances required for repeatable blocks
  * @property maxInstances - Optional maximum number of instances allowed for repeatable blocks
  * @property repeatableBlockRef - Optional ID of another block to reference and make repeatable (avoids duplicating block definitions)
- * @property repeatableDefaultSource - Optional Handlebars template that evaluates to a caseContext path
- *   (e.g. 'addresses' or 'legalEntity.addresses'). At initial load, the repeatable group is filled from
- *   that nested path when it is an array of objects.
+ * @property repeatableDefaultSource - Optional caseContext key, or a Handlebars template that evaluates
+ *   to that key (e.g. 'addresses', 'legalEntity.addresses', '{{caseContext.sourcePath}}').
+ *   A `json` helper template stringifies the array itself
+ *   (e.g. '{{json caseContext.contactGroupId.@index.emergencyContacts}}').
+ *   Extraction accepts either the key or a JSON array string. At initial load, the repeatable group
+ *   is filled from that array of objects.
  * @property repeatablePopin - If true with repeatable, each instance is edited via popin; summaries shown inline, click to edit
  * @property repeatableSummaryTemplate - Optional Handlebars template for summary text per instance (e.g. "{{name}} ({{role}})")
  * @property nestedBlocks - Optional references to other blocks rendered inside this block.
