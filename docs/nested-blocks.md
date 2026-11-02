@@ -148,6 +148,35 @@ In the popin, the instance descriptor's schema uses the nested block's min and m
 
 ## Repeatable popin
 
+On a plain parent the nested block is another section in the same form. On a repeatable popin the same block is drawn inside the open row, and its group key is a property of that row.
+
+```mermaid
+flowchart TB
+  subgraph descriptor ["descriptor.blocks"]
+    parent["contacts-block repeatablePopin"]
+    nested["emergency-contacts-block"]
+    parent -->|"nestedBlocks blockId"| nested
+  end
+
+  subgraph main ["Main form"]
+    summary["RepeatablePopinSummary"]
+    hidden["emergency-contacts-block skipped as its own section"]
+  end
+
+  subgraph dialog ["Open popin"]
+    instance["contacts-block-instance shell"]
+    placed["Block places emergency-contacts-block at position bottom"]
+    values["popin values: name and emergency-contacts array"]
+  end
+
+  parent --> summary
+  nested --> hidden
+  parent --> instance
+  nested --> placed
+  placed --> values
+  values -->|"Validate replaces that index on the parent array"| summary
+```
+
 `assertNestedBlocks` allows a repeatable popin to list `nestedBlocks`, and it checks row clashes for that case.
 
 Opening a row builds an instance descriptor in `buildRepeatablePopinInstanceDescriptor` (`src/utils/popin-instance-descriptor.ts`):

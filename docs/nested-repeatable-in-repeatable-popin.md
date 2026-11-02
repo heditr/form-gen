@@ -8,6 +8,57 @@ A same-block `repeatableGroupId` group is still used when the inner list is not 
 
 Source: `contacts-block` and `emergency-contacts-block` in that route. Prefill: `src/app/api/demo/prefill/route.ts`.
 
+## Data flow
+
+Opening Grace is index `1`. That number is stored once, on `popinEditContext`. The instance builder never receives it. Default extraction renames it `outerIndex`, then each template decides which token that number replaces.
+
+```mermaid
+sequenceDiagram
+  participant Summary as RepeatablePopinSummary
+  participant Manager as PopinManager
+  participant Builder as buildRepeatablePopinInstanceDescriptor
+  participant Session as PopinFormSession
+  participant Hook as useFormDescriptor
+  participant Extract as extractDefaultValues
+  participant Bind as bindTemplateIndex
+
+  Summary->>Manager: openPopin(contacts-block, groupId contactGroupId, index 1)
+  Manager->>Manager: popinEditContext index 1
+  Manager->>Builder: block, groupId, descriptor
+  Note over Builder: templates stay raw
+  Builder-->>Manager: shell name field plus emergency-contacts-block
+  Manager->>Session: popinDescriptor and popinEditContext
+  Session->>Hook: repeatableIndex 1, scope popin
+  Hook->>Extract: options index 1
+  Note over Extract: outerIndex equals options.index
+  Extract->>Bind: source @index becomes 1
+  Extract->>Bind: each inner row i with outerIndex 1
+```
+
+`RepeatableFieldGroup` adds an inner row later. That call to `evaluateDefaultValue` passes no index, so both tokens stay in the template and the new row gets the field type default.
+
+```mermaid
+flowchart LR
+  subgraph mainForm ["Main form before open"]
+    rows["contactGroupId: Ada, Grace"]
+  end
+
+  subgraph openGrace ["Popin for index 1"]
+    shell["name"]
+    inner["emergency-contacts: Jane, John"]
+  end
+
+  subgraph afterValidate ["Main form after Validate"]
+    ada["Ada unchanged"]
+    grace["Grace plus emergency-contacts"]
+  end
+
+  rows -->|"caseContext still holds emergency lists"| openGrace
+  openGrace -->|"replace index 1"| afterValidate
+```
+
+Create mode passes `index: -1`. A source that contains `@index` becomes `[]`, and Validate appends the popin object.
+
 ## Descriptor
 
 ```typescript
@@ -128,6 +179,31 @@ The dialog title is Contacts. Inside the body, Emergency contacts shows once, wi
 ## How `@index` is bound
 
 `@index` in the nested block's `repeatableDefaultSource` is the open contact. For Grace that path is `caseContext.contactGroupId.1.emergencyContacts`. For Ada it is index `0`. The other contact's list is not loaded. `@outerIndex` is not an alias inside `repeatableDefaultSource`.
+
+```mermaid
+flowchart TD
+  openIndex["options.index"]
+  outer["outerIndex = options.index"]
+  source{"source contains @index and index is below 0"}
+  none["nested group is an empty array"]
+  resolve["resolveCaseContextPath(source, outerIndex)"]
+  resolved{"resolved array length"}
+  perRow["each source row i"]
+  tokens["replace @outerIndex, then @index with i"]
+  outerOnly["one fallback row: @outerIndex bound, @index left unbound"]
+  shell["shell field, no repeatableGroupId"]
+  both["replace @index and @outerIndex with outerIndex"]
+
+  openIndex --> outer
+  outer --> source
+  source -->|yes| none
+  source -->|no| resolve --> resolved
+  resolved -->|at least 1, field default has a token| perRow --> tokens
+  resolved -->|0, fields have defaults| outerOnly
+  outer --> shell --> both
+```
+
+Grace, inner row `0`, rewrites the name default to `caseContext.contactGroupId.1.emergencyContacts.0.emergencyName` and reads Jane. Inner row `1` reads John.
 
 The same path can be declared as a key, `caseContext.contactGroupId.@index.emergencyContacts`, or stringified with the `json` helper, `{{json caseContext.contactGroupId.@index.emergencyContacts}}`. The helper writes a JSON array string. Extraction uses that array when the source parses as one, and looks up a caseContext key otherwise.
 

@@ -2,6 +2,8 @@
 
 This document explains how repeatable popin blocks are implemented in the KYC form engine and how data flows between the main form, the popin dialog, and backend-prefilled data.
 
+A nested block drawn inside an open row, and the `@index` / `@outerIndex` binds for that row, are in [nested-repeatable-in-repeatable-popin.md](nested-repeatable-in-repeatable-popin.md) and [nested-blocks.md](nested-blocks.md).
+
 ---
 
 ## 1. Descriptor model
