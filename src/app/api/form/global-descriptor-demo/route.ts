@@ -746,6 +746,53 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
             },
           ],
         },
+        // Inline repeatable group with one nested list of the same group: a holding sector
+        // opens its own subsector list. Child rows reuse these fields; see docs/repeatable-child-rows.md
+        {
+          id: 'business-sectors-block',
+          title: 'Business sector',
+          description: 'List the business sectors and their share. A holding sector can list its own subsectors.',
+          repeatable: true,
+          minInstances: 0,
+          maxInstances: 10,
+          repeatableDefaultSource: 'businessSectors',
+          repeatableChild: {
+            property: 'subsectors',
+            maxDepth: 2,
+            title: 'Subsector',
+            addLabel: 'Add subsector',
+            triggerField: 'sector',
+            triggerValues: ['holding'],
+            minInstances: 0,
+            maxInstances: 5,
+          },
+          layout: {
+            mode: 'grid',
+            columns: 2,
+            gap: 'md',
+          },
+          fields: [
+            {
+              id: 'businessSectors.sector',
+              type: 'dropdown',
+              label: 'Sector',
+              repeatableGroupId: 'businessSectors',
+              items: [
+                { label: 'Holding', value: 'holding' },
+                { label: 'Software', value: 'software' },
+                { label: 'Retail', value: 'retail' },
+              ],
+              validation: [{ type: 'required', message: 'Sector is required' }],
+            },
+            {
+              id: 'businessSectors.percentage',
+              type: 'number',
+              label: 'Percentage',
+              repeatableGroupId: 'businessSectors',
+              validation: [{ type: 'required', message: 'Percentage is required' }],
+            },
+          ],
+        },
         {
           id: 'parent-companies-block',
           title: 'Parent Companies',
@@ -1335,6 +1382,24 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to validate nested blocks';
       console.error('Error validating nested blocks:', error);
+
+      return NextResponse.json(
+        { error: errorMessage },
+        {
+          status: 500,
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+    }
+
+    try {
+      const { assertRepeatableChildren } = await import('@/utils/repeatable-child-validator');
+      resolvedDescriptor = assertRepeatableChildren(resolvedDescriptor);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to validate repeatable child rows';
+      console.error('Error validating repeatable child rows:', error);
 
       return NextResponse.json(
         { error: errorMessage },

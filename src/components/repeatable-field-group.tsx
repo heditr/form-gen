@@ -5,22 +5,22 @@
  * Each instance in the group contains all fields with the same repeatableGroupId.
  */
 
+import { useEffect, useRef } from 'react';
 import { useFieldArray } from 'react-hook-form';
-import type { BlockDescriptor, FieldDescriptor, GlobalFormDescriptor, FormData } from '@/types/form-descriptor';
+import type { BlockDescriptor, FieldDescriptor } from '@/types/form-descriptor';
 import type { UseFormReturn, FieldValues } from 'react-hook-form';
 import type { FormContext } from '@/utils/template-evaluator';
-import FieldWrapper from './field-wrapper';
-import { evaluateHiddenStatus, evaluateDisabledStatus, evaluateReadonlyStatus } from '@/utils/template-evaluator';
-import { evaluateDefaultValue } from '@/utils/default-value-evaluator';
-import { buildAutoFillPatchFromSelection } from '@/utils/form-descriptor-integration';
+import RepeatableRowFields from './repeatable-row-fields';
+import RepeatableChildGroup from './repeatable-child-group';
 import {
-  clearRepeatableAutoFillHold,
-  getRepeatableAutoFillHold,
-  setRepeatableAutoFillHold,
-} from '@/utils/auto-fill-hidden-hold';
-import { buildBlockLayoutRows } from '@/utils/block-layout';
+  buildNewRowValues,
+  buildRowContext,
+  childArrayPath,
+  childRowPath,
+  rowOpensChild,
+} from '@/utils/repeatable-child';
+import { useRepeatableChildClear } from '@/hooks/use-repeatable-child-clear';
 import { useInvalidateQueriesForBlock, useFlushDraftSave } from './popin-manager';
-import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Plus, Trash2 } from 'lucide-react';
 
@@ -65,58 +65,53 @@ export default function RepeatableFieldGroup({
   const invalidateQueriesForBlock = useInvalidateQueriesForBlock();
   const flushDraftSave = useFlushDraftSave();
 
-  // Build default values for a new instance using base field id (no groupId prefix)
-  const getDefaultInstanceValues = (): Record<string, unknown> => {
-    const defaultInstance: Record<string, unknown> = {};
-    for (const field of fields) {
-      if (field.type === 'button') {
-        continue;
-      }
-      const baseFieldId = field.id.startsWith(`${groupId}.`)
-        ? field.id.slice(groupId.length + 1)
-        : field.id;
-      if (field.defaultValue !== undefined) {
-        const evaluatedValue = evaluateDefaultValue(
-          field.defaultValue,
-          field.type,
-          formContext
-        );
-        defaultInstance[baseFieldId] = evaluatedValue;
-      } else {
-        switch (field.type) {
-          case 'text':
-          case 'dropdown':
-          case 'autocomplete':
-          case 'date':
-            defaultInstance[baseFieldId] = '';
-            break;
-          case 'checkbox':
-            defaultInstance[baseFieldId] = false;
-            break;
-          case 'radio':
-            defaultInstance[baseFieldId] = '';
-            break;
-          case 'number':
-            defaultInstance[baseFieldId] = 0;
-            break;
-          case 'file':
-            defaultInstance[baseFieldId] = null;
-            break;
-          case 'document':
-            defaultInstance[baseFieldId] = { requested: false, files: [] };
-            break;
-          default:
-            defaultInstance[baseFieldId] = '';
-        }
-      }
+  const childConfig = block.repeatableChild;
+  const baseFieldIdOf = (field: FieldDescriptor) =>
+    field.id.startsWith(`${groupId}.`) ? field.id.slice(groupId.length + 1) : field.id;
+  const triggerLabel = (
+    fields.find((field) => childConfig && baseFieldIdOf(field) === childConfig.triggerField)?.label ?? ''
+  ).toLowerCase();
+  const childAnnouncement = childConfig
+    ? `${childConfig.title}s removed because the ${triggerLabel} changed`
+    : '';
+  const childAnnouncementText = useRepeatableChildClear({
+    form,
+    groupId,
+    config: childConfig,
+    announcement: childAnnouncement,
+    flushDraftSave,
+  });
+
+  // Path of the child field to focus after the first child row is created
+  const pendingFocus = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (pendingFocus.current) {
+      form.setFocus(pendingFocus.current);
+      pendingFocus.current = undefined;
     }
-    return defaultInstance;
+  });
+
+  // The first child row creates the list; later rows are added by RepeatableChildGroup
+  const handleCreateChildList = (rootIndex: number) => {
+    if (!childConfig) {
+      return;
+    }
+    const path = childArrayPath({ groupId, rootIndex, property: childConfig.property });
+    form.setValue(path, [buildNewRowValues({ fields, groupId, formContext })], { shouldDirty: true });
+    const firstField = fields.find((field) => field.type !== 'button');
+    if (firstField) {
+      pendingFocus.current = `${childRowPath({
+        groupId,
+        rootIndex,
+        property: childConfig.property,
+        childIndex: 0,
+      })}.${baseFieldIdOf(firstField)}`;
+    }
   };
 
   // Handle adding a new instance
   const handleAdd = () => {
-    const defaultValues = getDefaultInstanceValues();
-    append(defaultValues);
+    append(buildNewRowValues({ fields, groupId, formContext }));
   };
 
   // Handle removing an instance
@@ -189,140 +184,13 @@ export default function RepeatableFieldGroup({
         ) : (
           <>
             {fieldArrayFields.map((fieldArrayField, index) => {
-              const currentInstance = groupArray?.[index] as Record<string, unknown> | undefined;
-              // Build instance-specific form context for template evaluation
-              // This allows templates to reference current instance data and index
-              const first = index === 0;
-              const last = index === (groupArray?.length ?? 0) - 1;
-
-              const instanceFormContext: FormContext = {
-                ...formContext,
-                // Add current instance data to context for template evaluation
-                [groupId]: groupArray,
-                // Add current instance values directly for easy access (e.g., {{street}})
-                ...(currentInstance || {}),
-                // Repeatable meta: use non-@ keys for Handlebars compatibility
-                // (Handlebars `@index/@first/@last` are data vars, not normal context vars)
+              const rowContext = buildRowContext({
+                formContext,
+                groupId,
+                rows: groupArray,
                 index,
-                first,
-                last,
-              };
-
-              const withRepeatableMeta = (template: string | undefined): string | undefined =>
-                template
-                  ? template
-                      .replaceAll('@index', 'index')
-                      .replaceAll('@first', 'first')
-                      .replaceAll('@last', 'last')
-                  : template;
-
-              const handleInstanceAutoFillSelection = (
-                selectionFieldId: string,
-                selectedPayload: Record<string, unknown> | null
-              ) => {
-                const basePrefix = `${groupId}.${index}.`;
-                if (!selectedPayload) {
-                  const hold = getRepeatableAutoFillHold(form, selectionFieldId);
-                  if (hold) {
-                    const row = (form.getValues(`${groupId}.${index}` as never) ?? {}) as Record<string, unknown>;
-                    for (const [key, heldValue] of Object.entries(hold.values)) {
-                      if (row[key] === heldValue) {
-                        form.setValue(`${groupId}.${index}.${key}`, '', {
-                          shouldDirty: true,
-                          shouldTouch: true,
-                          shouldValidate: true,
-                        });
-                      }
-                    }
-                    clearRepeatableAutoFillHold(form, selectionFieldId);
-                  }
-                  return;
-                }
-
-                const selectionBaseId = selectionFieldId.startsWith(basePrefix)
-                  ? selectionFieldId.slice(basePrefix.length)
-                  : selectionFieldId;
-
-                const groupFieldsWithBaseIds: FieldDescriptor[] = fields.map((f) => {
-                  const baseId = f.id.startsWith(`${groupId}.`)
-                    ? f.id.slice(groupId.length + 1)
-                    : f.id;
-                  return {
-                    ...f,
-                    id: baseId,
-                  };
-                });
-
-                const descriptorForGroup: GlobalFormDescriptor = {
-                  version: 'auto-fill-group',
-                  blocks: [
-                    {
-                      ...block,
-                      fields: groupFieldsWithBaseIds,
-                    },
-                  ],
-                  submission: {
-                    url: '',
-                    method: 'POST',
-                  },
-                };
-
-                const hiddenFieldIds: string[] = [];
-                const disabledFieldIds: string[] = [];
-
-                for (const field of fields) {
-                  const baseFieldId = field.id.startsWith(`${groupId}.`)
-                    ? field.id.slice(groupId.length + 1)
-                    : field.id;
-                  const fieldWithMeta = field.status
-                    ? {
-                        ...field,
-                        status: {
-                          ...field.status,
-                          hidden: withRepeatableMeta(field.status.hidden),
-                          disabled: withRepeatableMeta(field.status.disabled),
-                          readonly: withRepeatableMeta(field.status.readonly),
-                        },
-                      }
-                    : field;
-
-                  const fieldHidden = evaluateHiddenStatus(fieldWithMeta, instanceFormContext);
-                  const fieldDisabled = evaluateDisabledStatus(fieldWithMeta, instanceFormContext) || isDisabled;
-                  if (fieldHidden) {
-                    hiddenFieldIds.push(baseFieldId);
-                  }
-                  if (fieldDisabled) {
-                    disabledFieldIds.push(baseFieldId);
-                  }
-                }
-
-                const currentValuesForInstance = (currentInstance || {}) as Partial<FormData>;
-
-                const { patch, deferredPatch } = buildAutoFillPatchFromSelection({
-                  descriptor: descriptorForGroup,
-                  selectionFieldId: selectionBaseId,
-                  selectedPayload,
-                  currentValues: currentValuesForInstance,
-                  hiddenFieldIds,
-                  disabledFieldIds,
-                });
-
-                const written: Record<string, unknown> = {};
-                for (const source of [patch, deferredPatch]) {
-                  for (const [key, value] of Object.entries(source)) {
-                    form.setValue(`${groupId}.${index}.${key}`, value, {
-                      shouldDirty: true,
-                      shouldTouch: true,
-                      shouldValidate: true,
-                    });
-                    written[key] = value;
-                  }
-                }
-                setRepeatableAutoFillHold(form, selectionFieldId, {
-                  sourceValue: form.getValues(selectionFieldId as never),
-                  values: written,
-                });
-              };
+                ...(block.repeatableChild ? { depth: 1 } : {}),
+              });
 
               return (
                 <div
@@ -346,91 +214,50 @@ export default function RepeatableFieldGroup({
                       Remove
                     </Button>
                   </div>
-                  {(() => {
-                    const layoutMode = block.layout?.mode ?? 'default';
-
-                    const renderField = (field: FieldDescriptor) => {
-                      const baseFieldId = field.id.startsWith(`${groupId}.`)
-                        ? field.id.slice(groupId.length + 1)
-                        : field.id;
-                      const indexedFieldName = `${groupId}.${index}.${baseFieldId}`;
-                      const indexedField: FieldDescriptor = { ...field, id: indexedFieldName };
-
-                      const fieldWithMeta = field.status
-                        ? {
-                            ...field,
-                            status: {
-                              ...field.status,
-                              hidden: withRepeatableMeta(field.status.hidden),
-                              disabled: withRepeatableMeta(field.status.disabled),
-                              readonly: withRepeatableMeta(field.status.readonly),
-                            },
-                          }
-                        : field;
-
-                      const fieldHidden = evaluateHiddenStatus(fieldWithMeta, instanceFormContext);
-                      const fieldDisabled = evaluateDisabledStatus(fieldWithMeta, instanceFormContext) || isDisabled;
-                      const fieldReadonly = evaluateReadonlyStatus(fieldWithMeta, instanceFormContext) || isReadonly;
-
-                      return (
-                        <FieldWrapper
-                          key={indexedFieldName}
-                          field={indexedField}
-                          isDisabled={fieldDisabled}
-                          isHidden={fieldHidden}
-                          isReadonly={fieldReadonly}
-                          form={form}
-                          formContext={instanceFormContext}
-                          onLoadDataSource={onLoadDataSource}
-                          dataSourceCache={dataSourceCache}
-                          onAutoFillSelection={handleInstanceAutoFillSelection}
-                        />
-                      );
-                    };
-
-                    if (layoutMode !== 'grid') {
-                      return fields.map(renderField);
-                    }
-
-                    const rows = buildBlockLayoutRows(block, fields);
-                    const columns = block.layout?.columns ?? 1;
-                    const gap = block.layout?.gap ?? 'md';
-                    const gapYClass =
-                      gap === 'sm' ? 'gap-y-2' : gap === 'lg' ? 'gap-y-6' : 'gap-y-4';
-                    const gridColsClass =
-                      columns === 1
-                        ? 'md:grid-cols-1'
-                        : columns === 2
-                        ? 'md:grid-cols-2'
-                        : 'md:grid-cols-3';
-
-                    return rows.map((row, rowIndex) => {
-                      const rowGridColsClass =
-                        row.gridColumns === 1
-                          ? 'md:grid-cols-1'
-                          : row.gridColumns === 2
-                          ? 'md:grid-cols-2'
-                          : row.gridColumns === 3
-                          ? 'md:grid-cols-3'
-                          : gridColsClass;
-
-                      return (
-                      <div
-                        key={`row-${rowIndex}`}
-                        className={cn('grid grid-cols-1', rowGridColsClass, 'gap-x-4', gapYClass)}
-                      >
-                        {row.slots.map((slot, slotIndex) => (
-                          <div
-                            key={`slot-${slotIndex}`}
-                            className={slot.colSpan ? `col-span-${slot.colSpan}` : undefined}
-                          >
-                            {slot.fields.map(renderField)}
-                          </div>
-                        ))}
+                  <RepeatableRowFields
+                    block={block}
+                    groupId={groupId}
+                    fields={fields}
+                    rowPath={`${groupId}.${index}`}
+                    rowContext={rowContext}
+                    isDisabled={isDisabled}
+                    isReadonly={isReadonly}
+                    form={form}
+                    onLoadDataSource={onLoadDataSource}
+                    dataSourceCache={dataSourceCache}
+                  />
+                  {childConfig &&
+                    groupArray?.[index] &&
+                    rowOpensChild(groupArray[index] as Record<string, unknown>, block, rowContext) &&
+                    (Array.isArray((groupArray[index] as Record<string, unknown>)[childConfig.property]) ? (
+                      <RepeatableChildGroup
+                        block={block}
+                        groupId={groupId}
+                        fields={fields}
+                        config={childConfig}
+                        rootIndex={index}
+                        rootRows={groupArray}
+                        isDisabled={isDisabled}
+                        isReadonly={isReadonly}
+                        form={form}
+                        formContext={formContext}
+                        onLoadDataSource={onLoadDataSource}
+                        dataSourceCache={dataSourceCache}
+                      />
+                    ) : (
+                      <div className="flex justify-start">
+                        <Button
+                          type="button"
+                          onClick={() => handleCreateChildList(index)}
+                          disabled={isDisabled}
+                          variant="outline"
+                          data-testid={`repeatable-child-add-${groupId}-${index}`}
+                        >
+                          <Plus className="h-4 w-4 mr-2" />
+                          {childConfig.addLabel}
+                        </Button>
                       </div>
-                      );
-                    });
-                  })()}
+                    ))}
                 </div>
               );
             })}
@@ -449,6 +276,16 @@ export default function RepeatableFieldGroup({
           </>
         )}
       </div>
+      {childConfig && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="sr-only"
+          data-testid={`repeatable-child-announcer-${groupId}`}
+        >
+          {childAnnouncementText}
+        </div>
+      )}
     </div>
   );
 }

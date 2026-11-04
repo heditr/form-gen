@@ -23,6 +23,16 @@ import { evaluateTemplate } from './template-evaluator';
 import type { FormContext } from './template-evaluator';
 import { evaluateHiddenStatus } from './template-evaluator';
 import { evaluateValidationArrayTemplate, parseJsonArray } from './array-template-evaluator';
+import { buildRowContext, rowOpensChild, seedChildRows } from './repeatable-child';
+import {
+  defaultStatusContext,
+  getNestedValue,
+  isSubmitSkippedFieldType,
+  setNestedValue,
+  shouldSkipHiddenDefault,
+} from './row-values';
+
+export { getNestedValue, isSubmitSkippedFieldType };
 
 type ValidationScope = 'main' | 'popin';
 
@@ -115,15 +125,6 @@ const createDocumentCardDefaultData = (
   };
 };
 
-/**
- * Fields persisted out-of-band by their own backend interactions should remain
- * in RHF state for UI/draft purposes, but should not participate in final submit
- * payloads or submit-time required validation.
- */
-export function isSubmitSkippedFieldType(fieldType: FieldDescriptor['type'] | string): boolean {
-  return fieldType === 'file' || fieldType === 'document';
-}
-
 function shouldIncludeBlockInScope(
   block: BlockDescriptor,
   scope: ValidationScope
@@ -135,110 +136,11 @@ function shouldIncludeBlockInScope(
 }
 
 /**
- * Helper to set a nested value on an object using dot-notation path
- * (e.g. "businessAddress.line1" → obj.businessAddress.line1).
- */
-function setNestedValue(
-  target: Record<string, unknown>,
-  path: string,
-  value: unknown
-): void {
-  if (!path) {
-    return;
-  }
-  const parts = path.split('.');
-  let current: Record<string, unknown> = target;
-
-  for (let i = 0; i < parts.length - 1; i += 1) {
-    const key = parts[i];
-    const existing = current[key];
-
-    if (
-      !existing ||
-      typeof existing !== 'object' ||
-      Array.isArray(existing)
-    ) {
-      current[key] = {};
-    }
-
-    current = current[key] as Record<string, unknown>;
-  }
-
-  const lastKey = parts[parts.length - 1];
-  current[lastKey] = value;
-}
-
-/**
- * Helper to get a nested value from an object using dot-notation path
- * (e.g. "businessAddress.line1" ← obj.businessAddress.line1).
- */
-export function getNestedValue(
-  source: Record<string, unknown> | undefined,
-  path: string
-): unknown {
-  if (!source || !path) {
-    return undefined;
-  }
-
-  const parts = path.split('.');
-  let current: unknown = source;
-
-  for (const part of parts) {
-    if (current == null || typeof current !== 'object') {
-      return undefined;
-    }
-    if (Array.isArray(current)) {
-      if (!/^\d+$/.test(part)) {
-        return undefined;
-      }
-      current = current[Number(part)];
-      continue;
-    }
-    current = (current as Record<string, unknown>)[part];
-  }
-
-  return current;
-}
-
-/**
  * Source path for a repeatable group. It is the block's repeatableDefaultSource.
  */
 export function repeatableGroupDefaultSource(blockSource?: string): string | undefined {
   const source = blockSource?.trim();
   return source || undefined;
-}
-
-function defaultStatusContext(
-  parent: FormContext,
-  sourceRow: Record<string, unknown> | undefined,
-  builtRow: Record<string, unknown>
-): FormContext {
-  const parentFormData =
-    parent.formData &&
-    typeof parent.formData === 'object' &&
-    !Array.isArray(parent.formData)
-      ? (parent.formData as Record<string, unknown>)
-      : {};
-  const row = { ...(sourceRow ?? {}), ...builtRow };
-
-  return {
-    ...parent,
-    ...row,
-    formData: { ...parentFormData, ...row },
-  } as FormContext;
-}
-
-function shouldSkipHiddenDefault(field: FieldDescriptor, statusContext: FormContext): boolean {
-  if (field.type === 'button' || isSubmitSkippedFieldType(field.type)) {
-    return false;
-  }
-  // An explicit default belongs on the row even while a main-form condition hides the field.
-  // Fields with no default are omitted so a row-local hide (for example companyName on a
-  // residential address) does not copy a value that does not apply.
-  if (field.defaultValue !== undefined) {
-    return false;
-  }
-  return evaluateHiddenStatus(field, statusContext);
 }
 
 /**
@@ -401,6 +303,79 @@ export function buildAutoFillPatchFromSelection({
 }
 
 /**
+ * Build one row of a repeatable group from field defaults, keyed by base field id.
+ * `@index` stays unbound (type default). `@outerIndex` binds to the open popin row.
+ */
+function buildRowDefaults({
+  fields,
+  groupId,
+  context,
+  outerIndex,
+}: {
+  fields: FieldDescriptor[];
+  groupId: string;
+  context: FormContext;
+  outerIndex?: number;
+}): Record<string, unknown> {
+  const groupDefault: Record<string, unknown> = {};
+  for (const field of fields) {
+    if (field.type === 'button') {
+      continue;
+    }
+    const baseFieldId = field.id.startsWith(`${groupId}.`)
+      ? field.id.slice(groupId.length + 1)
+      : field.id;
+    if (shouldSkipHiddenDefault(field, defaultStatusContext(context, undefined, groupDefault))) {
+      continue;
+    }
+    if (field.defaultValue !== undefined) {
+      const evaluatedValue = evaluateDefaultValue(
+        field.defaultValue,
+        field.type,
+        context,
+        { outerIndex }
+      );
+      setNestedValue(
+        groupDefault,
+        baseFieldId,
+        field.type === 'document'
+          ? createDocumentCardDefaultData(field, context, evaluatedValue as DocumentCardData)
+          : evaluatedValue
+      );
+    } else {
+      switch (field.type) {
+        case 'text':
+        case 'dropdown':
+        case 'autocomplete':
+          setNestedValue(groupDefault, baseFieldId, '');
+          break;
+        case 'date':
+          setNestedValue(groupDefault, baseFieldId, null);
+          break;
+        case 'checkbox':
+          setNestedValue(groupDefault, baseFieldId, false);
+          break;
+        case 'radio':
+          setNestedValue(groupDefault, baseFieldId, '');
+          break;
+        case 'number':
+          setNestedValue(groupDefault, baseFieldId, 0);
+          break;
+        case 'file':
+          setNestedValue(groupDefault, baseFieldId, null);
+          break;
+        case 'document':
+          setNestedValue(groupDefault, baseFieldId, createDocumentCardDefaultData(field, context));
+          break;
+        default:
+          setNestedValue(groupDefault, baseFieldId, '');
+      }
+    }
+  }
+  return groupDefault;
+}
+
+/**
  * Extract default values from form descriptor fields
  * 
  * @param descriptor - Global form descriptor
@@ -467,6 +442,29 @@ export function extractDefaultValues(
             const baseFieldId = (f: FieldDescriptor) =>
               f.id.startsWith(`${groupId}.`) ? f.id.slice(groupId.length + 1) : f.id;
             const nonButtonFields = fields.filter(f => f.type !== 'button');
+            // Child lists come from the source row, copied by base field id, and only
+            // under rows whose trigger value opens the child level.
+            const withSeededChildRows = (rows: Record<string, unknown>[]): Record<string, unknown>[] => {
+              const config = block.repeatableChild;
+              if (!config) {
+                return rows;
+              }
+              return rows.map((row, i) => {
+                const children = seedChildRows({
+                  sourceRow: sourceArray[i] as Record<string, unknown>,
+                  fields: nonButtonFields,
+                  groupId,
+                  property: config.property,
+                  formContext: context,
+                });
+                const opensChild = rowOpensChild(
+                  row,
+                  block,
+                  buildRowContext({ formContext: context, groupId, rows, index: i })
+                );
+                return children && opensChild ? { ...row, [config.property]: children } : row;
+              });
+            };
             const hasAtIndex = nonButtonFields.some(
               f => typeof f.defaultValue === 'string' && hasIndexToken(f.defaultValue)
             );
@@ -496,7 +494,7 @@ export function extractDefaultValues(
                 }
                 return row;
               });
-              (defaultValues as Record<string, unknown>)[groupId] = rows;
+              (defaultValues as Record<string, unknown>)[groupId] = withSeededChildRows(rows);
             } else {
               // No @index or @outerIndex in any defaultValue: use source array as-is (normalized to field ids)
               const normalized = sourceArray.map((item: Record<string, unknown>) => {
@@ -512,7 +510,7 @@ export function extractDefaultValues(
                 }
                 return out;
               });
-              (defaultValues as Record<string, unknown>)[groupId] = normalized;
+              (defaultValues as Record<string, unknown>)[groupId] = withSeededChildRows(normalized);
             }
             processedRepeatableGroups.add(groupId);
             continue;
@@ -525,62 +523,7 @@ export function extractDefaultValues(
         if (hasAnyDefault) {
           // Build default object for this repeatable group using base field id (no groupId prefix)
           // @index stays unbound here (type default). @outerIndex still binds to the open popin row.
-          const groupDefault: Record<string, unknown> = {};
-          for (const field of fields) {
-            if (field.type === 'button') {
-              continue;
-            }
-            const baseFieldId = field.id.startsWith(`${groupId}.`)
-              ? field.id.slice(groupId.length + 1)
-              : field.id;
-            if (shouldSkipHiddenDefault(field, defaultStatusContext(context, undefined, groupDefault))) {
-              continue;
-            }
-            if (field.defaultValue !== undefined) {
-              const evaluatedValue = evaluateDefaultValue(
-                field.defaultValue,
-                field.type,
-                context,
-                { outerIndex }
-              );
-              setNestedValue(
-                groupDefault,
-                baseFieldId,
-                field.type === 'document'
-                  ? createDocumentCardDefaultData(field, context, evaluatedValue as DocumentCardData)
-                  : evaluatedValue
-              );
-            } else {
-              switch (field.type) {
-                case 'text':
-                case 'dropdown':
-                case 'autocomplete':
-                  setNestedValue(groupDefault, baseFieldId, '');
-                  break;
-                case 'date':
-                  setNestedValue(groupDefault, baseFieldId, null);
-                  break;
-                case 'checkbox':
-                  setNestedValue(groupDefault, baseFieldId, false);
-                  break;
-                case 'radio':
-                  setNestedValue(groupDefault, baseFieldId, '');
-                  break;
-                case 'number':
-                  setNestedValue(groupDefault, baseFieldId, 0);
-                  break;
-                case 'file':
-                  setNestedValue(groupDefault, baseFieldId, null);
-                  break;
-                case 'document':
-                  setNestedValue(groupDefault, baseFieldId, createDocumentCardDefaultData(field, context));
-                  break;
-                default:
-                  setNestedValue(groupDefault, baseFieldId, '');
-              }
-            }
-          }
-          
+          const groupDefault = buildRowDefaults({ fields, groupId, context, outerIndex });
           (defaultValues as Record<string, unknown>)[groupId] = [groupDefault];
         } else {
           // minInstances is a validation floor, not a reason to seed blank rows
@@ -916,8 +859,14 @@ export function buildZodSchemaFromDescriptor(
     return z.object(shape);
   };
 
-  const arraySchemaForGroup = (owner: BlockDescriptor, fields: FieldDescriptor[]) => {
-    const groupId = fields[0]?.repeatableGroupId ?? '';
+  /**
+   * Row shape of one repeatable group: base field ids (dotted ids nest), minus buttons,
+   * submit-skipped types, and status-hidden fields. Shared by root and child rows.
+   */
+  const buildRowSchemaShape = (
+    fields: FieldDescriptor[],
+    groupId: string
+  ): Record<string, z.ZodTypeAny> => {
     const groupTree: SchemaTreeObject = {};
     for (const field of fields) {
       if (field.type === 'button' || isSubmitSkippedFieldType(field.type)) {
@@ -939,18 +888,47 @@ export function buildZodSchemaFromDescriptor(
       }
     }
 
-    let arraySchema = z.array(schemaTreeToZod(groupTree));
-    if (owner.minInstances !== undefined) {
-      arraySchema = arraySchema.min(owner.minInstances, {
-        message: `At least ${owner.minInstances} instance(s) required`,
-      });
+    return Object.fromEntries(
+      Object.entries(groupTree).map(([key, node]) => [key, schemaTreeToZod(node)])
+    );
+  };
+
+  const limitInstances = <T extends z.ZodTypeAny>(
+    schema: z.ZodArray<T>,
+    { minInstances, maxInstances }: { minInstances?: number; maxInstances?: number }
+  ): z.ZodArray<T> => {
+    const withMin =
+      minInstances !== undefined
+        ? schema.min(minInstances, { message: `At least ${minInstances} instance(s) required` })
+        : schema;
+    return maxInstances !== undefined
+      ? withMin.max(maxInstances, { message: `At most ${maxInstances} instance(s) allowed` })
+      : withMin;
+  };
+
+  const arraySchemaForGroup = (owner: BlockDescriptor, fields: FieldDescriptor[]) =>
+    limitInstances(z.array(z.object(buildRowSchemaShape(fields, fields[0]?.repeatableGroupId ?? ''))), owner);
+
+  /**
+   * The child list of a root row: the group's row shape with its own limits. A child row
+   * cannot hold a child list, so its `property` key is rejected with a specific message.
+   */
+  const childArraySchemaForBlock = (
+    owner: BlockDescriptor,
+    groupId: string,
+    fields: FieldDescriptor[]
+  ) => {
+    const config = owner.repeatableChild;
+    if (!config) {
+      return undefined;
     }
-    if (owner.maxInstances !== undefined) {
-      arraySchema = arraySchema.max(owner.maxInstances, {
-        message: `At most ${owner.maxInstances} instance(s) allowed`,
-      });
-    }
-    return arraySchema;
+    const childRow = z.object({
+      ...buildRowSchemaShape(fields, groupId),
+      [config.property]: z
+        .never({ message: `${config.title} rows cannot hold their own ${config.property} list` })
+        .optional(),
+    });
+    return limitInstances(z.array(childRow), config).optional();
   };
 
   for (const block of descriptor.blocks) {
@@ -976,37 +954,16 @@ export function buildZodSchemaFromDescriptor(
           continue;
         }
         
-        // Build object schema for fields in this repeatable group.
-        // Use base field id (no groupId prefix) and support nested paths so schema
-        // matches form shape: addresses[0].street or addresses[0].location.street
-        const groupTree: Record<string, SchemaTreeNode> = {};
-        for (const field of fields) {
-          if (field.type === 'button' || isSubmitSkippedFieldType(field.type)) {
-            continue;
-          }
-          if (evaluateHiddenStatus(field, formContext)) {
-            continue;
-          }
-          const baseFieldId = field.id.startsWith(`${groupId}.`)
-            ? field.id.slice(groupId.length + 1)
-            : field.id;
-          const fieldType = field.type as Exclude<typeof field.type, 'button'>;
-          const fieldRules = evaluateValidationArrayTemplate(field.validation, formContext);
-          const fieldSchema = convertToZodSchema(fieldRules, fieldType);
-
-          if (baseFieldId.includes('.')) {
-            addSchemaToTree(groupTree, baseFieldId, fieldSchema);
-          } else {
-            groupTree[baseFieldId] = fieldSchema;
-          }
-        }
-        
-        // Create array schema for this repeatable group.
+        // Build the row shape from base field ids (no groupId prefix); dotted ids nest, so the
+        // schema matches the form shape: addresses[0].street or addresses[0].location.street.
         // A nested block's array is an optional key on this row, with that block's own limits.
-        const rowShape: Record<string, z.ZodTypeAny> = {};
-        for (const [key, node] of Object.entries(groupTree)) {
-          rowShape[key] = schemaTreeToZod(node);
-        }
+        // The child list of a repeatableChild block is declared here too, because Zod strips
+        // undeclared keys from the submitted output.
+        const childArray = childArraySchemaForBlock(block, groupId, fields);
+        const rowShape: Record<string, z.ZodTypeAny> = {
+          ...buildRowSchemaShape(fields, groupId),
+          ...(childArray && block.repeatableChild ? { [block.repeatableChild.property]: childArray } : {}),
+        };
         for (const nested of nestedByParentGroup.get(groupId) ?? []) {
           if (evaluateHiddenStatus(nested, formContext) || !isRepeatableBlock(nested)) {
             continue;
@@ -1020,21 +977,8 @@ export function buildZodSchemaFromDescriptor(
             processedRepeatableGroups.add(nestedGroupId);
           }
         }
-        const rowSchema = z.object(rowShape);
-        let arraySchema = z.array(rowSchema);
-        
-        // Apply array-level validation (minInstances/maxInstances)
-        if (block.minInstances !== undefined) {
-          arraySchema = arraySchema.min(block.minInstances, {
-            message: `At least ${block.minInstances} instance(s) required`,
-          });
-        }
-        if (block.maxInstances !== undefined) {
-          arraySchema = arraySchema.max(block.maxInstances, {
-            message: `At most ${block.maxInstances} instance(s) allowed`,
-          });
-        }
-        
+        const arraySchema = limitInstances(z.array(z.object(rowShape)), block);
+
         schemaShape[groupId] = arraySchema;
         processedRepeatableGroups.add(groupId);
       }

@@ -13,6 +13,7 @@ import {
   mapBackendErrorsToForm,
   identifyDiscriminantFields,
 } from '@/utils/form-descriptor-integration';
+import { pruneInactiveChildLists } from '@/utils/repeatable-child';
 import { identifyFieldsWithTemplateDefaults } from '@/utils/field-descriptor-utils';
 import type { FormContext } from '@/utils/template-evaluator';
 import { useLiveZodResolver, useFormMembershipSync } from '@/hooks/use-live-zod-resolver';
@@ -107,8 +108,9 @@ export function useFormDescriptor(
       }
     }
 
-    return merged;
-  }, [defaultValues, savedFormData, fieldsWithTemplateDefaults]);
+    // A saved draft may hold child lists that the current descriptor no longer opens.
+    return pruneInactiveChildLists(merged, descriptor, initFormContext);
+  }, [defaultValues, savedFormData, fieldsWithTemplateDefaults, descriptor, initFormContext]);
 
   const defaultValuesByFieldId = useMemo(
     () => defaultValues as Record<string, unknown>,

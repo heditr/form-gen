@@ -458,6 +458,32 @@ export interface PopinSubmitConfig {
 export type QueryInvalidationMap = Record<string, Array<Array<string | number>>>;
 
 /**
+ * One nested list of the same group inside a row of an inline repeatable block.
+ *
+ * The child list is an array stored on the root row under `property`. Child rows
+ * reuse the group's fields and cannot hold a further child list (depth is capped at 2).
+ *
+ * @property property - Key on the root row that holds the child array (for example `subsectors`)
+ * @property maxDepth - Must be the literal 2 (root level plus one child level)
+ * @property title - Child row heading and accessible name
+ * @property addLabel - Label of the control that appends a child row
+ * @property triggerField - Base field id (no group prefix) whose value opens the child level
+ * @property triggerValues - Values of the trigger field that open the child level
+ * @property minInstances - Minimum rows per child list, applied only when the list exists
+ * @property maxInstances - Maximum rows per child list
+ */
+export interface RepeatableChildConfig {
+  property: string;
+  maxDepth: 2;
+  title: string;
+  addLabel: string;
+  triggerField: string;
+  triggerValues: string[];
+  minInstances?: number;
+  maxInstances?: number;
+}
+
+/**
  * A block rendered inside another block.
  *
  * Exactly one of `position`, `insertBefore`, or `insertAfter` is set.
@@ -505,6 +531,7 @@ export interface NestedBlockReference {
  * @property repeatableSummaryTemplate - Optional Handlebars template for summary text per instance (e.g. "{{name}} ({{role}})")
  * @property nestedBlocks - Optional references to other blocks rendered inside this block.
  *   Each entry names one block and exactly one placement. The referenced block keeps its own descriptor.
+ * @property repeatableChild - Optional nested list of the same group inside a row of an inline repeatable block
  */
 export interface BlockDescriptor {
   id: string;
@@ -526,6 +553,7 @@ export interface BlockDescriptor {
   repeatablePopin?: boolean;
   repeatableSummaryTemplate?: string;
   nestedBlocks?: NestedBlockReference[];
+  repeatableChild?: RepeatableChildConfig;
   layout?: {
     mode?: 'default' | 'grid';
     columns?: 1 | 2 | 3;
@@ -649,6 +677,7 @@ export interface CasePrefill {
   addresses?: Array<Record<string, unknown>>;
   signatories?: Array<Record<string, unknown>>;
   contactGroupId?: Array<Record<string, unknown>>;
+  businessSectors?: Array<Record<string, unknown>>;
 }
 
 /**

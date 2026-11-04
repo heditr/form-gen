@@ -326,6 +326,14 @@ describe('useDraftSave', () => {
 });
 
 describe('flattenDirtyFields', () => {
+  test('given dirty child rows under a root row, should flatten to dot-index paths', () => {
+    expect(
+      flattenDirtyFields({
+        businessSectors: [{ subsectors: [{ sector: true }, { percentage: true }] }],
+      })
+    ).toEqual(['businessSectors.0.subsectors.0.sector', 'businessSectors.0.subsectors.1.percentage']);
+  });
+
   test('given flat boolean fields, should return top-level keys', () => {
     expect(flattenDirtyFields({ email: true, name: true })).toEqual(['email', 'name']);
   });

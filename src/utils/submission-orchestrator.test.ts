@@ -142,6 +142,39 @@ describe('submission orchestrator', () => {
     });
   });
 
+  describe('repeatable child rows in the payload', () => {
+    const businessSectors = [
+      { sector: 'holding', percentage: 60, subsectors: [{ sector: 'software', percentage: 40 }, { sector: 'holding', percentage: 20 }] },
+    ];
+
+    test('given no payload template, should pass the nested row tree through unchanged', () => {
+      const payload = evaluatePayloadTemplate(undefined, { businessSectors });
+
+      expect(payload).toEqual({ businessSectors });
+    });
+
+    test('given a payloadTemplate using the json helper, should keep subsectors inside each row', () => {
+      const payload = evaluatePayloadTemplate('{"sectors": {{json businessSectors}} }', { businessSectors });
+
+      expect(payload).toEqual({ sectors: businessSectors });
+    });
+
+    test('given a payloadTemplate iterating rows and subsectors with each, should reach both levels', () => {
+      const template =
+        '{"names":[{{#each businessSectors}}{{#each subsectors}}"{{sector}}"{{#unless @last}},{{/unless}}{{/each}}{{/each}}]}';
+
+      expect(evaluatePayloadTemplate(template, { businessSectors })).toEqual({
+        names: ['software', 'holding'],
+      });
+    });
+
+    test('given multipart submission, should keep the child list inside each root row JSON string', () => {
+      const formData = constructFormData({ businessSectors }, { businessSectors });
+
+      expect(JSON.parse(formData.getAll('businessSectors')[0] as string)).toEqual(businessSectors[0]);
+    });
+  });
+
   describe('serializeFormValues', () => {
     test('given nested objects with Date values, should serialize recursively', () => {
       const formValues = {

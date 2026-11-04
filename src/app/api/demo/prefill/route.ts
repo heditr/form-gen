@@ -2,7 +2,8 @@
  * Demo Prefill API Route
  *
  * GET /api/demo/prefill
- * Returns case prefill (CasePrefill) including addresses and signatories arrays.
+ * Returns case prefill (CasePrefill) including addresses, signatories, and business sectors
+ * (with subsectors under holding rows).
  * Addresses fill via repeatableDefaultSource (matching field ids). Signatories fill
  * via field defaultValues that map backend keys with `@index`.
  */
@@ -55,6 +56,18 @@ export async function GET(): Promise<NextResponse<DemoPrefillResponse | { error:
           city: 'Paris',
           zip: '75001',
           attentionTo: 'KYC Operations',
+        },
+      ],
+      // Mirrors the form shape: subsectors sit under their row, items keyed by base field id
+      businessSectors: [
+        { sector: 'retail', percentage: 30 },
+        {
+          sector: 'holding',
+          percentage: 70,
+          subsectors: [
+            { sector: 'software', percentage: 40 },
+            { sector: 'retail', percentage: 30 },
+          ],
         },
       ],
       contactGroupId: [

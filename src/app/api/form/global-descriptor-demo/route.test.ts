@@ -6,6 +6,8 @@ import { describe, test, expect } from 'vitest';
 import { GET } from './route';
 import { extractDefaultValues } from '@/utils/form-descriptor-integration';
 import type { GlobalFormDescriptor } from '@/types/form-descriptor';
+import { assertRepeatableChildren } from '@/utils/repeatable-child-validator';
+import { GET as getPrefill } from '@/app/api/demo/prefill/route';
 
 describe('GET /api/form/global-descriptor-demo', () => {
   test('given the demo descriptor, should include a signatories popin whose hidden fields depend on main-form values', async () => {
@@ -192,5 +194,37 @@ describe('GET /api/form/global-descriptor-demo', () => {
 
     expect(defaults.contactGroupId).toEqual([{ name: 'Ada' }, { name: 'Grace' }]);
     expect(defaults['emergency-contacts']).toBeUndefined();
+  });
+
+  test('given the demo descriptor, should include an inline business sectors block with one child level that passes the validator', async () => {
+    const response = await GET(new Request('http://localhost:3000/api/form/global-descriptor-demo'));
+    const descriptor = (await response.json()) as GlobalFormDescriptor;
+
+    const sectors = descriptor.blocks.find((block) => block.id === 'business-sectors-block');
+
+    expect(sectors?.repeatable).toBe(true);
+    expect(sectors?.repeatablePopin).toBeUndefined();
+    expect(sectors?.repeatableDefaultSource).toBe('businessSectors');
+    expect(sectors?.repeatableChild).toMatchObject({
+      property: 'subsectors',
+      maxDepth: 2,
+      triggerField: 'sector',
+      triggerValues: ['holding'],
+    });
+    expect(() => assertRepeatableChildren(descriptor)).not.toThrow();
+  });
+
+  test('given the demo prefill, should seed business sector rows with subsectors only under holding rows', async () => {
+    const descriptor = (await (
+      await GET(new Request('http://localhost:3000/api/form/global-descriptor-demo'))
+    ).json()) as GlobalFormDescriptor;
+    const { casePrefill } = await (await getPrefill()).json();
+
+    const defaults = extractDefaultValues(descriptor, { caseContext: casePrefill });
+    const rows = defaults.businessSectors as Array<Record<string, unknown>>;
+
+    expect(rows.length).toBeGreaterThanOrEqual(2);
+    expect(rows.some((row) => row.sector === 'holding' && Array.isArray(row.subsectors))).toBe(true);
+    expect(rows.filter((row) => row.sector !== 'holding').every((row) => !('subsectors' in row))).toBe(true);
   });
 });

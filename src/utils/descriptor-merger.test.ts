@@ -450,4 +450,53 @@ describe('descriptor merger', () => {
       expect(merged.blocks[0].fields[0].status?.readonly).toBe('{{#if readonly}}true{{/if}}');
     });
   });
+
+  describe('repeatableChild', () => {
+    test('given a block with repeatableChild, should preserve the config when rules are merged into its fields', () => {
+      const repeatableChild = {
+        property: 'subsectors',
+        maxDepth: 2 as const,
+        title: 'Subsector',
+        addLabel: 'Add subsector',
+        triggerField: 'sector',
+        triggerValues: ['holding'],
+        maxInstances: 5,
+      };
+      const globalDescriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'business-sectors-block',
+            title: 'Business sector',
+            repeatable: true,
+            repeatableChild,
+            fields: [
+              {
+                id: 'businessSectors.sector',
+                type: 'dropdown',
+                label: 'Sector',
+                repeatableGroupId: 'businessSectors',
+                validation: [],
+              },
+            ],
+          },
+        ],
+        submission: { url: '/api/submit', method: 'POST' },
+      };
+
+      const merged = mergeDescriptorWithRules(globalDescriptor, {
+        blocks: [{ id: 'business-sectors-block', status: { disabled: '{{x}}' } }],
+        fields: [
+          {
+            id: 'businessSectors.sector',
+            validation: [{ type: 'required', message: 'Sector is required' }],
+          },
+        ],
+      });
+
+      expect(merged.blocks[0].repeatableChild).toEqual(repeatableChild);
+      expect(merged.blocks[0].fields[0].validation).toEqual([
+        { type: 'required', message: 'Sector is required' },
+      ]);
+    });
+  });
 });

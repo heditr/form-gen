@@ -3,7 +3,13 @@
  * in validation for main form, popin, and submit-time checks.
  */
 
-import type { GlobalFormDescriptor, CaseContext, FormData } from '@/types/form-descriptor';
+import type {
+  BlockDescriptor,
+  CaseContext,
+  FieldDescriptor,
+  FormData,
+  GlobalFormDescriptor,
+} from '@/types/form-descriptor';
 import type { FormContext } from '@/utils/template-evaluator';
 import { evaluateHiddenStatus } from '@/utils/template-evaluator';
 import { evaluateValidationArrayTemplate } from '@/utils/array-template-evaluator';
@@ -13,6 +19,7 @@ import {
   isSubmitSkippedFieldType,
   repeatablePopinNestedPlacements,
 } from '@/utils/form-descriptor-integration';
+import { buildRowContext, rowOpensChild } from '@/utils/repeatable-child';
 
 export type ValidationScope = 'main' | 'popin';
 
@@ -142,7 +149,71 @@ function hasNestedKey(target: Record<string, unknown>, path: string): boolean {
 type HiddenDeletion =
   | { kind: 'group'; groupId: string }
   | { kind: 'path'; path: string }
-  | { kind: 'row'; groupId: string; rowIndex: number; path: string };
+  | { kind: 'row'; groupId: string; rowIndex: number; path: string }
+  | {
+      kind: 'child';
+      groupId: string;
+      rowIndex: number;
+      property: string;
+      childIndex: number;
+      path: string;
+    };
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  !!value && typeof value === 'object' && !Array.isArray(value);
+
+/**
+ * Deletions for the child list of one root row: the whole list when the row does not
+ * open the child level, otherwise the hidden fields of each child row (one level only).
+ */
+function collectChildDeletions({
+  block,
+  fields,
+  groupId,
+  rows,
+  rowIndex,
+  formContext,
+}: {
+  block: BlockDescriptor;
+  fields: FieldDescriptor[];
+  groupId: string;
+  rows: unknown[];
+  rowIndex: number;
+  formContext: FormContext;
+}): HiddenDeletion[] {
+  const property = block.repeatableChild?.property;
+  const row = rows[rowIndex];
+  if (!property || !isRecord(row) || !hasNestedKey(row, property)) {
+    return [];
+  }
+
+  const rootContext = {
+    ...overlayRowContext(formContext, row),
+    ...buildRowContext({ formContext, groupId, rows, index: rowIndex }),
+  } as FormContext;
+  if (!rowOpensChild(row, block, rootContext)) {
+    return [{ kind: 'row', groupId, rowIndex, path: property }];
+  }
+
+  const children = row[property];
+  if (!Array.isArray(children)) {
+    return [];
+  }
+  return children.flatMap((child, childIndex) =>
+    !isRecord(child)
+      ? []
+      : fields
+          .filter(
+            (field) =>
+              field.type !== 'button' &&
+              !isSubmitSkippedFieldType(field.type) &&
+              evaluateHiddenStatus(field, overlayRowContext(formContext, child))
+          )
+          .map((field) => field.id.startsWith(`${groupId}.`) ? field.id.slice(groupId.length + 1) : field.id)
+          .filter((path) => hasNestedKey(child, path))
+          .map((path) => ({ kind: 'child' as const, groupId, rowIndex, property, childIndex, path }))
+  );
+}
 
 /**
  * Drop status-hidden keys, including per-row keys in repeatable groups.
@@ -239,6 +310,10 @@ export function omitStatusHiddenFormValues(
               deletions.push({ kind: 'row', groupId, rowIndex, path: baseFieldId });
             }
           }
+
+          deletions.push(
+            ...collectChildDeletions({ block, fields, groupId, rows: groupValue, rowIndex, formContext })
+          );
         });
       }
       continue;
@@ -281,10 +356,19 @@ export function omitStatusHiddenFormValues(
       continue;
     }
     const row = groupValue[deletion.rowIndex];
-    if (!row || typeof row !== 'object' || Array.isArray(row)) {
+    if (!isRecord(row)) {
       continue;
     }
-    deleteNestedValue(row as Record<string, unknown>, deletion.path);
+    if (deletion.kind === 'child') {
+      const child = Array.isArray(row[deletion.property])
+        ? (row[deletion.property] as unknown[])[deletion.childIndex]
+        : undefined;
+      if (isRecord(child)) {
+        deleteNestedValue(child, deletion.path);
+      }
+      continue;
+    }
+    deleteNestedValue(row, deletion.path);
   }
 
   return stripped as Partial<FormData>;

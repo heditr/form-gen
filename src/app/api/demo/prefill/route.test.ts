@@ -32,4 +32,15 @@ describe('GET /api/demo/prefill', () => {
       },
     ]);
   });
+
+  test('given the demo prefill, should include business sectors whose holding row carries subsectors', async () => {
+    const response = await GET();
+    const body = await response.json();
+
+    const holding = body.casePrefill.businessSectors.find(
+      (row: { sector: string }) => row.sector === 'holding'
+    );
+    expect(holding.subsectors.length).toBeGreaterThan(0);
+    expect(holding.subsectors[0]).toEqual({ sector: expect.any(String), percentage: expect.any(Number) });
+  });
 });

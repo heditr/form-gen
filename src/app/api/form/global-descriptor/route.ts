@@ -262,6 +262,24 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
       );
     }
 
+    try {
+      const { assertRepeatableChildren } = await import('@/utils/repeatable-child-validator');
+      resolvedDescriptor = assertRepeatableChildren(resolvedDescriptor);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to validate repeatable child rows';
+      console.error('Error validating repeatable child rows:', error);
+
+      return NextResponse.json(
+        { error: errorMessage },
+        {
+          status: 500,
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+    }
+
     return NextResponse.json(resolvedDescriptor, {
       status: 200,
       headers: {
