@@ -4,6 +4,8 @@ An inline repeatable block can let one row hold exactly one nested list of the s
 
 Depth is capped at 2: a root level and one child level. A child row never holds a further list.
 
+For how it is built and how to debug it, see [repeatable-child-rows-implementation.md](repeatable-child-rows-implementation.md).
+
 This is separate from the other nesting mechanisms:
 
 - [nested-blocks.md](nested-blocks.md) nests a different block, once. A block cannot nest itself.
