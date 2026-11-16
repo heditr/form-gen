@@ -375,6 +375,49 @@ function buildRowDefaults({
   return groupDefault;
 }
 
+const standaloneDefault = (field: FieldDescriptor, context: FormContext): unknown => {
+  if (field.defaultValue !== undefined) {
+    const evaluatedValue = evaluateDefaultValue(field.defaultValue, field.type, context);
+    return field.type === 'document'
+      ? createDocumentCardDefaultData(field, context, evaluatedValue as DocumentCardData)
+      : evaluatedValue;
+  }
+
+  switch (field.type) {
+    case 'date':
+    case 'file':
+      return null;
+    case 'checkbox':
+      return false;
+    case 'number':
+      return 0;
+    case 'document':
+      return createDocumentCardDefaultData(field, context);
+    default:
+      return '';
+  }
+};
+
+/**
+ * Write each repeatOnce field at its own key. No row index is bound, and a
+ * repeatable default source does not supply the value.
+ */
+const assignRepeatOnceDefaults = (
+  block: BlockDescriptor,
+  target: Record<string, unknown>,
+  context: FormContext
+) => {
+  for (const field of block.fields) {
+    if (field.repeatOnce !== true || field.type === 'button') {
+      continue;
+    }
+    if (shouldSkipHiddenDefault(field, defaultStatusContext(context, undefined, target))) {
+      continue;
+    }
+    setNestedValue(target, field.id, standaloneDefault(field, context));
+  }
+};
+
 /**
  * Extract default values from form descriptor fields
  * 
@@ -441,7 +484,7 @@ export function extractDefaultValues(
           if (Array.isArray(sourceArray) && sourceArray.length > 0) {
             const baseFieldId = (f: FieldDescriptor) =>
               f.id.startsWith(`${groupId}.`) ? f.id.slice(groupId.length + 1) : f.id;
-            const nonButtonFields = fields.filter(f => f.type !== 'button');
+            const nonButtonFields = fields.filter((f) => f.type !== 'button' && !f.repeatOnce);
             // Child lists come from the source row, copied by base field id, and only
             // under rows whose trigger value opens the child level.
             const withSeededChildRows = (rows: Record<string, unknown>[]): Record<string, unknown>[] => {
@@ -523,7 +566,12 @@ export function extractDefaultValues(
         if (hasAnyDefault) {
           // Build default object for this repeatable group using base field id (no groupId prefix)
           // @index stays unbound here (type default). @outerIndex still binds to the open popin row.
-          const groupDefault = buildRowDefaults({ fields, groupId, context, outerIndex });
+          const groupDefault = buildRowDefaults({
+            fields: fields.filter((field) => !field.repeatOnce),
+            groupId,
+            context,
+            outerIndex,
+          });
           (defaultValues as Record<string, unknown>)[groupId] = [groupDefault];
         } else {
           // minInstances is a validation floor, not a reason to seed blank rows
@@ -532,6 +580,8 @@ export function extractDefaultValues(
         
         processedRepeatableGroups.add(groupId);
       }
+
+      assignRepeatOnceDefaults(block, defaultValues as Record<string, unknown>, context);
     } else {
       // Handle non-repeatable blocks - add fields as individual properties
       // Outer index applies here (flattened popin instance fields)
@@ -869,7 +919,7 @@ export function buildZodSchemaFromDescriptor(
   ): Record<string, z.ZodTypeAny> => {
     const groupTree: SchemaTreeObject = {};
     for (const field of fields) {
-      if (field.type === 'button' || isSubmitSkippedFieldType(field.type)) {
+      if (field.repeatOnce || field.type === 'button' || isSubmitSkippedFieldType(field.type)) {
         continue;
       }
       if (evaluateHiddenStatus(field, formContext)) {
@@ -981,6 +1031,25 @@ export function buildZodSchemaFromDescriptor(
 
         schemaShape[groupId] = arraySchema;
         processedRepeatableGroups.add(groupId);
+      }
+
+      for (const field of block.fields) {
+        if (
+          field.repeatOnce !== true ||
+          field.type === 'button' ||
+          isSubmitSkippedFieldType(field.type) ||
+          evaluateHiddenStatus(field, formContext)
+        ) {
+          continue;
+        }
+        const fieldType = field.type as Exclude<typeof field.type, 'button'>;
+        const fieldRules = evaluateValidationArrayTemplate(field.validation, formContext);
+        const fieldSchema = convertToZodSchema(fieldRules, fieldType);
+        if (field.id.includes('.')) {
+          addSchemaToTree(nonRepeatableTree, field.id, fieldSchema);
+        } else {
+          schemaShape[field.id] = fieldSchema;
+        }
       }
     } else {
       // Handle non-repeatable blocks - add fields as individual properties

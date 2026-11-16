@@ -11,6 +11,7 @@ This is separate from the other nesting mechanisms:
 - [nested-blocks.md](nested-blocks.md) nests a different block, once. A block cannot nest itself.
 - [nested-repeatable-in-repeatable-popin.md](nested-repeatable-in-repeatable-popin.md) stores a different group on a popin row and edits it in a dialog.
 - `repeatableBlockRef` copies fields onto the host block. `subFormRef` splices sibling blocks. Neither creates a nested array.
+- [repeat-once-fields.md](repeat-once-fields.md) stores one field of an inline repeatable block at its own key, outside every root row and child row.
 
 ## Descriptor
 
@@ -81,7 +82,7 @@ The global descriptor routes call `assertRepeatableChildren` right after `assert
 
 ## Value shape
 
-The child list is a property of the root row. Child rows hold only the group's base fields.
+The child list is a property of the root row. Child rows hold only the group's base fields. A `repeatOnce` field stays on the form root and is never a key of these rows. See [repeat-once-fields.md](repeat-once-fields.md).
 
 ```json
 {

@@ -7,6 +7,8 @@
 
 ## Active Epics
 
+- [Repeat-once fields](docs/repeat-once-fields.md) - 🚧 IN PROGRESS
+
 - [Nested Outer Index Default Epic](tasks/nested-outer-index-default-epic.md) - ✅ COMPLETED (2026-10-21)
 
 - [Repeatable Popin Main-Form Status Demo Epic](tasks/repeatable-popin-main-form-status-demo-epic.md) - ✅ IMPLEMENTED (2026-09-16)

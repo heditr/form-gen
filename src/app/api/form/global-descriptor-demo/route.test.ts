@@ -7,6 +7,7 @@ import { GET } from './route';
 import { extractDefaultValues } from '@/utils/form-descriptor-integration';
 import type { GlobalFormDescriptor } from '@/types/form-descriptor';
 import { assertRepeatableChildren } from '@/utils/repeatable-child-validator';
+import { assertRepeatOnce } from '@/utils/repeat-once-validator';
 import { GET as getPrefill } from '@/app/api/demo/prefill/route';
 
 describe('GET /api/form/global-descriptor-demo', () => {
@@ -211,7 +212,12 @@ describe('GET /api/form/global-descriptor-demo', () => {
       triggerField: 'sector',
       triggerValues: ['holding'],
     });
+    expect(sectors?.fields.find((field) => field.repeatOnce)).toMatchObject({
+      id: 'activityCountry',
+      repeatOnce: true,
+    });
     expect(() => assertRepeatableChildren(descriptor)).not.toThrow();
+    expect(() => assertRepeatOnce(descriptor)).not.toThrow();
   });
 
   test('given the demo prefill, should seed business sector rows with subsectors only under holding rows', async () => {

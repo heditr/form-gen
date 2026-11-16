@@ -335,6 +335,30 @@ describe('seedChildRows', () => {
     ).toEqual([{ sector: 'retail' }]);
   });
 
+  test('given a repeatOnce field in the field list, should leave it out of the child row', () => {
+    const withOnce: FieldDescriptor[] = [
+      {
+        id: 'activityCountry',
+        type: 'text',
+        label: 'Country of activity',
+        repeatOnce: true,
+        defaultValue: 'FR',
+        validation: [],
+      },
+      ...fields,
+    ];
+
+    expect(
+      seedChildRows({
+        sourceRow: { subsectors: [{ sector: 'retail', percentage: 1, activityCountry: 'US' }] },
+        fields: withOnce,
+        groupId: 'businessSectors',
+        property: 'subsectors',
+        formContext: {},
+      })
+    ).toEqual([{ sector: 'retail', percentage: 1 }]);
+  });
+
   test('given button fields, should skip them', () => {
     const withButton: FieldDescriptor[] = [
       ...fields,
@@ -391,6 +415,19 @@ describe('buildNewRowValues', () => {
         formContext: { caseContext: { country: 'FR' } },
       })
     ).toEqual({ country: 'FR' });
+  });
+
+  test('given a repeatOnce field, should leave it out of the new row', () => {
+    expect(
+      buildNewRowValues({
+        fields: [
+          field('name', 'text'),
+          { id: 'activityCountry', type: 'text', label: 'Country', repeatOnce: true, defaultValue: 'FR', validation: [] },
+        ],
+        groupId: 'g',
+        formContext: {},
+      })
+    ).toEqual({ name: '' });
   });
 
   test('given a button field, should skip it', () => {

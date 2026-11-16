@@ -280,6 +280,24 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
       );
     }
 
+    try {
+      const { assertRepeatOnce } = await import('@/utils/repeat-once-validator');
+      resolvedDescriptor = assertRepeatOnce(resolvedDescriptor);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to validate repeat-once fields';
+      console.error('Error validating repeat-once fields:', error);
+
+      return NextResponse.json(
+        { error: errorMessage },
+        {
+          status: 500,
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+    }
+
     return NextResponse.json(resolvedDescriptor, {
       status: 200,
       headers: {

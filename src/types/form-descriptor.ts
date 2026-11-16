@@ -371,6 +371,8 @@ export interface ButtonConfig {
  * @property file - Optional file upload configuration (only for file type fields)
  * @property document - Optional Document Card configuration (only for document type fields)
  * @property repeatableGroupId - Optional identifier to associate this field with a repeatable group
+ * @property repeatOnce - When true on an inline repeatable block, store and render this field once
+ *   at `id`. It is not a row field and is not copied into repeatableChild rows.
  * @property defaultValue - Optional default value or Handlebars template (e.g. '{{caseContext.email}}').
  *   In repeatable groups with repeatableDefaultSource, use '@index' in the template (e.g. '{{caseContext.addresses.@index.street}}');
  *   @index is replaced with the row index (0, 1, …) when evaluating.
@@ -402,6 +404,11 @@ export interface FieldDescriptor {
   file?: FileFieldConfig;
   document?: DocumentCardConfig;
   repeatableGroupId?: string;
+  /**
+   * Store this field once at `id` on an inline repeatable block.
+   * It is drawn with the group, outside every root row and child row.
+   */
+  repeatOnce?: boolean;
   autoFill?: AutoFillConfig;
   manualLookup?: ManualLookupConfig;
   layout?: FieldLayoutConfig;

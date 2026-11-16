@@ -316,6 +316,18 @@ export function omitStatusHiddenFormValues(
           );
         });
       }
+
+      for (const field of block.fields) {
+        if (field.repeatOnce !== true || field.type === 'button' || isSubmitSkippedFieldType(field.type)) {
+          continue;
+        }
+        if (!(blockHidden || evaluateHiddenStatus(field, formContext))) {
+          continue;
+        }
+        if (hasNestedKey(source, field.id)) {
+          deletions.push({ kind: 'path', path: field.id });
+        }
+      }
       continue;
     }
 
@@ -410,6 +422,14 @@ export function collectStatusHiddenFieldIds(
           hiddenIds.push(groupId);
         }
       }
+      for (const field of block.fields) {
+        if (field.repeatOnce !== true || field.type === 'button') {
+          continue;
+        }
+        if (blockHidden || evaluateHiddenStatus(field, formContext)) {
+          hiddenIds.push(field.id);
+        }
+      }
       continue;
     }
 
@@ -475,6 +495,20 @@ export function collectValidationTargets(
           })
           .join('|');
         targets.push({ id: groupId, ruleFingerprint });
+      }
+      for (const field of block.fields) {
+        if (
+          field.repeatOnce !== true ||
+          field.type === 'button' ||
+          isSubmitSkippedFieldType(field.type) ||
+          evaluateHiddenStatus(field, formContext)
+        ) {
+          continue;
+        }
+        targets.push({
+          id: field.id,
+          ruleFingerprint: buildRuleFingerprint(field, formContext),
+        });
       }
       continue;
     }

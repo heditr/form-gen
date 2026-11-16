@@ -92,7 +92,7 @@ function Block({
     if (!isRepeatable) {
       return block.fields;
     }
-    return block.fields.filter(f => !f.repeatableGroupId);
+    return block.fields.filter((field) => !field.repeatableGroupId && !field.repeatOnce);
   }, [block.fields, isRepeatable]);
 
   const blocksById = useMemo(

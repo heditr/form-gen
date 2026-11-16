@@ -9,8 +9,22 @@
 import type {
   GlobalFormDescriptor,
   BlockDescriptor,
+  FieldDescriptor,
 } from '@/types/form-descriptor';
 import { isRepeatableBlock } from './form-descriptor-integration';
+
+/**
+ * A repeatOnce field stays at its own id and does not join the row group.
+ * Every other referenced field is prefixed and assigned the group id.
+ */
+const fieldForRepeatableGroup = (field: FieldDescriptor, repeatableGroupId: string): FieldDescriptor =>
+  field.repeatOnce
+    ? { ...field }
+    : {
+        ...field,
+        id: `${repeatableGroupId}.${field.id}`,
+        repeatableGroupId,
+      };
 
 /**
  * Resolve a repeatable block reference for a specific block
@@ -161,12 +175,9 @@ function resolveRepeatableBlockRefWithValidation(
       ? block.id.slice(0, -6) // Remove "-block" (6 characters)
       : block.id;
     
-    // Prefix field IDs and assign repeatableGroupId
-    const mergedFields = nestedReferencedBlock.fields.map(field => ({
-      ...field,
-      id: `${repeatableGroupId}.${field.id}`, // Prefix field ID with groupId
-      repeatableGroupId, // Assign repeatableGroupId to all fields
-    }));
+    const mergedFields = nestedReferencedBlock.fields.map((field) =>
+      fieldForRepeatableGroup(field, repeatableGroupId)
+    );
     
     return {
       ...block,
@@ -182,13 +193,11 @@ function resolveRepeatableBlockRefWithValidation(
     ? block.id.slice(0, -6) // Remove "-block" (6 characters)
     : block.id;
 
-  // Merge referenced block's fields into the repeatable block
-  // Prefix field IDs with repeatableGroupId and assign repeatableGroupId to all fields
-  const mergedFields = referencedBlock.fields.map(field => ({
-    ...field,
-    id: `${repeatableGroupId}.${field.id}`, // Prefix field ID with groupId
-    repeatableGroupId, // Assign repeatableGroupId to all fields
-  }));
+  // Merge referenced block's fields into the repeatable block.
+  // Row fields are prefixed. A repeatOnce field keeps its id.
+  const mergedFields = referencedBlock.fields.map((field) =>
+    fieldForRepeatableGroup(field, repeatableGroupId)
+  );
 
   return {
     ...block,

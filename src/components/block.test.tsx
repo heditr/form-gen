@@ -6,7 +6,7 @@
  */
 
 import { describe, test, expect, vi } from 'vitest';
-import { render } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import Block from './block';
 import type { BlockProps } from './block';
 import type { BlockDescriptor, GlobalFormDescriptor } from '@/types/form-descriptor';
@@ -225,6 +225,42 @@ describe('Block', () => {
     const props = createProps({ block });
     // Component should handle mixed block
     expect(Block).toBeDefined();
+  });
+
+  test('given a repeatOnce field, should skip it in the plain field walk and still render ungrouped fields', () => {
+    const block: BlockDescriptor = {
+      id: 'addresses-block',
+      title: 'Addresses',
+      repeatable: true,
+      fields: [
+        {
+          id: 'country',
+          type: 'text',
+          label: 'Country',
+          repeatOnce: true,
+          validation: [],
+        },
+        {
+          id: 'addresses.street',
+          type: 'text',
+          label: 'Street',
+          repeatableGroupId: 'addresses',
+          validation: [],
+        },
+        {
+          id: 'notes',
+          type: 'text',
+          label: 'Notes',
+          validation: [],
+        },
+      ],
+    };
+
+    render(<Block {...createProps({ block })} />);
+
+    expect(screen.queryByTestId('field-country')).not.toBeInTheDocument();
+    expect(screen.getByTestId('field-notes')).toBeInTheDocument();
+    expect(screen.getByTestId('repeatable-group-addresses')).toBeInTheDocument();
   });
 
   test('given block with multiple repeatable groups, should render all groups', () => {

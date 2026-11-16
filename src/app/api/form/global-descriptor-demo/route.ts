@@ -773,6 +773,14 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
           },
           fields: [
             {
+              id: 'activityCountry',
+              type: 'text',
+              label: 'Country of activity',
+              description: 'Stored once for this list. It is not repeated on each sector or subsector.',
+              repeatOnce: true,
+              validation: [],
+            },
+            {
               id: 'businessSectors.sector',
               type: 'dropdown',
               label: 'Sector',
@@ -1400,6 +1408,24 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to validate repeatable child rows';
       console.error('Error validating repeatable child rows:', error);
+
+      return NextResponse.json(
+        { error: errorMessage },
+        {
+          status: 500,
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+    }
+
+    try {
+      const { assertRepeatOnce } = await import('@/utils/repeat-once-validator');
+      resolvedDescriptor = assertRepeatOnce(resolvedDescriptor);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to validate repeat-once fields';
+      console.error('Error validating repeat-once fields:', error);
 
       return NextResponse.json(
         { error: errorMessage },

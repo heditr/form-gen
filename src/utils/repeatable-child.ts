@@ -101,6 +101,10 @@ export const buildRowContext = ({
 const baseFieldIdOf = (field: FieldDescriptor, groupId: string): string =>
   field.id.startsWith(`${groupId}.`) ? field.id.slice(groupId.length + 1) : field.id;
 
+/** Row builders must ignore repeatOnce fields so a caller can pass `block.fields`. */
+const rowFieldsOf = (fields: FieldDescriptor[]): FieldDescriptor[] =>
+  fields.filter((field) => field.repeatOnce !== true);
+
 const groupIdOf = (block: BlockDescriptor): string | undefined =>
   block.fields.find((field) => field.repeatableGroupId)?.repeatableGroupId;
 
@@ -209,7 +213,7 @@ export function seedChildRows({
   }
 
   return children.filter(isRow).map((child) =>
-    fields
+    rowFieldsOf(fields)
       .filter((field) => field.type !== 'button')
       .reduce<Row>((built, field) => {
         if (shouldSkipHiddenDefault(field, defaultStatusContext(formContext, child, built))) {
@@ -252,7 +256,7 @@ export function buildNewRowValues({
   formContext: FormContext;
 }): Row {
   return Object.fromEntries(
-    fields
+    rowFieldsOf(fields)
       .filter((field) => field.type !== 'button')
       .map((field) => [
         baseFieldIdOf(field, groupId),

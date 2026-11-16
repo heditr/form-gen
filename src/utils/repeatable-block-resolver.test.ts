@@ -467,5 +467,48 @@ describe('repeatable block resolver', () => {
       expect(workAddressesBlock?.fields?.[0]?.id).toBe('work-addresses.street');
       expect(workAddressesBlock?.fields?.[0]?.repeatableGroupId).toBe('work-addresses');
     });
+
+    test('given a referenced field with repeatOnce, should keep its id and skip the group prefix', () => {
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'address-block',
+            title: 'Address',
+            fields: [
+              {
+                id: 'country',
+                type: 'dropdown',
+                label: 'Country',
+                repeatOnce: true,
+                validation: [],
+              },
+              {
+                id: 'street',
+                type: 'text',
+                label: 'Street',
+                validation: [],
+              },
+            ],
+          },
+          {
+            id: 'addresses-block',
+            title: 'Addresses',
+            repeatable: true,
+            repeatableBlockRef: 'address-block',
+            fields: [],
+          },
+        ],
+        submission: { url: '/api/submit', method: 'POST' },
+      };
+
+      const resolved = resolveAllRepeatableBlockRefs(descriptor);
+      const addresses = resolved.blocks.find((item) => item.id === 'addresses-block');
+      const country = addresses?.fields.find((field) => field.repeatOnce);
+      const street = addresses?.fields.find((field) => field.id === 'addresses.street');
+
+      expect(country).toMatchObject({ id: 'country', repeatOnce: true });
+      expect(country?.repeatableGroupId).toBeUndefined();
+      expect(street).toMatchObject({ id: 'addresses.street', repeatableGroupId: 'addresses' });
+    });
   });
 });
