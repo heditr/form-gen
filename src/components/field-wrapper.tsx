@@ -182,6 +182,8 @@ function FieldWrapper({
           required={isRequired}
         />
       );
+    case 'progress':
+      return null;
     case 'button':
       return (
         <ButtonField

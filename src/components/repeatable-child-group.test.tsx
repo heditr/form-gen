@@ -78,13 +78,20 @@ type HarnessProps = {
   onForm?: (form: UseFormReturn<FieldValues>) => void;
 };
 
-function Harness({ rootRows, rootIndex = 1, childConfig = config(), isDisabled = false, onForm }: HarnessProps) {
+function Harness({
+  rootRows,
+  rootIndex = 1,
+  childConfig = config(),
+  isDisabled = false,
+  onForm,
+  descriptor = block,
+}: HarnessProps & { descriptor?: BlockDescriptor }) {
   const form = useForm<FieldValues>({ defaultValues: { businessSectors: rootRows } });
   onForm?.(form);
   const watchedRows = form.watch('businessSectors') as unknown[];
   return (
     <RepeatableChildGroup
-      block={block}
+      block={descriptor}
       groupId="businessSectors"
       fields={fields}
       config={childConfig}
@@ -234,5 +241,37 @@ describe('RepeatableChildGroup', () => {
 
     expect(screen.getAllByRole('group')).toHaveLength(1);
     expect(screen.getAllByRole('button', { name: /^Add/ })).toHaveLength(1);
+  });
+
+  test('given a progress once-field, should show one bar after the child rows for that list only', () => {
+    const descriptor: BlockDescriptor = {
+      ...block,
+      fields: [
+        ...fields,
+        {
+          id: 'sectorShare',
+          type: 'progress',
+          label: 'Total share',
+          repeatOnce: true,
+          progress: { sumField: 'percentage', max: 100 },
+          validation: [],
+        },
+      ],
+    };
+
+    render(
+      <Harness
+        descriptor={descriptor}
+        rootRows={twoRoots([sub('software', 40), sub('retail', 10)])}
+      />
+    );
+
+    const group = screen.getByRole('group', { name: 'Subsectors of Business sector 2' });
+    const bar = within(group).getByRole('progressbar', { name: 'Total share' });
+    const add = within(group).getByRole('button', { name: 'Add subsector' });
+
+    expect(bar).toHaveAttribute('aria-valuenow', '50');
+    expect(bar.compareDocumentPosition(add) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(within(screen.getByTestId('repeatable-child-instance-businessSectors-1-0')).queryByRole('progressbar')).not.toBeInTheDocument();
   });
 });

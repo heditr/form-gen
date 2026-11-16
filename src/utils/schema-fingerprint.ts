@@ -318,7 +318,7 @@ export function omitStatusHiddenFormValues(
       }
 
       for (const field of block.fields) {
-        if (field.repeatOnce !== true || field.type === 'button' || isSubmitSkippedFieldType(field.type)) {
+        if (field.repeatOnce !== true || field.type === 'button' || field.type === 'progress' || isSubmitSkippedFieldType(field.type)) {
           continue;
         }
         if (!(blockHidden || evaluateHiddenStatus(field, formContext))) {
@@ -423,7 +423,7 @@ export function collectStatusHiddenFieldIds(
         }
       }
       for (const field of block.fields) {
-        if (field.repeatOnce !== true || field.type === 'button') {
+        if (field.repeatOnce !== true || field.type === 'button' || field.type === 'progress') {
           continue;
         }
         if (blockHidden || evaluateHiddenStatus(field, formContext)) {
@@ -500,6 +500,7 @@ export function collectValidationTargets(
         if (
           field.repeatOnce !== true ||
           field.type === 'button' ||
+          field.type === 'progress' ||
           isSubmitSkippedFieldType(field.type) ||
           evaluateHiddenStatus(field, formContext)
         ) {

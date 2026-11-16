@@ -91,4 +91,29 @@ describe('omitStatusHiddenFormValues with repeatOnce', () => {
       'notes',
     ]);
   });
+
+  test('given a progress once-field, should leave it out of hidden ids and validation targets', () => {
+    const descriptor = descriptorOf([
+      {
+        id: 'sectorShare',
+        type: 'progress',
+        label: 'Total share',
+        repeatOnce: true,
+        progress: { sumField: 'percentage', max: 100 },
+        validation: [],
+      },
+      {
+        id: 'addresses.percentage',
+        type: 'number',
+        label: 'Percentage',
+        repeatableGroupId: 'addresses',
+        validation: [],
+      },
+    ]);
+    const values = { sectorShare: 100, addresses: [{ percentage: 100 }] };
+
+    expect(omitStatusHiddenFormValues(descriptor, values)).toEqual(values);
+    expect(collectStatusHiddenFieldIds(descriptor, {})).not.toContain('sectorShare');
+    expect(collectValidationTargets(descriptor, {}).map((target) => target.id)).toEqual(['addresses']);
+  });
 });

@@ -773,14 +773,6 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
           },
           fields: [
             {
-              id: 'activityCountry',
-              type: 'text',
-              label: 'Country of activity',
-              description: 'Stored once for this list. It is not repeated on each sector or subsector.',
-              repeatOnce: true,
-              validation: [],
-            },
-            {
               id: 'businessSectors.sector',
               type: 'dropdown',
               label: 'Sector',
@@ -798,6 +790,15 @@ export async function GET(request: Request): Promise<NextResponse<GlobalFormDesc
               label: 'Percentage',
               repeatableGroupId: 'businessSectors',
               validation: [{ type: 'required', message: 'Percentage is required' }],
+            },
+            {
+              id: 'sectorShare',
+              type: 'progress',
+              label: 'Total share',
+              description: 'Readonly total of the percentage fields in this list.',
+              repeatOnce: true,
+              progress: { sumField: 'percentage', max: 100 },
+              validation: [],
             },
           ],
         },

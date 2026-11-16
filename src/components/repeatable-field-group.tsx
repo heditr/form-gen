@@ -7,21 +7,13 @@
 
 import { useEffect, useRef } from 'react';
 import { useFieldArray } from 'react-hook-form';
-import type { BlockDescriptor, FieldDescriptor, FormData, GlobalFormDescriptor } from '@/types/form-descriptor';
+import type { BlockDescriptor, FieldDescriptor } from '@/types/form-descriptor';
 import type { UseFormReturn, FieldValues } from 'react-hook-form';
 import type { FormContext } from '@/utils/template-evaluator';
-import {
-  evaluateDisabledStatus,
-  evaluateHiddenStatus,
-  evaluateReadonlyStatus,
-} from '@/utils/template-evaluator';
-import { buildAutoFillPatchFromSelection, getNestedValue } from '@/utils/form-descriptor-integration';
-import { clearHiddenAutoFillHoldsForSource, setHiddenAutoFillHold } from '@/utils/auto-fill-hidden-hold';
-import { buildBlockLayoutRows } from '@/utils/block-layout';
-import { cn } from '@/lib/utils';
+import { progressFieldOf } from '@/utils/progress-sum';
 import RepeatableRowFields from './repeatable-row-fields';
 import RepeatableChildGroup from './repeatable-child-group';
-import FieldWrapper from './field-wrapper';
+import ProgressField from './progress-field';
 import {
   buildNewRowValues,
   buildRowContext,
@@ -77,124 +69,11 @@ export default function RepeatableFieldGroup({
 
   const childConfig = block.repeatableChild;
   const rowFields = fields.filter((field) => field.repeatOnce !== true);
-  const groupedAt = block.fields.flatMap((field, index) => (field.repeatableGroupId ? [index] : []));
-  const firstGrouped = groupedAt[0] ?? block.fields.length;
-  const lastGrouped = groupedAt.length > 0 ? groupedAt[groupedAt.length - 1] : -1;
-  const leadingOnce = block.fields.slice(0, firstGrouped).filter((field) => field.repeatOnce === true);
-  const trailingOnce =
-    lastGrouped < 0 ? [] : block.fields.slice(lastGrouped + 1).filter((field) => field.repeatOnce === true);
-  const onceFields = [...leadingOnce, ...trailingOnce];
+  const progressField = progressFieldOf(block);
   const baseFieldIdOf = (field: FieldDescriptor) =>
     field.id.startsWith(`${groupId}.`) ? field.id.slice(groupId.length + 1) : field.id;
 
-  const handleOnceAutoFill = (
-    selectionFieldId: string,
-    selectedPayload: Record<string, unknown> | null
-  ) => {
-    if (!selectedPayload) {
-      clearHiddenAutoFillHoldsForSource(form, selectionFieldId);
-      return;
-    }
-
-    const descriptorForOnce: GlobalFormDescriptor = {
-      blocks: [{ ...block, fields: onceFields }],
-      submission: { url: '', method: 'POST' },
-    };
-    const hiddenFieldIds = onceFields
-      .filter((field) => evaluateHiddenStatus(field, formContext))
-      .map((field) => field.id);
-    const disabledFieldIds = onceFields
-      .filter((field) => evaluateDisabledStatus(field, formContext) || isDisabled)
-      .map((field) => field.id);
-    const { patch, deferredPatch } = buildAutoFillPatchFromSelection({
-      descriptor: descriptorForOnce,
-      selectionFieldId,
-      selectedPayload,
-      currentValues: form.getValues() as Partial<FormData>,
-      hiddenFieldIds,
-      disabledFieldIds,
-    });
-
-    for (const [key, value] of Object.entries(patch)) {
-      form.setValue(key, value, {
-        shouldDirty: true,
-        shouldTouch: true,
-        shouldValidate: true,
-      });
-    }
-
-    clearHiddenAutoFillHoldsForSource(form, selectionFieldId);
-    const sourceValue = form.getValues(selectionFieldId as never);
-    for (const fieldId of hiddenFieldIds) {
-      const value = getNestedValue(deferredPatch as Record<string, unknown>, fieldId);
-      if (value === undefined) {
-        continue;
-      }
-      setHiddenAutoFillHold(form, fieldId, {
-        sourceFieldId: selectionFieldId,
-        sourceValue,
-        value,
-      });
-    }
-  };
-
-  const renderOnceField = (field: FieldDescriptor) => (
-    <FieldWrapper
-      key={field.id}
-      field={field}
-      isDisabled={evaluateDisabledStatus(field, formContext) || isDisabled}
-      isHidden={evaluateHiddenStatus(field, formContext)}
-      isReadonly={evaluateReadonlyStatus(field, formContext) || isReadonly}
-      form={form}
-      formContext={formContext}
-      onLoadDataSource={onLoadDataSource}
-      dataSourceCache={dataSourceCache}
-      onAutoFillSelection={handleOnceAutoFill}
-    />
-  );
-
-  const renderOnceBand = (bandFields: FieldDescriptor[], band: 'leading' | 'trailing') => {
-    if (bandFields.length === 0) {
-      return null;
-    }
-    const layoutRows = buildBlockLayoutRows(block, bandFields);
-    const grid = (block.layout?.mode ?? 'default') === 'grid';
-    const columns = block.layout?.columns ?? 1;
-    const gap = block.layout?.gap ?? 'md';
-    const gapYClass = gap === 'sm' ? 'gap-y-2' : gap === 'lg' ? 'gap-y-6' : 'gap-y-4';
-    const gridColsClass =
-      columns === 1 ? 'md:grid-cols-1' : columns === 2 ? 'md:grid-cols-2' : 'md:grid-cols-3';
-
-    return (
-      <div data-testid={`repeat-once-${band}-${groupId}`} className="repeat-once-fields space-y-4">
-        {layoutRows.map((layoutRow, rowIndex) => {
-          const rowGridColsClass =
-            layoutRow.gridColumns === 1
-              ? 'md:grid-cols-1'
-              : layoutRow.gridColumns === 2
-                ? 'md:grid-cols-2'
-                : layoutRow.gridColumns === 3
-                  ? 'md:grid-cols-3'
-                  : gridColsClass;
-          return (
-            <div
-              key={`${band}-${rowIndex}`}
-              className={grid ? cn('grid grid-cols-1', rowGridColsClass, 'gap-x-4', gapYClass) : undefined}
-            >
-              {layoutRow.slots.map((slot, slotIndex) => (
-                <div
-                  key={`${band}-slot-${slotIndex}`}
-                  className={slot.colSpan ? `col-span-${slot.colSpan}` : undefined}
-                >
-                  {slot.fields.map(renderOnceField)}
-                </div>
-              ))}
-            </div>
-          );
-        })}
-      </div>
-    );
-  };
+  const progressBar = progressField ? <ProgressField field={progressField} rows={groupArray} /> : null;
   const triggerLabel = (
     rowFields.find((field) => childConfig && baseFieldIdOf(field) === childConfig.triggerField)?.label ?? ''
   ).toLowerCase();
@@ -293,12 +172,12 @@ export default function RepeatableFieldGroup({
         }
         return null;
       })()}
-      {renderOnceBand(leadingOnce, 'leading')}
       <div className="repeatable-group-instances space-y-4">
         {fieldArrayFields.length === 0 ? (
           // Empty state
           <div className="text-center py-8 text-muted-foreground">
             <p className="mb-4">No instances yet. Click &ldquo;Add&rdquo; to create one.</p>
+            {progressBar}
             <Button
               type="button"
               onClick={handleAdd}
@@ -355,7 +234,7 @@ export default function RepeatableFieldGroup({
                     dataSourceCache={dataSourceCache}
                   />
                   {childConfig &&
-                    groupArray?.[index] &&
+                    groupArray?.[index] != null &&
                     rowOpensChild(groupArray[index] as Record<string, unknown>, block, rowContext) &&
                     (Array.isArray((groupArray[index] as Record<string, unknown>)[childConfig.property]) ? (
                       <RepeatableChildGroup
@@ -389,6 +268,7 @@ export default function RepeatableFieldGroup({
                 </div>
               );
             })}
+            {progressBar}
             {/* Add button for adding more instances */}
             <div className="flex justify-start">
               <Button
@@ -404,7 +284,6 @@ export default function RepeatableFieldGroup({
           </>
         )}
       </div>
-      {renderOnceBand(trailingOnce, 'trailing')}
       {childConfig && (
         <div
           role="status"

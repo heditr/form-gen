@@ -59,6 +59,7 @@ export type FieldType =
   | 'file'
   | 'document'
   | 'number'
+  | 'progress'
   | 'button';
 
 /**
@@ -371,8 +372,10 @@ export interface ButtonConfig {
  * @property file - Optional file upload configuration (only for file type fields)
  * @property document - Optional Document Card configuration (only for document type fields)
  * @property repeatableGroupId - Optional identifier to associate this field with a repeatable group
- * @property repeatOnce - When true on an inline repeatable block, store and render this field once
- *   at `id`. It is not a row field and is not copied into repeatableChild rows.
+ * @property repeatOnce - When true on an inline repeatable block, this is the one readonly
+ *   progress bar for that block. It is drawn after the rows and again after each child list.
+ * @property progress - Sum configuration for a progress field. `sumField` is the base id of a
+ *   grouped number field. `max` is the bar's full scale.
  * @property defaultValue - Optional default value or Handlebars template (e.g. '{{caseContext.email}}').
  *   In repeatable groups with repeatableDefaultSource, use '@index' in the template (e.g. '{{caseContext.addresses.@index.street}}');
  *   @index is replaced with the row index (0, 1, …) when evaluating.
@@ -405,10 +408,15 @@ export interface FieldDescriptor {
   document?: DocumentCardConfig;
   repeatableGroupId?: string;
   /**
-   * Store this field once at `id` on an inline repeatable block.
-   * It is drawn with the group, outside every root row and child row.
+   * The one readonly progress bar on an inline repeatable block.
+   * Drawn after the root rows and after each child list. Not a form value.
    */
   repeatOnce?: boolean;
+  /** Sum of a grouped number field, shown by a progress bar. */
+  progress?: {
+    sumField: string;
+    max: number;
+  };
   autoFill?: AutoFillConfig;
   manualLookup?: ManualLookupConfig;
   layout?: FieldLayoutConfig;

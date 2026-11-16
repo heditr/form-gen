@@ -1,13 +1,12 @@
 /**
- * Tests for repeatOnce fields inside RepeatableFieldGroup.
+ * Tests for the one repeat-once progress bar inside RepeatableFieldGroup.
  *
- * The field is drawn once with the group, above or below the rows in
- * declaration order. Root rows and child rows render grouped fields only.
+ * The bar is drawn once after the root rows. A child list draws the same
+ * field again, totaling only that list.
  */
 
 import { describe, test, expect, vi, beforeAll } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import { useForm } from 'react-hook-form';
 import type { UseFormReturn, FieldValues } from 'react-hook-form';
 import type { BlockDescriptor, FieldDescriptor, RepeatableChildConfig } from '@/types/form-descriptor';
@@ -35,11 +34,13 @@ const textField = (
   ...extra,
 });
 
-const addressBlock = (fields: FieldDescriptor[]): BlockDescriptor => ({
-  id: 'addresses-block',
-  title: 'Addresses',
-  repeatable: true,
-  fields,
+const progressField = (): FieldDescriptor => ({
+  id: 'sectorShare',
+  type: 'progress',
+  label: 'Total share',
+  repeatOnce: true,
+  progress: { sumField: 'percentage', max: 100 },
+  validation: [],
 });
 
 const childConfig = (): RepeatableChildConfig => ({
@@ -57,9 +58,15 @@ const sectorBlock = (): BlockDescriptor => ({
   repeatable: true,
   repeatableChild: childConfig(),
   fields: [
-    textField('activityCountry', 'Country of activity', { repeatOnce: true }),
     textField('businessSectors.sector', 'Sector', { repeatableGroupId: 'businessSectors' }),
-    textField('businessSectors.percentage', 'Percentage', { repeatableGroupId: 'businessSectors' }),
+    {
+      id: 'businessSectors.percentage',
+      type: 'number',
+      label: 'Percentage',
+      repeatableGroupId: 'businessSectors',
+      validation: [],
+    },
+    progressField(),
   ],
 });
 
@@ -97,115 +104,78 @@ const renderGroup = (props: Omit<HarnessProps, 'onForm'>) => {
 const follows = (earlier: HTMLElement, later: HTMLElement) =>
   Boolean(earlier.compareDocumentPosition(later) & Node.DOCUMENT_POSITION_FOLLOWING);
 
-describe('RepeatableFieldGroup repeatOnce', () => {
+describe('RepeatableFieldGroup repeatOnce progress', () => {
   beforeAll(() => {
     registerHandlebarsHelpers();
   });
 
-  const leadingBlock = addressBlock([
-    textField('country', 'Country', { repeatOnce: true }),
-    textField('addresses.street', 'Street', { repeatableGroupId: 'addresses' }),
-    textField('addresses.city', 'City', { repeatableGroupId: 'addresses' }),
-  ]);
-
-  test('given several rows, should show the once-field a single time above the rows', () => {
-    renderGroup({
-      block: leadingBlock,
-      groupId: 'addresses',
-      values: {
-        country: 'FR',
-        addresses: [
-          { street: '1 main', city: 'Paris' },
-          { street: '2 main', city: 'Lyon' },
-        ],
-      },
-    });
-
-    expect(screen.getAllByLabelText('Country')).toHaveLength(1);
-    expect(screen.getAllByLabelText('Street')).toHaveLength(2);
-    expect(screen.getByTestId('text-field-country')).toBeInTheDocument();
-    expect(screen.queryByTestId('text-field-addresses.0.country')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('text-field-addresses.1.country')).not.toBeInTheDocument();
-    expect(
-      follows(screen.getByLabelText('Country'), screen.getByTestId('repeatable-instance-addresses-0'))
-    ).toBe(true);
-  });
-
-  test('given a once-field declared after the grouped fields, should show it below Add', () => {
-    renderGroup({
-      block: addressBlock([
-        textField('addresses.street', 'Street', { repeatableGroupId: 'addresses' }),
-        textField('notes', 'Notes', { repeatOnce: true }),
-      ]),
-      groupId: 'addresses',
-      values: { notes: '', addresses: [{ street: '1 main' }] },
-    });
-
-    expect(screen.getAllByLabelText('Notes')).toHaveLength(1);
-    expect(follows(screen.getByRole('button', { name: 'Add Addresses' }), screen.getByLabelText('Notes'))).toBe(true);
-  });
-
-  test('given an empty list, should still show a leading once-field', () => {
-    renderGroup({
-      block: leadingBlock,
-      groupId: 'addresses',
-      values: { country: 'FR', addresses: [] },
-    });
-
-    expect(screen.getByLabelText('Country')).toHaveValue('FR');
-    expect(screen.getByText(/No instances yet/)).toBeInTheDocument();
-    expect(follows(screen.getByLabelText('Country'), screen.getByRole('button', { name: 'Add Addresses' }))).toBe(true);
-  });
-
-  test('given a once-field value, should keep it when a row is added or removed', async () => {
-    const user = userEvent.setup();
-    const { holder } = renderGroup({
-      block: leadingBlock,
-      groupId: 'addresses',
-      values: {
-        country: '',
-        addresses: [{ street: '1 main', city: 'Paris' }, { street: '2 main', city: 'Lyon' }],
-      },
-    });
-
-    await user.type(screen.getByLabelText('Country'), 'FR');
-    await user.click(screen.getByRole('button', { name: 'Add Addresses' }));
-
-    expect(holder.form?.getValues('country')).toBe('FR');
-    expect(screen.getAllByLabelText('Country')).toHaveLength(1);
-    expect(screen.getAllByLabelText('Street')).toHaveLength(3);
-
-    await user.click(screen.getByRole('button', { name: 'Remove Addresses 1' }));
-
-    expect(holder.form?.getValues('country')).toBe('FR');
-    expect(screen.getAllByLabelText('Street')).toHaveLength(2);
-  });
-
-  test('given repeatableChild, should keep the once-field out of root rows and child rows', () => {
+  test('given sector rows, should show one bar after the rows and before Add with the root sum', () => {
     renderGroup({
       block: sectorBlock(),
       groupId: 'businessSectors',
       values: {
-        activityCountry: 'FR',
         businessSectors: [
-          {
-            sector: 'holding',
-            percentage: '60',
-            subsectors: [{ sector: 'retail', percentage: '10' }],
-          },
+          { sector: 'retail', percentage: 30 },
+          { sector: 'software', percentage: 70 },
         ],
       },
     });
 
-    const root = screen.getByTestId('repeatable-instance-businessSectors-0');
-    const child = screen.getByTestId('repeatable-child-instance-businessSectors-0-0');
+    const bars = screen.getAllByRole('progressbar', { name: 'Total share' });
+    const add = screen.getByRole('button', { name: 'Add Business sector' });
+    const lastRow = screen.getByTestId('repeatable-instance-businessSectors-1');
 
-    expect(screen.getAllByLabelText('Country of activity')).toHaveLength(1);
-    expect(screen.getByTestId('text-field-activityCountry')).toBeInTheDocument();
-    expect(within(root).queryByLabelText('Country of activity')).not.toBeInTheDocument();
-    expect(within(child).queryByLabelText('Country of activity')).not.toBeInTheDocument();
-    expect(within(child).getByLabelText('Sector')).toBeInTheDocument();
-    expect(screen.queryByTestId('text-field-businessSectors.0.activityCountry')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('text-field-businessSectors.0.subsectors.0.activityCountry')).not.toBeInTheDocument();
+    expect(bars).toHaveLength(1);
+    expect(bars[0]).toHaveAttribute('aria-valuenow', '100');
+    expect(bars[0]).toHaveAttribute('aria-valuemax', '100');
+    expect(bars[0]).toHaveAttribute('aria-readonly', 'true');
+    expect(follows(lastRow, bars[0])).toBe(true);
+    expect(follows(bars[0], add)).toBe(true);
+    expect(screen.queryByTestId('text-field-businessSectors.0.sectorShare')).not.toBeInTheDocument();
+  });
+
+  test('given an empty list, should show the bar at zero before Add', () => {
+    renderGroup({
+      block: sectorBlock(),
+      groupId: 'businessSectors',
+      values: { businessSectors: [] },
+    });
+
+    const bar = screen.getByRole('progressbar', { name: 'Total share' });
+    const add = screen.getByRole('button', { name: 'Add Business sector' });
+
+    expect(bar).toHaveAttribute('aria-valuenow', '0');
+    expect(follows(bar, add)).toBe(true);
+  });
+
+  test('given a child list, should show a second bar that sums only that list', () => {
+    renderGroup({
+      block: sectorBlock(),
+      groupId: 'businessSectors',
+      values: {
+        businessSectors: [
+          {
+            sector: 'holding',
+            percentage: 70,
+            subsectors: [{ sector: 'software', percentage: 40 }],
+          },
+          { sector: 'retail', percentage: 30 },
+        ],
+      },
+    });
+
+    const child = screen.getByTestId('repeatable-child-group-businessSectors-0');
+    const childBar = within(child).getByRole('progressbar', { name: 'Total share' });
+    const childAdd = within(child).getByRole('button', { name: 'Add subsector' });
+    const childRow = within(child).getByTestId('repeatable-child-instance-businessSectors-0-0');
+    const rootBar = screen
+      .getAllByRole('progressbar', { name: 'Total share' })
+      .find((bar) => !child.contains(bar));
+
+    expect(childBar).toHaveAttribute('aria-valuenow', '40');
+    expect(follows(childRow, childBar)).toBe(true);
+    expect(follows(childBar, childAdd)).toBe(true);
+    expect(rootBar).toHaveAttribute('aria-valuenow', '100');
+    expect(within(childRow).queryByRole('progressbar')).not.toBeInTheDocument();
   });
 });

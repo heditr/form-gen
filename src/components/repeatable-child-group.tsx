@@ -15,6 +15,8 @@ import type { UseFormReturn, FieldValues } from 'react-hook-form';
 import type { BlockDescriptor, FieldDescriptor, RepeatableChildConfig } from '@/types/form-descriptor';
 import type { FormContext } from '@/utils/template-evaluator';
 import RepeatableRowFields from './repeatable-row-fields';
+import ProgressField from './progress-field';
+import { progressFieldOf } from '@/utils/progress-sum';
 import { buildNewRowValues, buildRowContext, childArrayPath, childRowPath } from '@/utils/repeatable-child';
 import { useInvalidateQueriesForBlock, useFlushDraftSave } from './popin-manager';
 import { Button } from '@/components/ui/button';
@@ -67,6 +69,7 @@ export default function RepeatableChildGroup({
 
   const canAdd = config.maxInstances === undefined || childFields.length < config.maxInstances;
   const canRemove = config.minInstances === undefined || childFields.length > config.minInstances;
+  const progressField = progressFieldOf(block);
 
   const handleAdd = () => append(buildNewRowValues({ fields, groupId, formContext }));
 
@@ -137,6 +140,7 @@ export default function RepeatableChildGroup({
           />
         </div>
       ))}
+      {progressField ? <ProgressField field={progressField} rows={childRows} /> : null}
       <div className="flex justify-start">
         <Button
           type="button"

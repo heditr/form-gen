@@ -82,7 +82,7 @@ The global descriptor routes call `assertRepeatableChildren` right after `assert
 
 ## Value shape
 
-The child list is a property of the root row. Child rows hold only the group's base fields. A `repeatOnce` field stays on the form root and is never a key of these rows. See [repeat-once-fields.md](repeat-once-fields.md).
+The child list is a property of the root row. Child rows hold only the group's base fields. A repeat-once progress bar is drawn after the root rows and again after each child list. It is not a key of these rows. See [repeat-once-fields.md](repeat-once-fields.md).
 
 ```json
 {

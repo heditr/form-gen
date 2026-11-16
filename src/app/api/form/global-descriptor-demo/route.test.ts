@@ -213,8 +213,10 @@ describe('GET /api/form/global-descriptor-demo', () => {
       triggerValues: ['holding'],
     });
     expect(sectors?.fields.find((field) => field.repeatOnce)).toMatchObject({
-      id: 'activityCountry',
+      id: 'sectorShare',
+      type: 'progress',
       repeatOnce: true,
+      progress: { sumField: 'percentage', max: 100 },
     });
     expect(() => assertRepeatableChildren(descriptor)).not.toThrow();
     expect(() => assertRepeatOnce(descriptor)).not.toThrow();

@@ -408,7 +408,7 @@ const assignRepeatOnceDefaults = (
   context: FormContext
 ) => {
   for (const field of block.fields) {
-    if (field.repeatOnce !== true || field.type === 'button') {
+    if (field.repeatOnce !== true || field.type === 'button' || field.type === 'progress') {
       continue;
     }
     if (shouldSkipHiddenDefault(field, defaultStatusContext(context, undefined, target))) {
@@ -919,7 +919,7 @@ export function buildZodSchemaFromDescriptor(
   ): Record<string, z.ZodTypeAny> => {
     const groupTree: SchemaTreeObject = {};
     for (const field of fields) {
-      if (field.repeatOnce || field.type === 'button' || isSubmitSkippedFieldType(field.type)) {
+      if (field.repeatOnce || field.type === 'button' || field.type === 'progress' || isSubmitSkippedFieldType(field.type)) {
         continue;
       }
       if (evaluateHiddenStatus(field, formContext)) {
@@ -1037,6 +1037,7 @@ export function buildZodSchemaFromDescriptor(
         if (
           field.repeatOnce !== true ||
           field.type === 'button' ||
+          field.type === 'progress' ||
           isSubmitSkippedFieldType(field.type) ||
           evaluateHiddenStatus(field, formContext)
         ) {

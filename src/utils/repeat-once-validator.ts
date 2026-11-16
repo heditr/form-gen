@@ -1,8 +1,8 @@
 /**
- * Checks that repeatOnce fields are safe to store once at their own form key.
+ * Checks that an inline repeatable block has at most one repeatOnce field,
+ * and that field is a progress bar with a real sum.
  *
  * Runs after the repeatable-child check. Does not change the descriptor.
- * Fields without the flag keep today's behavior.
  */
 
 import { createError } from 'error-causes';
@@ -56,20 +56,8 @@ const assertGroup = (block: BlockDescriptor, field: FieldDescriptor) => {
   }
 };
 
-const assertPlacement = (block: BlockDescriptor, field: FieldDescriptor) => {
-  const groupedAt = block.fields.flatMap((candidate, index) => (candidate.repeatableGroupId ? [index] : []));
-  const fieldIndex = block.fields.indexOf(field);
-  const first = groupedAt[0] ?? -1;
-  const last = groupedAt[groupedAt.length - 1] ?? -1;
-  if (fieldIndex > first && fieldIndex < last) {
-    throw repeatOnceError({
-      message: `Field "${field.id}" on block "${block.id}" sits between grouped fields`,
-      code: 'REPEAT_ONCE_PLACEMENT',
-      blockId: block.id,
-      fieldId: field.id,
-    });
-  }
-};
+const baseFieldId = (field: FieldDescriptor, groupId: string): string =>
+  field.id.startsWith(`${groupId}.`) ? field.id.slice(groupId.length + 1) : field.id;
 
 const assertId = (block: BlockDescriptor, field: FieldDescriptor, groupId: string) => {
   const firstSegment = field.id.split('.')[0] ?? '';
@@ -109,10 +97,29 @@ const assertIndex = (block: BlockDescriptor, field: FieldDescriptor) => {
 };
 
 const assertType = (block: BlockDescriptor, field: FieldDescriptor) => {
-  if (field.type === 'button') {
+  if (field.type !== 'progress') {
     throw repeatOnceError({
-      message: `Field "${field.id}" on block "${block.id}" cannot be a button when repeatOnce is set`,
+      message: `Field "${field.id}" on block "${block.id}" must be a progress field when repeatOnce is set`,
       code: 'REPEAT_ONCE_TYPE',
+      blockId: block.id,
+      fieldId: field.id,
+    });
+  }
+};
+
+const assertSum = (block: BlockDescriptor, field: FieldDescriptor, groupId: string) => {
+  const sumField = field.progress?.sumField;
+  const max = field.progress?.max;
+  const matchesNumberField = block.fields.some(
+    (candidate) =>
+      candidate.repeatableGroupId === groupId &&
+      candidate.type === 'number' &&
+      baseFieldId(candidate, groupId) === sumField
+  );
+  if (!sumField || !matchesNumberField || typeof max !== 'number' || !Number.isFinite(max) || max <= 0) {
+    throw repeatOnceError({
+      message: `Field "${field.id}" on block "${block.id}" must sum a grouped number field with a positive max`,
+      code: 'REPEAT_ONCE_SUM',
       blockId: block.id,
       fieldId: field.id,
     });
@@ -135,7 +142,7 @@ const assertUnique = (descriptor: GlobalFormDescriptor, block: BlockDescriptor, 
 };
 
 /**
- * Reject repeatOnce fields that cannot be stored once at `field.id`.
+ * Reject a repeatOnce field that is not the one progress bar for an inline list.
  * Returns the same descriptor when every flagged field is valid.
  */
 export function assertRepeatOnce(descriptor: GlobalFormDescriptor): GlobalFormDescriptor {
@@ -146,6 +153,13 @@ export function assertRepeatOnce(descriptor: GlobalFormDescriptor): GlobalFormDe
     }
 
     assertParentKind(block);
+    if (onceFields.length > 1) {
+      throw repeatOnceError({
+        message: `Block "${block.id}" can have only one repeatOnce field`,
+        code: 'REPEAT_ONCE_LIMIT',
+        blockId: block.id,
+      });
+    }
 
     for (const field of onceFields) {
       assertGroup(block, field);
@@ -153,11 +167,11 @@ export function assertRepeatOnce(descriptor: GlobalFormDescriptor): GlobalFormDe
       if (!groupId) {
         continue;
       }
-      assertPlacement(block, field);
       assertId(block, field, groupId);
       assertProperty(block, field);
       assertIndex(block, field);
       assertType(block, field);
+      assertSum(block, field, groupId);
       assertUnique(descriptor, block, field);
     }
   }

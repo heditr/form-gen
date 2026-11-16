@@ -1,9 +1,8 @@
 /**
  * Tests for repeat-once descriptor checks.
  *
- * A field with `repeatOnce` on an inline repeatable block is stored once at its
- * own id. The descriptor must reject placements and ids that would put that
- * value on a row, on a child row, or between the fields that form the row.
+ * An inline repeatable block has at most one repeatOnce field, and that field
+ * is a progress bar that sums a grouped number field.
  */
 
 import { describe, test, expect } from 'vitest';
@@ -26,12 +25,21 @@ const grouped = (id: string, groupId = 'addresses'): FieldDescriptor => ({
 });
 
 const once = (overrides: Partial<FieldDescriptor> = {}): FieldDescriptor => ({
-  id: 'country',
-  type: 'dropdown',
-  label: 'Country',
+  id: 'sectorShare',
+  type: 'progress',
+  label: 'Total share',
   repeatOnce: true,
+  progress: { sumField: 'percentage', max: 100 },
   validation: [],
   ...overrides,
+});
+
+const percentage = (groupId = 'addresses'): FieldDescriptor => ({
+  id: `${groupId}.percentage`,
+  type: 'number',
+  label: 'Percentage',
+  repeatableGroupId: groupId,
+  validation: [],
 });
 
 const childConfig = (): RepeatableChildConfig => ({
@@ -47,7 +55,7 @@ const block = (overrides: Partial<BlockDescriptor> = {}): BlockDescriptor => ({
   id: 'addresses-block',
   title: 'Addresses',
   repeatable: true,
-  fields: [once(), grouped('street'), grouped('city')],
+  fields: [once(), grouped('street'), percentage()],
   ...overrides,
 });
 
@@ -74,31 +82,31 @@ const expectDescriptorError = (descriptor: GlobalFormDescriptor, code: string) =
 
 describe('assertRepeatOnce', () => {
   describe('valid descriptors', () => {
-    test('given an inline repeatable block with a leading once-field, should return the descriptor unchanged', () => {
+    test('given an inline repeatable block with one progress field, should return the descriptor unchanged', () => {
       const descriptor = form([block()]);
 
       expect(assertRepeatOnce(descriptor)).toBe(descriptor);
     });
 
-    test('given once-fields before and after the grouped fields, should return the descriptor unchanged', () => {
+    test('given a progress field between grouped fields, should return the descriptor unchanged', () => {
       const descriptor = form([
         block({
-          fields: [once(), grouped('street'), grouped('city'), once({ id: 'notes', type: 'text', label: 'Notes' })],
+          fields: [grouped('street'), once(), percentage()],
         }),
       ]);
 
       expect(assertRepeatOnce(descriptor)).toBe(descriptor);
     });
 
-    test('given an inline repeatable block with repeatableChild, should accept a once-field that is not the child property', () => {
+    test('given an inline repeatable block with repeatableChild, should accept a progress field that is not the child property', () => {
       const descriptor = form([
         block({
           id: 'business-sectors-block',
           repeatableChild: childConfig(),
           fields: [
-            once({ id: 'activityCountry', label: 'Country of activity' }),
+            once(),
             grouped('sector', 'businessSectors'),
-            grouped('percentage', 'businessSectors'),
+            percentage('businessSectors'),
           ],
         }),
       ]);
@@ -144,10 +152,29 @@ describe('assertRepeatOnce', () => {
       );
     });
 
-    test('given a once-field between two grouped fields, should reject it with REPEAT_ONCE_PLACEMENT', () => {
+    test('given more than one repeatOnce field, should reject it with REPEAT_ONCE_LIMIT', () => {
       expectDescriptorError(
-        form([block({ fields: [grouped('street'), once(), grouped('city')] })]),
-        'REPEAT_ONCE_PLACEMENT'
+        form([
+          block({
+            fields: [once(), once({ id: 'otherShare', label: 'Other' }), grouped('street'), percentage()],
+          }),
+        ]),
+        'REPEAT_ONCE_LIMIT'
+      );
+    });
+
+    test('given a progress field that does not sum a grouped number field, should reject it with REPEAT_ONCE_SUM', () => {
+      expectDescriptorError(
+        form([block({ fields: [once({ progress: { sumField: 'missing', max: 100 } }), grouped('street'), percentage()] })]),
+        'REPEAT_ONCE_SUM'
+      );
+      expectDescriptorError(
+        form([block({ fields: [once({ progress: { sumField: 'percentage', max: 0 } }), grouped('street'), percentage()] })]),
+        'REPEAT_ONCE_SUM'
+      );
+      expectDescriptorError(
+        form([block({ fields: [once({ progress: undefined }), grouped('street'), percentage()] })]),
+        'REPEAT_ONCE_SUM'
       );
     });
 
@@ -193,18 +220,24 @@ describe('assertRepeatOnce', () => {
       );
     });
 
-    test('given a button marked repeatOnce, should reject it with REPEAT_ONCE_TYPE', () => {
+    test('given a once-field that is not a progress field, should reject it with REPEAT_ONCE_TYPE', () => {
       expectDescriptorError(
-        form([block({ fields: [once({ id: 'help', type: 'button', label: 'Help' }), grouped('street')] })]),
+        form([block({ fields: [once({ id: 'help', type: 'button', label: 'Help' }), grouped('street'), percentage()] })]),
+        'REPEAT_ONCE_TYPE'
+      );
+      expectDescriptorError(
+        form([block({ fields: [once({ type: 'text', label: 'Country' }), grouped('street'), percentage()] })]),
         'REPEAT_ONCE_TYPE'
       );
     });
 
-    test('given the same once-field id twice, should reject it with REPEAT_ONCE_DUPLICATE', () => {
+    test('given the same progress field id on two blocks, should reject it with REPEAT_ONCE_DUPLICATE', () => {
       expectDescriptorError(
         form([
+          block(),
           block({
-            fields: [once(), once({ label: 'Country again' }), grouped('street'), grouped('city')],
+            id: 'other-addresses-block',
+            fields: [once(), grouped('street', 'other'), percentage('other')],
           }),
         ]),
         'REPEAT_ONCE_DUPLICATE'

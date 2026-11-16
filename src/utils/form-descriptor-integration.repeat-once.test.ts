@@ -157,6 +157,47 @@ describe('buildZodSchemaFromDescriptor with repeatOnce', () => {
     });
   });
 
+  test('given a progress once-field, should leave that id out of the parsed value', () => {
+    const descriptor = descriptorOf(
+      sectorBlock(
+        sectorFields([
+          {
+            id: 'sectorShare',
+            type: 'progress',
+            label: 'Total share',
+            repeatOnce: true,
+            progress: { sumField: 'percentage', max: 100 },
+            validation: [],
+          },
+        ])
+      )
+    );
+    const result = parse(
+      {
+        sectorShare: 100,
+        businessSectors: [
+          {
+            sector: 'holding',
+            percentage: 70,
+            sectorShare: 40,
+            subsectors: [{ sector: 'retail', percentage: 40, sectorShare: 40 }],
+          },
+        ],
+      },
+      descriptor
+    );
+
+    expect(result.success && result.data).toEqual({
+      businessSectors: [
+        {
+          sector: 'holding',
+          percentage: 70,
+          subsectors: [{ sector: 'retail', percentage: 40 }],
+        },
+      ],
+    });
+  });
+
   test('given a block with no repeatOnce fields, should keep the row schema unchanged', () => {
     const descriptor = descriptorOf(addressBlock(addressFields([])));
     const result = parse(
@@ -243,6 +284,43 @@ describe('extractDefaultValues with repeatOnce', () => {
     );
 
     expect(extractDefaultValues(descriptor, {})).toEqual({});
+  });
+
+  test('given a progress once-field, should not write it into the defaults', () => {
+    const descriptor = descriptorOf(
+      sectorBlock(
+        sectorFields([
+          {
+            id: 'sectorShare',
+            type: 'progress',
+            label: 'Total share',
+            repeatOnce: true,
+            progress: { sumField: 'percentage', max: 100 },
+            validation: [],
+          },
+        ])
+      )
+    );
+    const defaults = extractDefaultValues(descriptor, {
+      caseContext: {
+        businessSectors: [
+          {
+            sector: 'holding',
+            percentage: 70,
+            subsectors: [{ sector: 'retail', percentage: 40 }],
+          },
+        ],
+      },
+    }) as Record<string, unknown>;
+
+    expect(defaults.sectorShare).toBeUndefined();
+    expect(defaults.businessSectors).toEqual([
+      {
+        sector: 'holding',
+        percentage: 70,
+        subsectors: [{ sector: 'retail', percentage: 40 }],
+      },
+    ]);
   });
 
   test('given a block with no repeatOnce fields, should keep today\'s row defaults', () => {
