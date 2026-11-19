@@ -159,6 +159,19 @@ const pruneRows = (
   return pruned.every((row, index) => row === rows[index]) ? rows : pruned;
 };
 
+const popinParentGroupId = (
+  descriptor: GlobalFormDescriptor,
+  blockId: string
+): string | undefined => {
+  const parent = descriptor.blocks.find(
+    (other) =>
+      other.repeatable === true &&
+      other.repeatablePopin === true &&
+      (other.nestedBlocks ?? []).some((entry) => entry.blockId === blockId)
+  );
+  return parent?.fields.find((field) => field.repeatableGroupId)?.repeatableGroupId;
+};
+
 /**
  * Remove child lists from root rows that do not open the child level.
  * Returns the input object when nothing needs removing. Hidden blocks are left
@@ -178,8 +191,31 @@ export function pruneInactiveChildLists<T extends Partial<FormData>>(
     .filter((block) => block.repeatableChild && !evaluateHiddenStatus(block, formContext))
     .reduce<Record<string, unknown>>((acc, block) => {
       const groupId = groupIdOf(block);
-      const rows = groupId ? acc[groupId] : undefined;
-      if (!groupId || !Array.isArray(rows)) {
+      if (!groupId) {
+        return acc;
+      }
+      const parentGroupId = popinParentGroupId(descriptor, block.id);
+      if (parentGroupId) {
+        const parents = acc[parentGroupId];
+        if (!Array.isArray(parents)) {
+          return acc;
+        }
+        let changed = false;
+        const nextParents = parents.map((parent) => {
+          if (!isRow(parent) || !Array.isArray(parent[groupId])) {
+            return parent;
+          }
+          const prunedRows = pruneRows(parent[groupId] as unknown[], block, groupId, formContext);
+          if (prunedRows === parent[groupId]) {
+            return parent;
+          }
+          changed = true;
+          return { ...parent, [groupId]: prunedRows };
+        });
+        return changed ? { ...acc, [parentGroupId]: nextParents } : acc;
+      }
+      const rows = acc[groupId];
+      if (!Array.isArray(rows)) {
         return acc;
       }
       const prunedRows = pruneRows(rows, block, groupId, formContext);

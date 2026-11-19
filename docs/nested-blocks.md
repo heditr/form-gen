@@ -144,6 +144,8 @@ contactGroupId: [
 
 `'emergency-contacts'` is the nested block's own group id. Opening index `1` seeds only Grace's list, because `@index` in that block's `repeatableDefaultSource` is the open parent. That source may be the path key or `{{json caseContext.contactGroupId.@index.emergencyContacts}}`; both resolve to the same array. `@index` inside an inner field `defaultValue` is the inner row, and `@outerIndex` is that same open parent when the template remaps a case-context key. Create mode (`index < 0`) leaves a source that contains `@index` unresolved, so the nested array is `[]`. An unbound `@outerIndex` returns the field type default. Validate writes that popin object onto the open index, or appends it when the index is new, and leaves every other parent row as it was.
 
+A nested inline repeatable may also set `repeatableChild`. That child list is a key of the nested row, not a new group on the parent row. The main-form schema uses the nested block's row shape, including the optional child array, so submit keeps it. See [repeatable-child-rows.md](repeatable-child-rows.md).
+
 In the popin, the instance descriptor's schema uses the nested block's min and max for that array. A hidden nested block drops its key from each parent row on the main form, and from the popin value when the instance descriptor is used.
 
 ## Repeatable popin

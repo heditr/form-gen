@@ -243,6 +243,93 @@ describe('pruneInactiveChildLists', () => {
     expect(pruneInactiveChildLists(input, hiddenBlock, { country: 'US' })).toBe(input);
   });
 
+  test('given a repeatable popin nests the child host, should prune closed lists on the nested rows', () => {
+    const parent: BlockDescriptor = {
+      id: 'contacts-block',
+      title: 'Contacts',
+      repeatable: true,
+      repeatablePopin: true,
+      fields: [
+        {
+          id: 'contactGroupId.name',
+          type: 'text',
+          label: 'Name',
+          repeatableGroupId: 'contactGroupId',
+          validation: [],
+        },
+      ],
+      nestedBlocks: [{ blockId: 'business-sectors-block', position: 'bottom' }],
+    };
+    const placed = descriptorOf(parent, sectorBlock());
+    const input = {
+      contactGroupId: [
+        {
+          name: 'Ada',
+          businessSectors: [
+            { sector: 'retail', percentage: 30, subsectors: [{ sector: 'retail', percentage: 10 }] },
+          ],
+        },
+        {
+          name: 'Grace',
+          businessSectors: [
+            { sector: 'holding', percentage: 70, subsectors: [{ sector: 'software', percentage: 40 }] },
+          ],
+        },
+      ],
+    };
+
+    expect(pruneInactiveChildLists(input, placed)).toEqual({
+      contactGroupId: [
+        {
+          name: 'Ada',
+          businessSectors: [{ sector: 'retail', percentage: 30 }],
+        },
+        {
+          name: 'Grace',
+          businessSectors: [
+            { sector: 'holding', percentage: 70, subsectors: [{ sector: 'software', percentage: 40 }] },
+          ],
+        },
+      ],
+    });
+    expect(pruneInactiveChildLists(input, placed).contactGroupId[1]).toBe(input.contactGroupId[1]);
+  });
+
+  test('given a hidden nested child host, should keep child lists on the parent rows', () => {
+    const parent: BlockDescriptor = {
+      id: 'contacts-block',
+      title: 'Contacts',
+      repeatable: true,
+      repeatablePopin: true,
+      fields: [
+        {
+          id: 'contactGroupId.name',
+          type: 'text',
+          label: 'Name',
+          repeatableGroupId: 'contactGroupId',
+          validation: [],
+        },
+      ],
+      nestedBlocks: [{ blockId: 'business-sectors-block', position: 'bottom' }],
+    };
+    const placed = descriptorOf(
+      parent,
+      sectorBlock({ status: { hidden: '{{eq country "US"}}' } })
+    );
+    const input = {
+      contactGroupId: [
+        {
+          name: 'Ada',
+          businessSectors: [
+            { sector: 'retail', percentage: 30, subsectors: [{ sector: 'retail', percentage: 10 }] },
+          ],
+        },
+      ],
+    };
+
+    expect(pruneInactiveChildLists(input, placed, { country: 'US' })).toBe(input);
+  });
+
   test('given no group array in the values, should return the same object', () => {
     const input = { other: 1 };
 

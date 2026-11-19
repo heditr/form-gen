@@ -15,7 +15,7 @@ This is separate from the other nesting mechanisms:
 
 ## Descriptor
 
-Set `repeatableChild` on an inline repeatable block (`repeatable: true`, no `popin`, no `repeatablePopin`).
+Set `repeatableChild` on an inline repeatable block (`repeatable: true`, no `popin`, no `repeatablePopin`). Another block may list that block in `nestedBlocks`. The child list stays on this block's own rows.
 
 ```typescript
 {
@@ -71,7 +71,6 @@ The global descriptor routes call `assertRepeatableChildren` right after `assert
 | `REPEATABLE_CHILD_PARENT_KIND` | The block is not `repeatable: true`, or it is a `popin` or `repeatablePopin`. |
 | `REPEATABLE_CHILD_GROUP` | The block does not declare exactly one `repeatableGroupId`. |
 | `REPEATABLE_CHILD_GROUP_CLASH` | The group id also appears on another block. |
-| `REPEATABLE_CHILD_NESTED_HOST` | Another block lists this block in `nestedBlocks`. |
 | `REPEATABLE_CHILD_DEPTH` | `maxDepth` is missing or is not 2. |
 | `REPEATABLE_CHILD_UNSUPPORTED` | The config is not an object or has unknown keys, including `repeatableChild` or `fields`. |
 | `REPEATABLE_CHILD_PROPERTY` | `property` is missing, empty, or contains a dot. |
@@ -102,6 +101,27 @@ The child list is a property of the root row. Child rows hold only the group's b
 
 The key is absent until the user adds the first child row. Removing the last child at child min 0 leaves `[]`. The backend contract treats an absent list and `[]` as equivalent.
 
+On a plain parent, that group stays a top-level form key. On a repeatable popin, the nested group is already a key of the parent row, and the child list stays on the nested row:
+
+```json
+{
+  "contactGroupId": [
+    {
+      "name": "Grace",
+      "businessSectors": [
+        {
+          "sector": "holding",
+          "percentage": 60,
+          "subsectors": [{ "sector": "software", "percentage": 40 }]
+        }
+      ]
+    }
+  ]
+}
+```
+
+Main-form defaults still store only the parent rows. The nested rows, including child lists, stay on `caseContext` until that row is opened. Depth stays 2 inside the nested group: a child row still cannot hold `subsectors`.
+
 A row opens the child level when the trigger field holds one of `triggerValues` and the trigger field is not hidden for that row. A child row set to a trigger value opens nothing: only root rows ever carry the child config.
 
 ### Paths
@@ -116,7 +136,7 @@ Backend errors must use these dot-index paths so `mapBackendErrorsToForm` can pl
 
 ## Validation schema
 
-`buildZodSchemaFromDescriptor` builds the root row shape and one child row shape from the same fields, with the same status-hidden filter. The child array is an optional key on the root row, so it appears in the Zod output. A child row declares its own `property` key as `never`, so a child row that holds a `subsectors` array fails at `businessSectors.<i>.subsectors.<j>.subsectors`.
+`buildZodSchemaFromDescriptor` builds the root row shape and one child row shape from the same fields, with the same status-hidden filter. The child array is an optional key on the root row, so it appears in the Zod output. A nested repeatable inside a repeatable popin uses that same row shape, so the child array is kept on the parent row. A child row declares its own `property` key as `never`, so a child row that holds a `subsectors` array fails at `businessSectors.<i>.subsectors.<j>.subsectors`, or at `contactGroupId.<i>.businessSectors.<j>.subsectors.<k>.subsectors` when the group is placed on a popin row.
 
 | Child list | Result |
 | ---------- | ------ |

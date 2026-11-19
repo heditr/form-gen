@@ -67,7 +67,7 @@ draft:  raw form values (no strip)
 
 `assertRepeatableChildren(descriptor)` checks every block that sets `repeatableChild`, in this order, and throws on the first failure. The error is created with `createError` (`name: 'RepeatableChildDescriptorError'`). The code is on `error.cause.code`.
 
-Order of checks: parent kind, group id (exactly one), group clash, nested host, config shape and unknown keys, `maxDepth === 2`, `property`, property clash, trigger field, trigger values, limits. The full code table is in [repeatable-child-rows.md](repeatable-child-rows.md#descriptor-errors).
+Order of checks: parent kind, group id (exactly one), group clash, config shape and unknown keys, `maxDepth === 2`, `property`, property clash, trigger field, trigger values, limits. The full code table is in [repeatable-child-rows.md](repeatable-child-rows.md#descriptor-errors). A block listed in another block's `nestedBlocks` may still set `repeatableChild`.
 
 Notes that matter when debugging:
 
@@ -104,7 +104,7 @@ It is used in four places: the UI (show the Add button or the list), prefill see
 In `buildZodSchemaFromDescriptor`:
 
 - `buildRowSchemaShape(fields, groupId)` builds the row shape from base field ids. It skips buttons, submit-skipped types and status-hidden fields. Dotted ids still nest (`location.street`).
-- Root row shape = `buildRowSchemaShape(...)` plus `[property]: childArray` when `repeatableChild` is set.
+- Root row shape = `rowShapeForGroup`: `buildRowSchemaShape(...)` plus `[property]: childArray` when `repeatableChild` is set. A repeatable group nested in a repeatable popin uses that same row shape, so the child list survives on `parentGroup[i][nestedGroup][j]`.
 - `childArraySchemaForBlock` = `limitInstances(z.array(childRow), config).optional()`. `childRow` is the same shape plus `[property]: z.never(...).optional()`, so a nested list inside a child row fails with a specific message at `businessSectors.<i>.subsectors.<j>.subsectors`.
 - `limitInstances` produces the messages `At least N instance(s) required` and `At most N instance(s) allowed`.
 
@@ -159,7 +159,7 @@ The policy never runs on `setValue`, reset, prefill, hydration or rules re-hydra
 
 ### 4.9 Submit and draft
 
-- Submit: the Zod output keeps the nested tree. Then `omitStatusHiddenFormValues` strips (a) the whole child list when the row does not open the child level, and (b) status-hidden fields in each child row (one level). `collectChildDeletions` produces the deletions of kind `row` (whole list) and `child` (one field of one child row).
+- Submit: the Zod output keeps the nested tree. Then `omitStatusHiddenFormValues` strips (a) the whole child list when the row does not open the child level, and (b) status-hidden fields in each child row (one level). `collectChildDeletions` produces the deletions of kind `row` (whole list) and `child` (one field of one child row). When the host is nested in a repeatable popin, those same deletions are applied on `parentGroup[i][nestedGroup][j]` as kind `placed`. `pruneInactiveChildLists` walks that same placed path on load.
 - Draft: `submitDraft` sends raw form values and does not call `omitStatusHiddenFormValues`. That is why the clear policy removes the list from form state itself.
 - Saved draft load: `initialValues` in `use-form-descriptor.ts` calls `pruneInactiveChildLists(merged, descriptor, initFormContext)`. A descriptor version that changed `triggerValues` therefore drops lists that no longer apply.
 - Multipart submit stringifies each root row, so the child list stays inside the row's JSON string.

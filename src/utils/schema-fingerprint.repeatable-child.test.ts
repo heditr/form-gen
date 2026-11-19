@@ -157,4 +157,121 @@ describe('omitStatusHiddenFormValues with repeatableChild', () => {
 
     expect(values).toEqual(snapshot);
   });
+
+  const placedDescriptor = (
+    sectorOverrides: Partial<BlockDescriptor> = {}
+  ): GlobalFormDescriptor => ({
+    blocks: [
+      {
+        id: 'contacts-block',
+        title: 'Contacts',
+        repeatable: true,
+        repeatablePopin: true,
+        fields: [
+          {
+            id: 'contactGroupId.name',
+            type: 'text',
+            label: 'Name',
+            repeatableGroupId: 'contactGroupId',
+            validation: [],
+          },
+        ],
+        nestedBlocks: [{ blockId: 'business-sectors-block', position: 'bottom' }],
+      },
+      sectorBlock(sectorFields(), sectorOverrides),
+    ],
+    submission: { url: '/api/submit', method: 'POST' },
+  });
+
+  test('given a repeatable popin nests the child host, should strip a closed child list on the nested row', () => {
+    const values = {
+      contactGroupId: [
+        {
+          name: 'Ada',
+          businessSectors: [
+            { sector: 'retail', percentage: 30, subsectors: [{ sector: 'retail', percentage: 1 }] },
+          ],
+        },
+        {
+          name: 'Grace',
+          businessSectors: [
+            { sector: 'holding', percentage: 70, subsectors: [{ sector: 'retail', percentage: 2 }] },
+          ],
+        },
+      ],
+    };
+
+    expect(omitStatusHiddenFormValues(placedDescriptor(), values)).toEqual({
+      contactGroupId: [
+        {
+          name: 'Ada',
+          businessSectors: [{ sector: 'retail', percentage: 30 }],
+        },
+        {
+          name: 'Grace',
+          businessSectors: [
+            { sector: 'holding', percentage: 70, subsectors: [{ sector: 'retail', percentage: 2 }] },
+          ],
+        },
+      ],
+    });
+  });
+
+  test('given a hidden field on an open nested child row, should strip that field only', () => {
+    const descriptor = placedDescriptor({
+      fields: sectorFields({ percentage: { status: { hidden: '{{eq sector "retail"}}' } } }),
+    });
+    const values = {
+      contactGroupId: [
+        {
+          name: 'Grace',
+          businessSectors: [
+            {
+              sector: 'holding',
+              percentage: 70,
+              subsectors: [
+                { sector: 'retail', percentage: 10 },
+                { sector: 'holding', percentage: 20 },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+
+    expect(omitStatusHiddenFormValues(descriptor, values)).toEqual({
+      contactGroupId: [
+        {
+          name: 'Grace',
+          businessSectors: [
+            {
+              sector: 'holding',
+              percentage: 70,
+              subsectors: [{ sector: 'retail' }, { sector: 'holding', percentage: 20 }],
+            },
+          ],
+        },
+      ],
+    });
+  });
+
+  test('given a hidden nested child host, should keep the nested group on the parent row', () => {
+    const descriptor = placedDescriptor({ status: { hidden: '{{eq mode "simple"}}' } });
+    const values = {
+      mode: 'simple',
+      contactGroupId: [
+        {
+          name: 'Grace',
+          businessSectors: [
+            { sector: 'holding', percentage: 70, subsectors: [{ sector: 'retail', percentage: 2 }] },
+          ],
+        },
+      ],
+    };
+
+    expect(omitStatusHiddenFormValues(descriptor, values)).toEqual({
+      mode: 'simple',
+      contactGroupId: [{ name: 'Grace' }],
+    });
+  });
 });

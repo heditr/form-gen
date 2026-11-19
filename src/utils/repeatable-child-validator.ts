@@ -88,20 +88,6 @@ const assertGroupUnique = (block: BlockDescriptor, descriptor: GlobalFormDescrip
   }
 };
 
-const assertNotNestedHost = (block: BlockDescriptor, descriptor: GlobalFormDescriptor) => {
-  const parent = descriptor.blocks.find((other) =>
-    (other.nestedBlocks ?? []).some((entry) => entry.blockId === block.id)
-  );
-  if (parent) {
-    throw repeatableChildError({
-      message: `Block "${block.id}" sets repeatableChild and cannot be nested in block "${parent.id}"`,
-      code: 'REPEATABLE_CHILD_NESTED_HOST',
-      blockId: block.id,
-      parentId: parent.id,
-    });
-  }
-};
-
 const assertConfigShape = (block: BlockDescriptor) => {
   const config: unknown = block.repeatableChild;
   if (!isPlainObject(config)) {
@@ -235,7 +221,6 @@ export function assertRepeatableChildren(descriptor: GlobalFormDescriptor): Glob
       assertParentKind(block);
       assertGroup(block);
       assertGroupUnique(block, descriptor);
-      assertNotNestedHost(block, descriptor);
       assertConfigShape(block);
       assertProperty(block, descriptor);
       assertTriggerValues(block, assertTriggerField(block));

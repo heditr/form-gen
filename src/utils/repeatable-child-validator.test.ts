@@ -121,6 +121,42 @@ describe('assertRepeatableChildren', () => {
 
       expect(captureError(form([sectorBlock({ repeatableChild: config })]))).toBeUndefined();
     });
+
+    test('given a plain block that nests the child host, should return the descriptor unchanged', () => {
+      const parent: BlockDescriptor = {
+        id: 'parent',
+        title: 'Parent',
+        fields: [{ id: 'note', type: 'text', label: 'Note', validation: [] }],
+        nestedBlocks: [{ blockId: 'business-sectors-block', position: 'bottom' }],
+      };
+      const descriptor = form([parent, sectorBlock()]);
+
+      expect(assertRepeatableChildren(descriptor)).toBe(descriptor);
+      expect(assertNestedBlocks(descriptor)).toBe(descriptor);
+    });
+
+    test('given a repeatable popin that nests the child host, should return the descriptor unchanged', () => {
+      const parent: BlockDescriptor = {
+        id: 'contacts-block',
+        title: 'Contacts',
+        repeatable: true,
+        repeatablePopin: true,
+        fields: [
+          {
+            id: 'contactGroupId.name',
+            type: 'text',
+            label: 'Name',
+            repeatableGroupId: 'contactGroupId',
+            validation: [],
+          },
+        ],
+        nestedBlocks: [{ blockId: 'business-sectors-block', position: 'bottom' }],
+      };
+      const descriptor = form([parent, sectorBlock()]);
+
+      expect(assertRepeatableChildren(descriptor)).toBe(descriptor);
+      expect(assertNestedBlocks(descriptor)).toBe(descriptor);
+    });
   });
 
   describe('REPEATABLE_CHILD_PARENT_KIND', () => {
@@ -164,19 +200,6 @@ describe('assertRepeatableChildren', () => {
       };
 
       expectDescriptorError(form([sectorBlock(), other]), 'REPEATABLE_CHILD_GROUP_CLASH');
-    });
-  });
-
-  describe('REPEATABLE_CHILD_NESTED_HOST', () => {
-    test('given a block that another block nests, should throw', () => {
-      const parent: BlockDescriptor = {
-        id: 'parent',
-        title: 'Parent',
-        fields: [{ id: 'note', type: 'text', label: 'Note', validation: [] }],
-        nestedBlocks: [{ blockId: 'business-sectors-block', position: 'bottom' }],
-      };
-
-      expectDescriptorError(form([parent, sectorBlock()]), 'REPEATABLE_CHILD_NESTED_HOST');
     });
   });
 

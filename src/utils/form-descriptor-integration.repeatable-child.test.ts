@@ -10,6 +10,7 @@ import { describe, test, expect, beforeAll } from 'vitest';
 import type { BlockDescriptor, FieldDescriptor, GlobalFormDescriptor } from '@/types/form-descriptor';
 import type { FormContext } from '@/utils/template-evaluator';
 import { registerHandlebarsHelpers } from '@/utils/handlebars-helpers';
+import { buildRepeatablePopinInstanceDescriptor } from './popin-instance-descriptor';
 import { buildZodSchemaFromDescriptor, extractDefaultValues } from './form-descriptor-integration';
 
 const sectorFields = (overrides: Record<string, Partial<FieldDescriptor>> = {}): FieldDescriptor[] => [
@@ -171,6 +172,91 @@ describe('buildZodSchemaFromDescriptor with repeatableChild', () => {
       businessSectors: [{ sector: 'holding', percentage: 60 }],
     });
   });
+
+  const contactsBlock = (): BlockDescriptor => ({
+    id: 'contacts-block',
+    title: 'Contacts',
+    repeatable: true,
+    repeatablePopin: true,
+    minInstances: 0,
+    maxInstances: 5,
+    repeatableDefaultSource: 'contactGroupId',
+    fields: [
+      {
+        id: 'contactGroupId.name',
+        type: 'text',
+        label: 'Name',
+        repeatableGroupId: 'contactGroupId',
+        validation: [],
+      },
+    ],
+    nestedBlocks: [{ blockId: 'business-sectors-block', position: 'bottom' }],
+  });
+
+  const placedDescriptor = () => descriptorOf(contactsBlock(), sectorBlock());
+
+  const grace = (subsectors?: unknown) => ({
+    contactGroupId: [
+      {
+        name: 'Grace',
+        businessSectors: [
+          {
+            sector: 'holding',
+            percentage: 60,
+            ...(subsectors ? { subsectors } : {}),
+          },
+        ],
+      },
+    ],
+  });
+
+  test('given a repeatable popin nests the child host, should keep the child list on the nested row', () => {
+    const result = parse(grace([sub('software', 40)]), placedDescriptor());
+
+    expect(result.success && result.data).toEqual(grace([sub('software', 40)]));
+  });
+
+  test('given a nested row with no child list, should stay valid', () => {
+    expect(parse(grace(), placedDescriptor()).success).toBe(true);
+    expect(parse({ contactGroupId: [{ name: 'Ada' }] }, placedDescriptor()).success).toBe(true);
+  });
+
+  test('given an empty nested child list and child min 1, should fail on that nested row', () => {
+    const descriptor = descriptorOf(contactsBlock(), sectorBlock({}, { minInstances: 1 }));
+    const result = parse(grace([]), descriptor);
+
+    expect(result.success).toBe(false);
+    expect(!result.success && result.error.issues[0]).toMatchObject({
+      path: ['contactGroupId', 0, 'businessSectors', 0, 'subsectors'],
+      message: 'At least 1 instance(s) required',
+    });
+  });
+
+  test('given a nested child row that holds its own child list, should fail at that property', () => {
+    const result = parse(grace([{ ...sub('holding'), subsectors: [sub('retail')] }]), placedDescriptor());
+
+    expect(!result.success && result.error.issues.map((issue) => issue.path.join('.'))).toEqual([
+      'contactGroupId.0.businessSectors.0.subsectors.0.subsectors',
+    ]);
+  });
+
+  test('given the open popin, should keep the child list on the nested group', () => {
+    const descriptor = placedDescriptor();
+    const instance = buildRepeatablePopinInstanceDescriptor({
+      block: descriptor.blocks[0],
+      groupId: 'contactGroupId',
+      descriptor,
+    });
+    const result = buildZodSchemaFromDescriptor(instance, {}, 'popin').safeParse({
+      name: 'Grace',
+      businessSectors: [{ sector: 'holding', percentage: 60, subsectors: [sub('software', 40)] }],
+    });
+
+    expect(result.success && result.data).toEqual({
+      name: 'Grace',
+      businessSectors: [{ sector: 'holding', percentage: 60, subsectors: [sub('software', 40)] }],
+    });
+  });
 });
 
 describe('extractDefaultValues with repeatableChild', () => {
@@ -254,5 +340,63 @@ describe('extractDefaultValues with repeatableChild', () => {
 
   test('given no source rows, should keep the existing empty default', () => {
     expect(extractDefaultValues(descriptorOf(sectorBlock()), {})).toEqual({ businessSectors: [] });
+  });
+
+  test('given a repeatable popin nests the child host, should seed the open contact and leave main defaults on the parent rows', () => {
+    const nested = sectorBlock({
+      repeatableDefaultSource: '{{json caseContext.contactGroupId.@index.businessSectors}}',
+    });
+    const parent: BlockDescriptor = {
+      id: 'contacts-block',
+      title: 'Contacts',
+      repeatable: true,
+      repeatablePopin: true,
+      repeatableDefaultSource: 'contactGroupId',
+      fields: [
+        {
+          id: 'contactGroupId.name',
+          type: 'text',
+          label: 'Name',
+          repeatableGroupId: 'contactGroupId',
+          validation: [],
+        },
+      ],
+      nestedBlocks: [{ blockId: 'business-sectors-block', position: 'bottom' }],
+    };
+    const descriptor = descriptorOf(parent, nested);
+    const context = {
+      caseContext: {
+        contactGroupId: [
+          {
+            name: 'Ada',
+            businessSectors: [
+              { sector: 'retail', percentage: 10, subsectors: [{ sector: 'software', percentage: 1 }] },
+            ],
+          },
+          {
+            name: 'Grace',
+            businessSectors: [
+              { sector: 'holding', percentage: 70, subsectors: [{ sector: 'software', percentage: 40, extra: 1 }] },
+              { sector: 'retail', percentage: 30, subsectors: [{ sector: 'software', percentage: 5 }] },
+            ],
+          },
+        ],
+      },
+    } as FormContext;
+    const instance = buildRepeatablePopinInstanceDescriptor({
+      block: descriptor.blocks[0],
+      groupId: 'contactGroupId',
+      descriptor,
+    });
+
+    expect(extractDefaultValues(descriptor, context)).toEqual({
+      contactGroupId: [{ name: 'Ada' }, { name: 'Grace' }],
+    });
+    expect(
+      extractDefaultValues(instance, context, { scope: 'popin', index: 1 }).businessSectors
+    ).toEqual([
+      { sector: 'holding', percentage: 70, subsectors: [{ sector: 'software', percentage: 40 }] },
+      { sector: 'retail', percentage: 30 },
+    ]);
   });
 });

@@ -157,6 +157,15 @@ type HiddenDeletion =
       property: string;
       childIndex: number;
       path: string;
+    }
+  | {
+      kind: 'placed';
+      parentGroupId: string;
+      parentIndex: number;
+      nestedGroupId: string;
+      nestedRowIndex: number;
+      path: string;
+      child?: { property: string; childIndex: number };
     };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -269,6 +278,55 @@ export function omitStatusHiddenFormValues(
             });
           });
         }
+      } else if (block.repeatableChild) {
+        const parents = source[placement.parentGroupId];
+        const groups = groupFieldsByRepeatableGroupId(block.fields);
+        if (Array.isArray(parents)) {
+          parents.forEach((parent, parentIndex) => {
+            if (!isRecord(parent)) {
+              return;
+            }
+            Object.entries(groups).forEach(([nestedGroupId, fields]) => {
+              const nestedRows = parent[nestedGroupId];
+              if (!Array.isArray(nestedRows)) {
+                return;
+              }
+              nestedRows.forEach((_, nestedRowIndex) => {
+                collectChildDeletions({
+                  block,
+                  fields,
+                  groupId: nestedGroupId,
+                  rows: nestedRows,
+                  rowIndex: nestedRowIndex,
+                  formContext,
+                }).forEach((deletion) => {
+                  if (deletion.kind === 'child') {
+                    deletions.push({
+                      kind: 'placed',
+                      parentGroupId: placement.parentGroupId,
+                      parentIndex,
+                      nestedGroupId,
+                      nestedRowIndex,
+                      path: deletion.path,
+                      child: { property: deletion.property, childIndex: deletion.childIndex },
+                    });
+                    return;
+                  }
+                  if (deletion.kind === 'row') {
+                    deletions.push({
+                      kind: 'placed',
+                      parentGroupId: placement.parentGroupId,
+                      parentIndex,
+                      nestedGroupId,
+                      nestedRowIndex: deletion.rowIndex,
+                      path: deletion.path,
+                    });
+                  }
+                });
+              });
+            });
+          });
+        }
       }
       continue;
     }
@@ -360,6 +418,25 @@ export function omitStatusHiddenFormValues(
     }
     if (deletion.kind === 'path') {
       deleteNestedValue(stripped, deletion.path);
+      continue;
+    }
+    if (deletion.kind === 'placed') {
+      const parents = stripped[deletion.parentGroupId];
+      const parent = Array.isArray(parents) ? parents[deletion.parentIndex] : undefined;
+      const nested = isRecord(parent) ? parent[deletion.nestedGroupId] : undefined;
+      const row = Array.isArray(nested) ? nested[deletion.nestedRowIndex] : undefined;
+      if (!isRecord(row)) {
+        continue;
+      }
+      if (deletion.child) {
+        const children = row[deletion.child.property];
+        const child = Array.isArray(children) ? children[deletion.child.childIndex] : undefined;
+        if (isRecord(child)) {
+          deleteNestedValue(child, deletion.path);
+        }
+        continue;
+      }
+      deleteNestedValue(row, deletion.path);
       continue;
     }
 

@@ -956,9 +956,6 @@ export function buildZodSchemaFromDescriptor(
       : withMin;
   };
 
-  const arraySchemaForGroup = (owner: BlockDescriptor, fields: FieldDescriptor[]) =>
-    limitInstances(z.array(z.object(buildRowSchemaShape(fields, fields[0]?.repeatableGroupId ?? ''))), owner);
-
   /**
    * The child list of a root row: the group's row shape with its own limits. A child row
    * cannot hold a child list, so its `property` key is rejected with a specific message.
@@ -980,6 +977,30 @@ export function buildZodSchemaFromDescriptor(
     });
     return limitInstances(z.array(childRow), config).optional();
   };
+
+  /**
+   * One group's row, including its optional child list. Nested groups on a popin row
+   * use the same shape so Zod keeps `repeatableChild` values in the submitted output.
+   */
+  const rowShapeForGroup = (
+    owner: BlockDescriptor,
+    groupId: string,
+    fields: FieldDescriptor[]
+  ): Record<string, z.ZodTypeAny> => {
+    const childArray = childArraySchemaForBlock(owner, groupId, fields);
+    return {
+      ...buildRowSchemaShape(fields, groupId),
+      ...(childArray && owner.repeatableChild
+        ? { [owner.repeatableChild.property]: childArray }
+        : {}),
+    };
+  };
+
+  const arraySchemaForGroup = (owner: BlockDescriptor, fields: FieldDescriptor[]) =>
+    limitInstances(
+      z.array(z.object(rowShapeForGroup(owner, fields[0]?.repeatableGroupId ?? '', fields))),
+      owner
+    );
 
   for (const block of descriptor.blocks) {
     if (!shouldIncludeBlockInScope(block, scope)) {
@@ -1009,11 +1030,7 @@ export function buildZodSchemaFromDescriptor(
         // A nested block's array is an optional key on this row, with that block's own limits.
         // The child list of a repeatableChild block is declared here too, because Zod strips
         // undeclared keys from the submitted output.
-        const childArray = childArraySchemaForBlock(block, groupId, fields);
-        const rowShape: Record<string, z.ZodTypeAny> = {
-          ...buildRowSchemaShape(fields, groupId),
-          ...(childArray && block.repeatableChild ? { [block.repeatableChild.property]: childArray } : {}),
-        };
+        const rowShape = rowShapeForGroup(block, groupId, fields);
         for (const nested of nestedByParentGroup.get(groupId) ?? []) {
           if (evaluateHiddenStatus(nested, formContext) || !isRepeatableBlock(nested)) {
             continue;
