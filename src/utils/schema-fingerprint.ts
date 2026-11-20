@@ -171,6 +171,77 @@ type HiddenDeletion =
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   !!value && typeof value === 'object' && !Array.isArray(value);
 
+function repeatableRowPath(fieldId: string, groupId: string): string {
+  return fieldId.startsWith(`${groupId}.`)
+    ? fieldId.slice(groupId.length + 1)
+    : fieldId;
+}
+
+function isPlainRowField(field: FieldDescriptor): boolean {
+  return (
+    field.type !== 'button' &&
+    !field.repeatableGroupId &&
+    !isSubmitSkippedFieldType(field.type)
+  );
+}
+
+function plainRowPaths(block: BlockDescriptor, groupId: string): string[] {
+  return block.fields.filter(isPlainRowField).map((field) => repeatableRowPath(field.id, groupId));
+}
+
+function hiddenPlacementDeletions(
+  block: BlockDescriptor,
+  parentGroupId: string,
+  source: Record<string, unknown>
+): HiddenDeletion[] {
+  const rows = source[parentGroupId];
+  if (!Array.isArray(rows)) {
+    return [];
+  }
+  if (isRepeatableBlock(block)) {
+    const nestedGroupIds = Object.keys(groupFieldsByRepeatableGroupId(block.fields));
+    return rows.flatMap((row, rowIndex) => {
+      if (!isRecord(row)) {
+        return [];
+      }
+      return nestedGroupIds
+        .filter((nestedGroupId) => Object.prototype.hasOwnProperty.call(row, nestedGroupId))
+        .map((path) => ({ kind: 'row' as const, groupId: parentGroupId, rowIndex, path }));
+    });
+  }
+  return rows.flatMap((row, rowIndex) => {
+    if (!isRecord(row)) {
+      return [];
+    }
+    return plainRowPaths(block, parentGroupId)
+      .filter((path) => hasNestedKey(row, path))
+      .map((path) => ({ kind: 'row' as const, groupId: parentGroupId, rowIndex, path }));
+  });
+}
+
+function hiddenPlainFieldDeletions(
+  block: BlockDescriptor,
+  parentGroupId: string,
+  source: Record<string, unknown>,
+  formContext: FormContext
+): HiddenDeletion[] {
+  const rows = source[parentGroupId];
+  if (!Array.isArray(rows)) {
+    return [];
+  }
+  return rows.flatMap((row, rowIndex) => {
+    if (!isRecord(row)) {
+      return [];
+    }
+    const rowContext = overlayRowContext(formContext, row);
+    return block.fields
+      .filter((field) => isPlainRowField(field) && evaluateHiddenStatus(field, rowContext))
+      .map((field) => repeatableRowPath(field.id, parentGroupId))
+      .filter((path) => hasNestedKey(row, path))
+      .map((path) => ({ kind: 'row' as const, groupId: parentGroupId, rowIndex, path }));
+  });
+}
+
 /**
  * Deletions for the child list of one root row: the whole list when the row does not
  * open the child level, otherwise the hidden fields of each child row (one level only).
@@ -259,25 +330,13 @@ export function omitStatusHiddenFormValues(
     const placement = placementByNestedId.get(block.id);
     if (placement) {
       if (blockHidden) {
-        const rows = source[placement.parentGroupId];
-        const nestedGroupIds = Object.keys(groupFieldsByRepeatableGroupId(block.fields));
-        if (Array.isArray(rows)) {
-          rows.forEach((row, rowIndex) => {
-            if (!row || typeof row !== 'object' || Array.isArray(row)) {
-              return;
-            }
-            nestedGroupIds.forEach((nestedGroupId) => {
-              if (Object.prototype.hasOwnProperty.call(row, nestedGroupId)) {
-                deletions.push({
-                  kind: 'row',
-                  groupId: placement.parentGroupId,
-                  rowIndex,
-                  path: nestedGroupId,
-                });
-              }
-            });
-          });
-        }
+        deletions.push(
+          ...hiddenPlacementDeletions(block, placement.parentGroupId, source)
+        );
+      } else if (!isRepeatableBlock(block)) {
+        deletions.push(
+          ...hiddenPlainFieldDeletions(block, placement.parentGroupId, source, formContext)
+        );
       } else if (block.repeatableChild) {
         const parents = source[placement.parentGroupId];
         const groups = groupFieldsByRepeatableGroupId(block.fields);
@@ -541,6 +600,16 @@ export function collectValidationTargets(
       (placement) => placement.nestedBlockId
     )
   );
+  const plainNestedByParent = new Map<string, BlockDescriptor[]>();
+  if (scope === 'main') {
+    for (const placement of repeatablePopinNestedPlacements(descriptor)) {
+      if (isRepeatableBlock(placement.nestedBlock)) {
+        continue;
+      }
+      const current = plainNestedByParent.get(placement.parentGroupId) ?? [];
+      plainNestedByParent.set(placement.parentGroupId, [...current, placement.nestedBlock]);
+    }
+  }
 
   for (const block of descriptor.blocks) {
     if (!shouldIncludeBlockInScope(block, scope) || nestedOnMain.has(block.id)) {
@@ -560,16 +629,22 @@ export function collectValidationTargets(
             !isSubmitSkippedFieldType(field.type) &&
             !evaluateHiddenStatus(field, formContext)
         );
-        if (visibleFields.length === 0) {
+        const plainNestedFields = (plainNestedByParent.get(groupId) ?? [])
+          .filter((nested) => !evaluateHiddenStatus(nested, formContext))
+          .flatMap((nested) =>
+            nested.fields.filter(
+              (field) => isPlainRowField(field) && !evaluateHiddenStatus(field, formContext)
+            )
+          );
+        const fingerprintFields = [...visibleFields, ...plainNestedFields];
+        if (fingerprintFields.length === 0) {
           continue;
         }
-        const ruleFingerprint = visibleFields
-          .map((field) => {
-            const baseFieldId = field.id.startsWith(`${groupId}.`)
-              ? field.id.slice(groupId.length + 1)
-              : field.id;
-            return `${baseFieldId}:${buildRuleFingerprint(field, formContext)}`;
-          })
+        const ruleFingerprint = fingerprintFields
+          .map(
+            (field) =>
+              `${repeatableRowPath(field.id, groupId)}:${buildRuleFingerprint(field, formContext)}`
+          )
           .join('|');
         targets.push({ id: groupId, ruleFingerprint });
       }

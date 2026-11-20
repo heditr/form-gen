@@ -828,6 +828,29 @@ export function groupFieldsByRepeatableGroupId(
 }
 
 /**
+ * Place a field schema on a row shape. Dotted ids nest. An existing Zod object at a
+ * prefix is merged; a leaf/object clash at the same key overwrites that key.
+ */
+const assignRowSchema = (
+  shape: Record<string, z.ZodTypeAny>,
+  path: string,
+  schema: z.ZodTypeAny
+): void => {
+  const dot = path.indexOf('.');
+  if (dot === -1) {
+    shape[path] = schema;
+    return;
+  }
+
+  const head = path.slice(0, dot);
+  const existing = shape[head];
+  const nestedShape: Record<string, z.ZodTypeAny> =
+    existing instanceof z.ZodObject ? { ...existing.shape } : {};
+  assignRowSchema(nestedShape, path.slice(dot + 1), schema);
+  shape[head] = z.object(nestedShape);
+};
+
+/**
  * Build a complete Zod schema object from form descriptor
  * 
  * For repeatable blocks, builds array schemas (z.array(z.object({...}))) for each repeatable group.
@@ -1002,6 +1025,36 @@ export function buildZodSchemaFromDescriptor(
       owner
     );
 
+  /**
+   * Plain nested fields are shell keys on the popin row, with that field's own rules.
+   */
+  const appendPlainNestedFields = (
+    rowShape: Record<string, z.ZodTypeAny>,
+    nested: BlockDescriptor,
+    groupId: string
+  ): void => {
+    for (const field of nested.fields) {
+      if (
+        field.repeatableGroupId ||
+        field.type === 'button' ||
+        field.type === 'progress' ||
+        isSubmitSkippedFieldType(field.type) ||
+        evaluateHiddenStatus(field, formContext)
+      ) {
+        continue;
+      }
+      const fieldType = field.type as Exclude<typeof field.type, 'button' | 'progress'>;
+      const fieldSchema = convertToZodSchema(
+        evaluateValidationArrayTemplate(field.validation, formContext),
+        fieldType
+      );
+      const path = field.id.startsWith(`${groupId}.`)
+        ? field.id.slice(groupId.length + 1)
+        : field.id;
+      assignRowSchema(rowShape, path, fieldSchema);
+    }
+  };
+
   for (const block of descriptor.blocks) {
     if (!shouldIncludeBlockInScope(block, scope)) {
       continue;
@@ -1027,12 +1080,17 @@ export function buildZodSchemaFromDescriptor(
         
         // Build the row shape from base field ids (no groupId prefix); dotted ids nest, so the
         // schema matches the form shape: addresses[0].street or addresses[0].location.street.
-        // A nested block's array is an optional key on this row, with that block's own limits.
+        // A nested repeatable block's array is an optional key on this row, with that block's limits.
+        // A plain nested block's fields are keys on this same row, with that field's own rules.
         // The child list of a repeatableChild block is declared here too, because Zod strips
         // undeclared keys from the submitted output.
         const rowShape = rowShapeForGroup(block, groupId, fields);
         for (const nested of nestedByParentGroup.get(groupId) ?? []) {
-          if (evaluateHiddenStatus(nested, formContext) || !isRepeatableBlock(nested)) {
+          if (evaluateHiddenStatus(nested, formContext)) {
+            continue;
+          }
+          if (!isRepeatableBlock(nested)) {
+            appendPlainNestedFields(rowShape, nested, groupId);
             continue;
           }
           const nestedGroups = groupFieldsByRepeatableGroupId(nested.fields);

@@ -2966,6 +2966,165 @@ describe('form descriptor integration', () => {
     });
   });
 
+  describe('plain nested block inside a repeatable popin', () => {
+    const nameField = (): BlockDescriptor['fields'][number] => ({
+      id: 'contactGroupId.name',
+      type: 'text',
+      label: 'Name',
+      repeatableGroupId: 'contactGroupId',
+      validation: [],
+    });
+
+    const noteField = (
+      validation: BlockDescriptor['fields'][number]['validation'] = [
+        { type: 'required', message: 'Note is required' },
+      ]
+    ): BlockDescriptor['fields'][number] => ({
+      id: 'note',
+      type: 'text',
+      label: 'Note',
+      validation,
+    });
+
+    const noteBlock = (
+      fields: BlockDescriptor['fields'] = [noteField()],
+      status?: BlockDescriptor['status']
+    ): BlockDescriptor => ({
+      id: 'note-block',
+      title: 'Note',
+      ...(status ? { status } : {}),
+      fields,
+    });
+
+    const contactsBlock = (
+      fields: BlockDescriptor['fields'] = [nameField()]
+    ): BlockDescriptor => ({
+      id: 'contacts-block',
+      title: 'Contacts',
+      repeatable: true,
+      repeatablePopin: true,
+      fields,
+      nestedBlocks: [{ blockId: 'note-block', position: 'bottom' }],
+    });
+
+    const descriptorFor = (
+      note: BlockDescriptor = noteBlock(),
+      contacts: BlockDescriptor = contactsBlock()
+    ): GlobalFormDescriptor => ({
+      blocks: [contacts, note],
+      submission: { url: '/api/submit', method: 'POST' },
+    });
+
+    test('given main scope, should keep a required plain nested field on the parent row', () => {
+      const schema = buildZodSchemaFromDescriptor(descriptorFor());
+
+      expect(schema.safeParse({ contactGroupId: [{ name: 'Ada' }] }).success).toBe(false);
+      expect(
+        schema.safeParse({ contactGroupId: [{ name: 'Ada', note: '' }] }).success
+      ).toBe(false);
+      expect(
+        schema.parse({
+          contactGroupId: [{ name: 'Ada', note: 'Call Friday' }],
+          note: 'root',
+        })
+      ).toEqual({
+        contactGroupId: [{ name: 'Ada', note: 'Call Friday' }],
+      });
+    });
+
+    test('given a dotted plain nested field, should merge it into the shell object on the row', () => {
+      const schema = buildZodSchemaFromDescriptor(
+        descriptorFor(
+          noteBlock([
+            {
+              id: 'address.city',
+              type: 'text',
+              label: 'City',
+              validation: [{ type: 'required', message: 'City is required' }],
+            },
+          ]),
+          contactsBlock([
+            {
+              id: 'contactGroupId.address.street',
+              type: 'text',
+              label: 'Street',
+              repeatableGroupId: 'contactGroupId',
+              validation: [],
+            },
+          ])
+        )
+      );
+
+      expect(
+        schema.parse({
+          contactGroupId: [{ address: { street: '1', city: 'Paris' } }],
+        })
+      ).toEqual({
+        contactGroupId: [{ address: { street: '1', city: 'Paris' } }],
+      });
+      expect(
+        schema.safeParse({
+          contactGroupId: [{ address: { street: '1' } }],
+        }).success
+      ).toBe(false);
+    });
+
+    test('given a hidden plain nested block, should leave the row valid without note', () => {
+      const schema = buildZodSchemaFromDescriptor(
+        descriptorFor(noteBlock([noteField()], { hidden: 'true' }))
+      );
+
+      expect(schema.parse({ contactGroupId: [{ name: 'Ada' }] })).toEqual({
+        contactGroupId: [{ name: 'Ada' }],
+      });
+    });
+
+    test('given popin scope, should validate the plain nested field at the popin root', () => {
+      const descriptor = descriptorFor();
+      const instance = buildRepeatablePopinInstanceDescriptor({
+        block: descriptor.blocks[0],
+        groupId: 'contactGroupId',
+        descriptor,
+      });
+      const schema = buildZodSchemaFromDescriptor(instance, {}, 'popin');
+
+      expect(schema.safeParse({ name: 'Ada' }).success).toBe(false);
+      expect(schema.parse({ name: 'Ada', note: 'Call Friday' })).toEqual({
+        name: 'Ada',
+        note: 'Call Friday',
+      });
+    });
+
+    test('given a plain parent, should validate the nested field as a root key', () => {
+      const descriptor: GlobalFormDescriptor = {
+        blocks: [
+          {
+            id: 'profile-block',
+            title: 'Profile',
+            fields: [
+              {
+                id: 'name',
+                type: 'text',
+                label: 'Name',
+                validation: [],
+              },
+            ],
+            nestedBlocks: [{ blockId: 'note-block', position: 'bottom' }],
+          },
+          noteBlock(),
+        ],
+        submission: { url: '/api/submit', method: 'POST' },
+      };
+      const schema = buildZodSchemaFromDescriptor(descriptor);
+
+      expect(schema.safeParse({ name: 'Ada' }).success).toBe(false);
+      expect(schema.parse({ name: 'Ada', note: 'Call Friday' })).toEqual({
+        name: 'Ada',
+        note: 'Call Friday',
+      });
+    });
+  });
+
   describe('buildAutoFillPatchFromSelection', () => {
     test('given selection field with autoFill mappings and simple payload, should map values to target fields', () => {
       const descriptor: GlobalFormDescriptor = {

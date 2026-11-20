@@ -148,6 +148,8 @@ A nested inline repeatable may also set `repeatableChild`. That child list is a 
 
 In the popin, the instance descriptor's schema uses the nested block's min and max for that array. A hidden nested block drops its key from each parent row on the main form, and from the popin value when the instance descriptor is used.
 
+On a repeatable popin, a plain nested block's field ids are keys on the parent row, and each field keeps its own rules. A hidden plain nested block drops those keys from each row.
+
 ## Repeatable popin
 
 On a plain parent the nested block is another section in the same form. On a repeatable popin the same block is drawn inside the open row, and its group key is a property of that row.

@@ -6,6 +6,7 @@ import { describe, test, expect, beforeAll } from 'vitest';
 import type { GlobalFormDescriptor } from '@/types/form-descriptor';
 import { registerHandlebarsHelpers } from '@/utils/handlebars-helpers';
 import {
+  collectStatusHiddenFieldIds,
   collectValidationTargets,
   diffValidationTargets,
   getActiveValidationTargetIds,
@@ -535,5 +536,177 @@ describe('omitStatusHiddenFormValues', () => {
     ).toEqual({
       contactGroupId: [{ name: 'Ada' }, { name: 'Grace' }],
     });
+  });
+
+  test('given a hidden plain nested block, should drop its fields from each parent row', () => {
+    const descriptor: GlobalFormDescriptor = {
+      blocks: [
+        {
+          id: 'contacts-block',
+          title: 'Contacts',
+          repeatable: true,
+          repeatablePopin: true,
+          fields: [
+            {
+              id: 'contactGroupId.name',
+              type: 'text',
+              label: 'Name',
+              repeatableGroupId: 'contactGroupId',
+              validation: [],
+            },
+          ],
+          nestedBlocks: [{ blockId: 'note-block', position: 'bottom' }],
+        },
+        {
+          id: 'note-block',
+          title: 'Note',
+          status: { hidden: 'true' },
+          fields: [
+            { id: 'note', type: 'text', label: 'Note', validation: [] },
+          ],
+        },
+      ],
+      submission: { url: '/api/submit', method: 'POST' },
+    };
+
+    expect(
+      omitStatusHiddenFormValues(descriptor, {
+        contactGroupId: [
+          { name: 'Ada', note: 'a' },
+          { name: 'Grace', note: 'g' },
+        ],
+      })
+    ).toEqual({
+      contactGroupId: [{ name: 'Ada' }, { name: 'Grace' }],
+    });
+  });
+
+  test('given a visible plain nested block with a hidden field, should drop only that field from the row', () => {
+    const descriptor: GlobalFormDescriptor = {
+      blocks: [
+        {
+          id: 'contacts-block',
+          title: 'Contacts',
+          repeatable: true,
+          repeatablePopin: true,
+          fields: [
+            {
+              id: 'contactGroupId.name',
+              type: 'text',
+              label: 'Name',
+              repeatableGroupId: 'contactGroupId',
+              validation: [],
+            },
+          ],
+          nestedBlocks: [{ blockId: 'note-block', position: 'bottom' }],
+        },
+        {
+          id: 'note-block',
+          title: 'Note',
+          fields: [
+            { id: 'note', type: 'text', label: 'Note', validation: [] },
+            {
+              id: 'secret',
+              type: 'text',
+              label: 'Secret',
+              validation: [],
+              status: { hidden: '{{eq name "Ada"}}' },
+            },
+          ],
+        },
+      ],
+      submission: { url: '/api/submit', method: 'POST' },
+    };
+
+    expect(
+      omitStatusHiddenFormValues(descriptor, {
+        contactGroupId: [
+          { name: 'Ada', note: 'a', secret: 's1' },
+          { name: 'Grace', note: 'g', secret: 's2' },
+        ],
+      })
+    ).toEqual({
+      contactGroupId: [
+        { name: 'Ada', note: 'a' },
+        { name: 'Grace', note: 'g', secret: 's2' },
+      ],
+    });
+  });
+});
+
+describe('plain nested field validation targets', () => {
+  beforeAll(() => {
+    registerHandlebarsHelpers();
+  });
+
+  const descriptorWithNote = ({
+    validation = [],
+    hidden,
+  }: {
+    validation?: GlobalFormDescriptor['blocks'][number]['fields'][number]['validation'];
+    hidden?: string;
+  } = {}): GlobalFormDescriptor => ({
+    blocks: [
+      {
+        id: 'contacts-block',
+        title: 'Contacts',
+        repeatable: true,
+        repeatablePopin: true,
+        fields: [
+          {
+            id: 'contactGroupId.name',
+            type: 'text',
+            label: 'Name',
+            repeatableGroupId: 'contactGroupId',
+            validation: [],
+          },
+        ],
+        nestedBlocks: [{ blockId: 'note-block', position: 'bottom' }],
+      },
+      {
+        id: 'note-block',
+        title: 'Note',
+        fields: [
+          {
+            id: 'note',
+            type: 'text',
+            label: 'Note',
+            validation,
+            ...(hidden ? { status: { hidden } } : {}),
+          },
+        ],
+      },
+    ],
+    submission: { url: '/api/submit', method: 'POST' },
+  });
+
+  const parentFingerprint = (
+    descriptor: GlobalFormDescriptor,
+    context: Record<string, string> = {}
+  ): string | undefined =>
+    collectValidationTargets(descriptor, context).find(
+      (target) => target.id === 'contactGroupId'
+    )?.ruleFingerprint;
+
+  test('given a plain nested field, should change the parent group fingerprint when its rules or visibility change', () => {
+    const visible = descriptorWithNote();
+    const required = descriptorWithNote({
+      validation: [{ type: 'required', message: 'Note is required' }],
+    });
+    const visibility = descriptorWithNote({ hidden: '{{eq showNote "no"}}' });
+
+    expect(parentFingerprint(visible)).toBe('name:none|note:none');
+    expect(parentFingerprint(required)).toBe('name:none|note:required:');
+    expect(parentFingerprint(visibility, { showNote: 'yes' })).toBe('name:none|note:none');
+    expect(parentFingerprint(visibility, { showNote: 'no' })).toBe('name:none');
+    expect(parentFingerprint(descriptorWithNote(), {})).not.toBe(
+      parentFingerprint(required)
+    );
+    expect(
+      collectValidationTargets(visible, {}).map((target) => target.id)
+    ).not.toContain('note');
+    expect(
+      collectStatusHiddenFieldIds(visibility, { showNote: 'no' })
+    ).not.toContain('note');
   });
 });
